@@ -2,6 +2,7 @@ pub mod commands;
 pub mod core;
 pub mod error;
 pub mod models;
+pub mod platform;
 pub mod security;
 pub mod state;
 
@@ -16,7 +17,8 @@ pub fn run() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_app_status,
-            commands::validate_command_intent
+            commands::validate_command_intent,
+            commands::discover_applications
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

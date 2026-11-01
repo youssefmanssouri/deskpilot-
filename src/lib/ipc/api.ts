@@ -1,5 +1,5 @@
 import { invokeSafe } from './client';
-import type { AppStatusDto, CommandIntentDto } from './types';
+import type { AppStatusDto, CommandIntentDto, DiscoveryResultDto } from './types';
 
 /**
  * Domain-level IPC API client for DeskPilot.
@@ -21,5 +21,11 @@ export const deskpilotApi = {
   validateCommandIntent(intent: CommandIntentDto): Promise<void> {
     return invokeSafe<void>('validate_command_intent', { intent });
   },
-};
 
+  /**
+   * Discovers installed Windows applications across Registry hives and Start Menu shortcuts.
+   */
+  discoverApplications(): Promise<DiscoveryResultDto> {
+    return invokeSafe<DiscoveryResultDto>('discover_applications');
+  },
+};

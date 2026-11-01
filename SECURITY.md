@@ -37,6 +37,14 @@ DeskPilot operates entirely locally. No analytics, tracking tokens, crash dumps,
 ### 7. Dependency & Supply Chain Integrity
 All npm and Cargo dependencies are audited regularly. Lockfiles (`package-lock.json` and `Cargo.lock`) are committed to version control to guarantee deterministic, reproducible builds.
 
+### 8. Application Discovery & Metadata Trust Boundaries
+Application discovery interacts with external Windows state (registry hives and Start Menu filesystem hierarchies). All discovered data is treated as untrusted:
+- **Zero Execution Policy:** Discovered binaries, registry strings (`UninstallString`, `DisplayIcon`), and `.lnk` shortcuts are NEVER executed or passed to the shell during discovery.
+- **Safe Binary Parsing:** Shell link files (`.lnk`) are parsed using an isolated binary parser that reads raw LinkInfo headers without instantiating COM or triggering Windows shell handlers.
+- **Path and Machine Data Omission:** Internal executable paths, install directories, and user profile paths are retained only within the privileged Rust domain; they are never transmitted to the frontend in `ApplicationDto`.
+- **Resilience Against Malformed Data:** Registry entries with corrupt types, missing fields, or oversized buffers are handled gracefully without aborting the discovery scan.
+- **Partial Failure Transparency:** Inaccessible registry subkeys or filesystem folders are reported as non-fatal warnings in `partialFailures`, preventing silent failure states.
+
 ---
 
 ## Reporting a Vulnerability

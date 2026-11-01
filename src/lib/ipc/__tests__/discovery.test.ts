@@ -1,0 +1,165 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { deskpilotApi } from '../api';
+import { IpcError } from '../errors';
+import * as tauriCore from '@tauri-apps/api/core';
+import type { DiscoveryResultDto } from '../types';
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+describe('Application Discovery IPC Client', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('handles a successful catalog response with populated applications', async () => {
+    const mockResult: DiscoveryResultDto = {
+      applications: [
+        {
+          id: 'app_1a2b3c4d5e6f7a8b',
+          displayName: 'Google Chrome',
+          publisher: 'Google LLC',
+          version: '156.0.0.0',
+          sources: ['Registry (HKLM 32-bit)', 'Start Menu (Common)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_9f8e7d6c5b4a3a2a',
+          displayName: 'Visual Studio Code',
+          publisher: 'Microsoft Corporation',
+          version: '1.99.0',
+          sources: ['Registry (HKCU User)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ],
+      scannedSources: ['Registry (HKLM 32-bit)', 'Registry (HKCU User)', 'Start Menu (Common)'],
+      partialFailures: [],
+      totalDiscovered: 2,
+    };
+
+    vi.mocked(tauriCore.invoke).mockResolvedValueOnce(mockResult);
+
+    const result = await deskpilotApi.discoverApplications();
+
+    expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+    expect(tauriCore.invoke).toHaveBeenCalledWith('discover_applications', undefined);
+    expect(result.applications).toHaveLength(2);
+    expect(result.totalDiscovered).toBe(2);
+    expect(result.applications[0].displayName).toBe('Google Chrome');
+    expect(result.applications[0].sources).toContain('Registry (HKLM 32-bit)');
+    expect(result.applications[0].availability).toBe('Available');
+  });
+
+  it('handles an empty catalog response cleanly', async () => {
+    const mockEmptyResult: DiscoveryResultDto = {
+      applications: [],
+      scannedSources: ['Registry (HKLM 64-bit)', 'Registry (HKCU User)'],
+      partialFailures: [],
+      totalDiscovered: 0,
+    };
+
+    vi.mocked(tauriCore.invoke).mockResolvedValueOnce(mockEmptyResult);
+
+    const result = await deskpilotApi.discoverApplications();
+
+    expect(result.applications).toHaveLength(0);
+    expect(result.totalDiscovered).toBe(0);
+    expect(result.scannedSources).toHaveLength(2);
+  });
+
+  it('handles partial discovery failures gracefully without crashing', async () => {
+    const mockPartialResult: DiscoveryResultDto = {
+      applications: [
+        {
+          id: 'app_1122334455667788',
+          displayName: 'Notepad++',
+          publisher: 'Don Ho',
+          version: '8.6.2',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ],
+      scannedSources: ['Registry (HKLM 64-bit)', 'Registry (HKLM 32-bit)'],
+      partialFailures: ['HKLM 32-bit: Inaccessible registry key Software\\Wow6432Node...: Access is denied.'],
+      totalDiscovered: 1,
+    };
+
+    vi.mocked(tauriCore.invoke).mockResolvedValueOnce(mockPartialResult);
+
+    const result = await deskpilotApi.discoverApplications();
+
+    expect(result.applications).toHaveLength(1);
+    expect(result.partialFailures).toHaveLength(1);
+    expect(result.partialFailures[0]).toContain('Access is denied');
+  });
+
+  it('catches and maps backend IPC errors to typed IpcError', async () => {
+    vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+      code: 'UNAVAILABLE',
+      message: 'Windows registry subsystem is temporarily locked by another process',
+    });
+
+    await expect(deskpilotApi.discoverApplications()).rejects.toThrow(IpcError);
+
+    try {
+      await deskpilotApi.discoverApplications();
+    } catch (err) {
+      const ipcErr = err as IpcError;
+      expect(ipcErr.code).toBe('UNAVAILABLE');
+      expect(ipcErr.isUnavailable()).toBe(true);
+      expect(ipcErr.message).toContain('registry subsystem is temporarily locked');
+    }
+  });
+
+  it('handles malformed string error rejections safely', async () => {
+    vi.mocked(tauriCore.invoke).mockRejectedValueOnce('Low-level IO failure');
+
+    await expect(deskpilotApi.discoverApplications()).rejects.toThrow(IpcError);
+
+    try {
+      await deskpilotApi.discoverApplications();
+    } catch (err) {
+      const ipcErr = err as IpcError;
+      expect(ipcErr.code).toBe('INTERNAL_ERROR');
+      expect(ipcErr.message).toBe('Low-level IO failure');
+    }
+  });
+
+  it('supports repeated refresh calls', async () => {
+    const mock1: DiscoveryResultDto = {
+      applications: [],
+      scannedSources: [],
+      partialFailures: [],
+      totalDiscovered: 0,
+    };
+    const mock2: DiscoveryResultDto = {
+      applications: [
+        {
+          id: 'app_test',
+          displayName: 'App',
+          sources: [],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ],
+      scannedSources: [],
+      partialFailures: [],
+      totalDiscovered: 1,
+    };
+
+    vi.mocked(tauriCore.invoke)
+      .mockResolvedValueOnce(mock1)
+      .mockResolvedValueOnce(mock2);
+
+    const res1 = await deskpilotApi.discoverApplications();
+    expect(res1.totalDiscovered).toBe(0);
+
+    const res2 = await deskpilotApi.discoverApplications();
+    expect(res2.totalDiscovered).toBe(1);
+    expect(tauriCore.invoke).toHaveBeenCalledTimes(2);
+  });
+});

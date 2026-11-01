@@ -39,3 +39,36 @@ export interface CommandIntentDto {
   targetId?: string;
 }
 
+/**
+ * Operational availability status of a discovered application.
+ */
+export type AvailabilityStateDto =
+  | 'Available'
+  | 'MissingTarget'
+  | 'IncompleteMetadata'
+  | 'Unverified';
+
+/**
+ * Safe frontend representation of a discovered Windows application.
+ *
+ * Excludes machine-specific file paths, usernames, or registry subkeys.
+ */
+export interface ApplicationDto {
+  id: string;
+  displayName: string;
+  publisher?: string;
+  version?: string;
+  sources: string[];
+  availability: AvailabilityStateDto;
+  isInstalled: boolean;
+}
+
+/**
+ * Payload returned by `discover_applications` IPC command.
+ */
+export interface DiscoveryResultDto {
+  applications: ApplicationDto[];
+  scannedSources: string[];
+  partialFailures: string[];
+  totalDiscovered: number;
+}
