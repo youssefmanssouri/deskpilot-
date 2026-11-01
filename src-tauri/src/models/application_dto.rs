@@ -27,6 +27,7 @@ impl From<AvailabilityState> for AvailabilityStateDto {
 /// or registry subkeys) is strictly omitted.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct ApplicationDto {
     pub id: String,
     pub displayName: String,
@@ -61,6 +62,7 @@ impl From<DiscoveredApplication> for ApplicationDto {
 /// Result returned to the frontend by the `discover_applications` IPC command.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+#[allow(non_snake_case)]
 pub struct DiscoveryResultDto {
     pub applications: Vec<ApplicationDto>,
     pub scannedSources: Vec<String>,

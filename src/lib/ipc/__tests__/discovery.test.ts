@@ -17,7 +17,7 @@ describe('Application Discovery IPC Client', () => {
     const mockResult: DiscoveryResultDto = {
       applications: [
         {
-          id: 'app_1a2b3c4d5e6f7a8b',
+          id: 'app_1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
           displayName: 'Google Chrome',
           publisher: 'Google LLC',
           version: '156.0.0.0',
@@ -26,7 +26,7 @@ describe('Application Discovery IPC Client', () => {
           isInstalled: true,
         },
         {
-          id: 'app_9f8e7d6c5b4a3a2a',
+          id: 'app_9f8e7d6c5b4a3a2a1b2c3d4e5f6a7b8c',
           displayName: 'Visual Studio Code',
           publisher: 'Microsoft Corporation',
           version: '1.99.0',
@@ -53,6 +53,32 @@ describe('Application Discovery IPC Client', () => {
     expect(result.applications[0].availability).toBe('Available');
   });
 
+  it('verifies 128-bit collision-resistant application ID format', async () => {
+    const mockResult: DiscoveryResultDto = {
+      applications: [
+        {
+          id: 'app_e3b0c44298fc1c149afbf4c8996fb924',
+          displayName: 'Test App',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ],
+      scannedSources: ['Registry (HKLM 64-bit)'],
+      partialFailures: [],
+      totalDiscovered: 1,
+    };
+
+    vi.mocked(tauriCore.invoke).mockResolvedValueOnce(mockResult);
+
+    const result = await deskpilotApi.discoverApplications();
+    const appId = result.applications[0].id;
+
+    // Must strictly start with app_ followed by exactly 32 lowercase hex characters (36 chars total)
+    expect(appId).toMatch(/^app_[0-9a-f]{32}$/);
+    expect(appId.length).toBe(36);
+  });
+
   it('handles an empty catalog response cleanly', async () => {
     const mockEmptyResult: DiscoveryResultDto = {
       applications: [],
@@ -74,7 +100,7 @@ describe('Application Discovery IPC Client', () => {
     const mockPartialResult: DiscoveryResultDto = {
       applications: [
         {
-          id: 'app_1122334455667788',
+          id: 'app_112233445566778899aabbccddeeff00',
           displayName: 'Notepad++',
           publisher: 'Don Ho',
           version: '8.6.2',
@@ -139,7 +165,7 @@ describe('Application Discovery IPC Client', () => {
     const mock2: DiscoveryResultDto = {
       applications: [
         {
-          id: 'app_test',
+          id: 'app_1234567890abcdef1234567890abcdef',
           displayName: 'App',
           sources: [],
           availability: 'Available',

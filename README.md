@@ -40,15 +40,16 @@ Tauri 2 / Rust Core Engine
 
 ## Current Status
 
-**Phase 1, Phase 2 & Phase 3: Architecture & Application Discovery Engine (Completed)**
+**Phase 1, Phase 2, Phase 3 & Phase 3.1: Architecture & Hardened Application Discovery (Completed)**
 - Official MSVC Rust toolchain (`rustc`/`cargo` v1.99.1) configured with LLVM linker (`rust-lld`) and Windows SDK / CRT libraries.
 - Tauri 2 + React + TypeScript scaffolding established.
 - Comprehensive `.gitignore` and security baseline implemented.
 - Domain structure (`commands`, `core`, `models`, `security`, `state`) and typed IPC contract (`deskpilotApi`) established.
 - Error architecture and trust boundary validation (`InputGuard`) operational.
-- **Deterministic Windows Application Discovery Engine:** Scans HKLM (64-bit & 32-bit Wow6432Node), HKCU, and Start Menu shortcuts (Common & User) with zero execution of shortcuts or registry commands.
-- **Deterministic Identity & Deduplication:** Collision-resistant SHA-256 identity generation (`app_<16-hex>`) with publisher normalization, source provenance tracking, and metadata conflict resolution.
-- **Application Catalog Interface:** React catalog view displaying discovered applications, metadata, source badges, and operational availability status (`Available`, `Unverified`, `IncompleteMetadata`, `MissingTarget`).
+- **Deterministic Windows Application Discovery Engine:** Scans HKLM (64-bit `KEY_WOW64_64KEY` & 32-bit `KEY_WOW64_32KEY`), HKCU, and Start Menu shortcuts (Common & User) with bounded key enumeration and zero shell execution.
+- **Hardened MS-SHLLINK Shortcut Parser:** Memory-safe binary parser with Shell Link CLSID validation, checked offset arithmetic, bounded reads (64KB), and support for both ANSI and UTF-16LE Unicode paths.
+- **128-bit Collision-Resistant Application Identity:** SHA-256 identity generation (`app_<32-hex>`) incorporating normalized publishers, display names, target executables, and installation discriminators to prevent false merges.
+- **Application Catalog Interface:** React catalog view displaying discovered applications, metadata, source provenance badges, and operational availability status (`Available`, `Unverified`, `IncompleteMetadata`, `MissingTarget`).
 
 *Application launching, SQLite persistence, file manager, and system monitoring will be implemented in subsequent phases.*
 
