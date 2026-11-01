@@ -1,4 +1,11 @@
-// Unit tests verifying Windows application discovery, normalization, identity, and conflict resolution.
+// Unit and integration tests verifying Windows application discovery, normalization, identity,
+// deduplication, and failure sanitization directly against production domain services.
+
+pub mod error {
+    #[path = "../../src/error.rs"]
+    pub mod error_impl;
+    pub use error_impl::*;
+}
 
 pub mod models {
     #[path = "../../src/models/application.rs"]
@@ -7,172 +14,24 @@ pub mod models {
     pub mod application_dto;
 }
 
-#[path = "../src/core/application_identity.rs"]
-pub mod application_identity;
-
-#[path = "../src/platform/windows/application_discovery.rs"]
-pub mod platform_discovery;
-
-use application_identity::ApplicationIdentity;
-use models::application::{AvailabilityState, DiscoveredApplication, DiscoverySource};
-use platform_discovery::{RawDiscoveredEntry, WindowsApplicationScanner};
-use std::path::Path;
-
-pub fn process_test_entries(entries: Vec<RawDiscoveredEntry>) -> Vec<DiscoveredApplication> {
-    let mut apps: Vec<DiscoveredApplication> = Vec::new();
-
-    for entry in entries {
-        let raw_name = match entry.raw_display_name {
-            Some(name) if !name.trim().is_empty() => name.trim().to_string(),
-            _ => continue,
-        };
-
-        let publisher = entry
-            .raw_publisher
-            .filter(|p| !p.trim().is_empty())
-            .map(|p| p.trim().to_string());
-        let version = entry
-            .raw_version
-            .filter(|v| !v.trim().is_empty())
-            .map(|v| v.trim().to_string());
-        let install_location = entry
-            .raw_install_location
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| l.trim().to_string());
-        let target_path = entry
-            .raw_target_path
-            .filter(|t| !t.trim().is_empty())
-            .map(|t| t.trim().to_string());
-
-        let target_hint = target_path.as_deref().or(install_location.as_deref());
-        let target_basename = target_hint.and_then(ApplicationIdentity::extract_target_basename);
-
-        let availability = if let Some(target) = &target_path {
-            if Path::new(target).is_file() {
-                AvailabilityState::Available
-            } else {
-                AvailabilityState::MissingTarget
-            }
-        } else if let Some(loc) = &install_location {
-            if Path::new(loc).is_dir() {
-                AvailabilityState::Unverified
-            } else {
-                AvailabilityState::MissingTarget
-            }
-        } else {
-            AvailabilityState::IncompleteMetadata
-        };
-
-        let norm_entry_name = ApplicationIdentity::normalize_display_name(&raw_name);
-        let norm_entry_pub = publisher
-            .as_deref()
-            .and_then(ApplicationIdentity::normalize_publisher);
-
-        let mut matched_idx = None;
-        for (idx, existing) in apps.iter().enumerate() {
-            let norm_exist_name =
-                ApplicationIdentity::normalize_display_name(&existing.display_name);
-            if norm_exist_name != norm_entry_name {
-                continue;
-            }
-
-            let norm_exist_pub = existing
-                .publisher
-                .as_deref()
-                .and_then(ApplicationIdentity::normalize_publisher);
-            if let (Some(ep), Some(np)) = (&norm_exist_pub, &norm_entry_pub) {
-                if ep != np {
-                    continue;
-                }
-            }
-
-            let exist_hint = existing
-                .target_path
-                .as_deref()
-                .or(existing.install_location.as_deref());
-            let exist_basename = exist_hint.and_then(ApplicationIdentity::extract_target_basename);
-            if let (Some(eb), Some(nb)) = (&exist_basename, &target_basename) {
-                if eb != nb {
-                    continue;
-                }
-            }
-
-            if let (Some(et), Some(nt)) = (&existing.target_path, &target_path) {
-                let ep = Path::new(et);
-                let np = Path::new(nt);
-                if ep != np && ep.parent() != np.parent() {
-                    continue;
-                }
-            }
-
-            matched_idx = Some(idx);
-            break;
-        }
-
-        if let Some(idx) = matched_idx {
-            let existing = &mut apps[idx];
-            if !existing.sources.contains(&entry.source) {
-                existing.sources.push(entry.source);
-            }
-            if existing.publisher.is_none() && publisher.is_some() {
-                existing.publisher = publisher;
-            }
-            if existing.version.is_none() && version.is_some() {
-                existing.version = version;
-            }
-            if existing.install_location.is_none() && install_location.is_some() {
-                existing.install_location = install_location;
-            }
-            if existing.target_path.is_none() && target_path.is_some() {
-                existing.target_path = target_path;
-            }
-            existing.availability = match (existing.availability, availability) {
-                (AvailabilityState::Available, _) | (_, AvailabilityState::Available) => {
-                    AvailabilityState::Available
-                }
-                (AvailabilityState::Unverified, _) | (_, AvailabilityState::Unverified) => {
-                    AvailabilityState::Unverified
-                }
-                (AvailabilityState::IncompleteMetadata, _)
-                | (_, AvailabilityState::IncompleteMetadata) => {
-                    AvailabilityState::IncompleteMetadata
-                }
-                (AvailabilityState::MissingTarget, AvailabilityState::MissingTarget) => {
-                    AvailabilityState::MissingTarget
-                }
-            };
-            let enriched_hint = existing
-                .target_path
-                .as_deref()
-                .or(existing.install_location.as_deref());
-            existing.id = ApplicationIdentity::generate_id(
-                &existing.display_name,
-                existing.publisher.as_deref(),
-                enriched_hint,
-            );
-        } else {
-            let id = ApplicationIdentity::generate_id(&raw_name, publisher.as_deref(), target_hint);
-            apps.push(DiscoveredApplication {
-                id,
-                display_name: raw_name,
-                publisher,
-                version,
-                sources: vec![entry.source],
-                install_location,
-                target_path,
-                availability,
-                discovered_at: 0,
-            });
-        }
-    }
-
-    apps.sort_by(|a, b| {
-        a.display_name
-            .to_lowercase()
-            .cmp(&b.display_name.to_lowercase())
-    });
-    apps
+pub mod platform {
+    #[path = "../../src/platform/windows/application_discovery.rs"]
+    pub mod windows;
+    pub use windows::*;
 }
+
+pub mod core {
+    #[path = "../../src/core/application_discovery.rs"]
+    pub mod application_discovery;
+    #[path = "../../src/core/application_identity.rs"]
+    pub mod application_identity;
+}
+
+use core::application_discovery::ApplicationDiscoveryService;
+use core::application_identity::ApplicationIdentity;
+use models::application::{AvailabilityState, DiscoverySource};
+use platform::{RawDiscoveredEntry, WindowsApplicationScanner};
+use std::path::Path;
 
 #[test]
 pub fn test_identity_determinism_and_128bit_entropy() {
@@ -245,7 +104,8 @@ pub fn test_deduplication_and_cross_source_merging() {
         source: DiscoverySource::StartMenuUser,
     };
 
-    let apps = process_test_entries(vec![entry_reg, entry_shortcut]);
+    // Invokes actual production ApplicationDiscoveryService directly
+    let apps = ApplicationDiscoveryService::process_raw_entries(vec![entry_reg, entry_shortcut]);
     assert_eq!(
         apps.len(),
         1,
@@ -268,6 +128,69 @@ pub fn test_deduplication_and_cross_source_merging() {
         Some("1.99.1".to_string()),
         "Version from Registry must be preserved"
     );
+}
+
+#[test]
+pub fn test_deduplication_case_insensitive_windows_paths() {
+    let entry1 = RawDiscoveredEntry {
+        raw_display_name: Some("Google Chrome".to_string()),
+        raw_publisher: Some("Google LLC".to_string()),
+        raw_version: Some("156.0.0".to_string()),
+        raw_install_location: None,
+        raw_display_icon: None,
+        raw_target_path: Some(r"C:\Program Files\Google\Chrome\Application\chrome.exe".to_string()),
+        source: DiscoverySource::RegistryHklm32,
+    };
+
+    let entry2 = RawDiscoveredEntry {
+        raw_display_name: Some("Google Chrome".to_string()),
+        raw_publisher: None,
+        raw_version: None,
+        raw_install_location: None,
+        raw_display_icon: None,
+        // Lowercase drive letter and folder names
+        raw_target_path: Some(r"c:\program files\google\chrome\application\chrome.exe".to_string()),
+        source: DiscoverySource::StartMenuCommon,
+    };
+
+    let apps = ApplicationDiscoveryService::process_raw_entries(vec![entry1, entry2]);
+    assert_eq!(
+        apps.len(),
+        1,
+        "Paths with different casing on Windows must merge into a single application"
+    );
+    assert_eq!(apps[0].sources.len(), 2);
+}
+
+#[test]
+pub fn test_deduplication_distinct_installation_directories() {
+    let entry_a = RawDiscoveredEntry {
+        raw_display_name: Some("Python".to_string()),
+        raw_publisher: Some("Python Software Foundation".to_string()),
+        raw_version: Some("3.11".to_string()),
+        raw_install_location: None,
+        raw_display_icon: None,
+        raw_target_path: Some(r"C:\Python311\python.exe".to_string()),
+        source: DiscoverySource::RegistryHklm64,
+    };
+
+    let entry_b = RawDiscoveredEntry {
+        raw_display_name: Some("Python".to_string()),
+        raw_publisher: Some("Python Software Foundation".to_string()),
+        raw_version: Some("3.12".to_string()),
+        raw_install_location: None,
+        raw_display_icon: None,
+        raw_target_path: Some(r"C:\Python312\python.exe".to_string()),
+        source: DiscoverySource::RegistryHklm64,
+    };
+
+    let apps = ApplicationDiscoveryService::process_raw_entries(vec![entry_a, entry_b]);
+    assert_eq!(
+        apps.len(),
+        2,
+        "Distinct installation directories must remain distinct applications"
+    );
+    assert_ne!(apps[0].id, apps[1].id);
 }
 
 #[test]
@@ -302,7 +225,8 @@ pub fn test_missing_and_malformed_metadata_handling() {
         source: DiscoverySource::RegistryHklm64,
     };
 
-    let apps = process_test_entries(vec![missing_name, empty_name, valid]);
+    let apps =
+        ApplicationDiscoveryService::process_raw_entries(vec![missing_name, empty_name, valid]);
     assert_eq!(apps.len(), 1);
     assert_eq!(apps[0].display_name, "Real Application");
 }
@@ -319,7 +243,7 @@ pub fn test_stale_target_handling() {
         source: DiscoverySource::RegistryHklm64,
     };
 
-    let apps = process_test_entries(vec![missing_target_entry]);
+    let apps = ApplicationDiscoveryService::process_raw_entries(vec![missing_target_entry]);
     assert_eq!(apps.len(), 1);
     assert_eq!(apps[0].availability, AvailabilityState::MissingTarget);
 }
@@ -355,6 +279,20 @@ pub fn test_registry_sanitization_adversarial() {
 }
 
 #[test]
+pub fn test_failure_sanitization_does_not_leak_usernames_or_paths() {
+    let synthetic_path_error =
+        r#"Failed to enumerate C:\Users\SecretAdmin\AppData\Local\Temp: Access is denied."#;
+    let failure_msg = ApplicationDiscoveryService::format_sanitized_failure(
+        "Start Menu (User)",
+        synthetic_path_error,
+    );
+    assert_eq!(failure_msg, "Start Menu (User): Access is denied.");
+    assert!(!failure_msg.contains("SecretAdmin"));
+    assert!(!failure_msg.contains("Users"));
+    assert!(!failure_msg.contains(r"C:\"));
+}
+
+#[test]
 pub fn test_shortcut_parser_synthetic_ansi_and_unicode() {
     const CLSID: [u8; 16] = [
         0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -362,11 +300,11 @@ pub fn test_shortcut_parser_synthetic_ansi_and_unicode() {
     ];
 
     // 1. ANSI LinkInfo fixture
-    let mut buf_ansi = vec![0u8; 128];
+    let mut buf_ansi = vec![0u8; 256];
     buf_ansi[0..4].copy_from_slice(&76u32.to_le_bytes());
     buf_ansi[4..20].copy_from_slice(&CLSID);
     buf_ansi[20..24].copy_from_slice(&2u32.to_le_bytes()); // HasLinkInfo
-    buf_ansi[76..80].copy_from_slice(&52u32.to_le_bytes()); // LinkInfo size
+    buf_ansi[76..80].copy_from_slice(&80u32.to_le_bytes()); // LinkInfo size
     buf_ansi[80..84].copy_from_slice(&28u32.to_le_bytes()); // Header size
     buf_ansi[84..88].copy_from_slice(&1u32.to_le_bytes()); // VolumeIDAndLocalBasePath
     buf_ansi[92..96].copy_from_slice(&28u32.to_le_bytes()); // LocalBasePathOffset (at 76+28 = 104)

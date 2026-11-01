@@ -110,7 +110,7 @@ describe('Application Discovery IPC Client', () => {
         },
       ],
       scannedSources: ['Registry (HKLM 64-bit)', 'Registry (HKLM 32-bit)'],
-      partialFailures: ['HKLM 32-bit: Inaccessible registry key Software\\Wow6432Node...: Access is denied.'],
+      partialFailures: ['Registry (HKLM 32-bit): Access is denied.'],
       totalDiscovered: 1,
     };
 
@@ -120,7 +120,25 @@ describe('Application Discovery IPC Client', () => {
 
     expect(result.applications).toHaveLength(1);
     expect(result.partialFailures).toHaveLength(1);
-    expect(result.partialFailures[0]).toContain('Access is denied');
+    expect(result.partialFailures[0]).toBe('Registry (HKLM 32-bit): Access is denied.');
+  });
+
+  it('verifies partial failures are sanitized and omit raw filesystem paths and usernames', async () => {
+    const mockResult: DiscoveryResultDto = {
+      applications: [],
+      scannedSources: ['Start Menu (User)'],
+      partialFailures: ['Start Menu (User): Access is denied.'],
+      totalDiscovered: 0,
+    };
+
+    vi.mocked(tauriCore.invoke).mockResolvedValueOnce(mockResult);
+
+    const result = await deskpilotApi.discoverApplications();
+    expect(result.partialFailures).toHaveLength(1);
+    expect(result.partialFailures[0]).toBe('Start Menu (User): Access is denied.');
+    expect(result.partialFailures[0]).not.toMatch(/[a-zA-Z]:\\/);
+    expect(result.partialFailures[0]).not.toMatch(/Users/i);
+    expect(result.partialFailures[0]).not.toMatch(/AppData/i);
   });
 
   it('catches and maps backend IPC errors to typed IpcError', async () => {

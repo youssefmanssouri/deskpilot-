@@ -36,6 +36,16 @@ impl WindowsApplicationScanner {
         }
     }
 
+    fn format_registry_error(err: &std::io::Error) -> String {
+        if err.kind() == std::io::ErrorKind::PermissionDenied {
+            "Access is denied.".to_string()
+        } else if err.kind() == std::io::ErrorKind::NotFound {
+            "Registry key not found.".to_string()
+        } else {
+            "Registry key inaccessible.".to_string()
+        }
+    }
+
     /// Scans Windows Uninstall registry hives for installed application metadata.
     ///
     /// Applies view flags (`KEY_WOW64_64KEY` or `KEY_WOW64_32KEY`), limits enumeration to 5000 keys,
@@ -51,7 +61,7 @@ impl WindowsApplicationScanner {
         let root_key = RegKey::predef(root);
         let uninstall_key = root_key
             .open_subkey_with_flags(subkey_path, access_flags)
-            .map_err(|e| format!("Inaccessible registry key {}: {}", subkey_path, e))?;
+            .map_err(|e| Self::format_registry_error(&e))?;
 
         let mut entries = Vec::new();
 
@@ -137,10 +147,7 @@ impl WindowsApplicationScanner {
         max_depth: usize,
     ) -> Result<Vec<RawDiscoveredEntry>, String> {
         if !dir_path.exists() {
-            return Err(format!(
-                "Start Menu directory does not exist: {:?}",
-                dir_path
-            ));
+            return Err("Directory does not exist or is inaccessible.".to_string());
         }
 
         let mut entries = Vec::new();

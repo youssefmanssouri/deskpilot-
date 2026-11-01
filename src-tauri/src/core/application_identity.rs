@@ -12,8 +12,10 @@ impl ApplicationIdentity {
     /// Generates a stable, 128-bit collision-resistant application ID formatted as `app_<32-hex-chars>`.
     ///
     /// The algorithm uses SHA-256 over a normalized canonical key seed:
+    /// - If publisher, directory discriminator, and target are present: `pub:<norm_publisher>:dir:<norm_dir>:exe:<norm_exe>:app:<norm_name>`
     /// - If publisher and target are present: `pub:<norm_publisher>:exe:<norm_exe>:app:<norm_name>`
     /// - If publisher is present, target is absent: `pub:<norm_publisher>:app:<norm_name>`
+    /// - If publisher is absent, directory and target are present: `dir:<norm_dir>:exe:<norm_exe>:app:<norm_name>`
     /// - If publisher is absent, target is present: `exe:<norm_exe>:app:<norm_name>`
     /// - Otherwise: `bare:app:<norm_name>`
     pub fn generate_id(
@@ -24,15 +26,22 @@ impl ApplicationIdentity {
         let norm_name = Self::normalize_display_name(display_name);
         let norm_pub = publisher.and_then(Self::normalize_publisher);
         let norm_exe = target_path.and_then(Self::extract_target_basename);
+        let norm_dir = target_path.and_then(Self::extract_parent_stem);
 
-        let seed = match (&norm_pub, &norm_exe) {
-            (Some(p), Some(exe)) if !p.is_empty() && !exe.is_empty() => {
+        let seed = match (&norm_pub, &norm_dir, &norm_exe) {
+            (Some(p), Some(dir), Some(exe)) if !p.is_empty() && !exe.is_empty() && dir != exe => {
+                format!("pub:{}:dir:{}:exe:{}:app:{}", p, dir, exe, norm_name)
+            }
+            (Some(p), _, Some(exe)) if !p.is_empty() && !exe.is_empty() => {
                 format!("pub:{}:exe:{}:app:{}", p, exe, norm_name)
             }
-            (Some(p), _) if !p.is_empty() => {
+            (Some(p), _, _) if !p.is_empty() => {
                 format!("pub:{}:app:{}", p, norm_name)
             }
-            (None, Some(exe)) if !exe.is_empty() => {
+            (None, Some(dir), Some(exe)) if !exe.is_empty() && dir != exe => {
+                format!("dir:{}:exe:{}:app:{}", dir, exe, norm_name)
+            }
+            (None, _, Some(exe)) if !exe.is_empty() => {
                 format!("exe:{}:app:{}", exe, norm_name)
             }
             _ => {
@@ -188,6 +197,55 @@ impl ApplicationIdentity {
             .and_then(|f| f.to_str())
             .map(|name| name.trim().to_lowercase())
             .filter(|name| !name.is_empty())
+    }
+
+    /// Extracts and normalizes the immediate parent directory stem if the path references an executable file.
+    pub fn extract_parent_stem(raw_path: &str) -> Option<String> {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        let clean_path = if trimmed.starts_with('"') {
+            if let Some(end_idx) = trimmed[1..].find('"') {
+                &trimmed[1..=end_idx]
+            } else {
+                trimmed.trim_matches('"')
+            }
+        } else {
+            let lowered = trimmed.to_lowercase();
+            let mut cut_idx = None;
+
+            for ext in &[".exe", ".cmd", ".bat", ".msi"] {
+                if let Some(pos) = lowered.find(ext) {
+                    let end_pos = pos + ext.len();
+                    if end_pos == trimmed.len()
+                        || trimmed.as_bytes()[end_pos].is_ascii_whitespace()
+                        || trimmed.as_bytes()[end_pos] == b','
+                    {
+                        cut_idx = Some(end_pos);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(idx) = cut_idx {
+                &trimmed[..idx]
+            } else {
+                trimmed.trim_end_matches(['\\', '/'])
+            }
+        };
+
+        let p = Path::new(clean_path.trim().trim_end_matches(['\\', '/']));
+        if p.extension().is_some() {
+            p.parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|f| f.to_str())
+                .map(|name| name.trim().to_lowercase())
+                .filter(|name| !name.is_empty())
+        } else {
+            None
+        }
     }
 }
 

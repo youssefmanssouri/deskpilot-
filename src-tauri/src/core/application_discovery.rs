@@ -16,6 +16,113 @@ pub struct DiscoveryResult {
 pub struct ApplicationDiscoveryService;
 
 impl ApplicationDiscoveryService {
+    /// Formats a clean, sanitized partial failure description that excludes all raw paths,
+    /// usernames, environment variable values, and registry keys.
+    pub fn format_sanitized_failure(source_label: &str, raw_reason: &str) -> String {
+        let sanitized = Self::sanitize_error_text(raw_reason);
+        format!("{}: {}", source_label, sanitized)
+    }
+
+    /// Strips any raw paths, usernames, or internal operating system references,
+    /// returning a stable, user-safe error category.
+    pub fn sanitize_error_text(raw: &str) -> String {
+        let lower = raw.to_lowercase();
+        if lower.contains("access is denied") || lower.contains("permission denied") {
+            "Access is denied.".to_string()
+        } else if lower.contains("not found") || lower.contains("does not exist") {
+            "Resource not found or unavailable.".to_string()
+        } else if lower.contains("environment variable") {
+            "Required environment variable is not defined.".to_string()
+        } else {
+            "Subsystem or resource is currently inaccessible.".to_string()
+        }
+    }
+
+    /// Compares two filesystem paths for equality in a platform-appropriate manner.
+    ///
+    /// On Windows, compares path components case-insensitively with full Unicode support,
+    /// normalizes path separators (`/` vs `\`), and treats drive letters (`c:` vs `C:`) as identical.
+    /// On other platforms, performs standard case-sensitive path comparison.
+    pub fn paths_equal(path_a: &Path, path_b: &Path) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            let mut comp_a = path_a.components();
+            let mut comp_b = path_b.components();
+
+            loop {
+                match (comp_a.next(), comp_b.next()) {
+                    (None, None) => return true,
+                    (Some(ca), Some(cb)) => {
+                        if !Self::components_equal_windows(&ca, &cb) {
+                            return false;
+                        }
+                    }
+                    _ => return false,
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            path_a == path_b
+        }
+    }
+
+    /// Compares the parent directories of two paths for equality in a platform-appropriate manner.
+    pub fn path_parents_equal(path_a: &Path, path_b: &Path) -> bool {
+        match (path_a.parent(), path_b.parent()) {
+            (Some(pa), Some(pb)) => Self::paths_equal(pa, pb),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    fn components_equal_windows(ca: &std::path::Component, cb: &std::path::Component) -> bool {
+        use std::path::{Component, Prefix};
+
+        match (ca, cb) {
+            (Component::Prefix(pa), Component::Prefix(pb)) => match (pa.kind(), pb.kind()) {
+                (Prefix::Disk(da), Prefix::Disk(db))
+                | (Prefix::VerbatimDisk(da), Prefix::VerbatimDisk(db))
+                | (Prefix::Disk(da), Prefix::VerbatimDisk(db))
+                | (Prefix::VerbatimDisk(da), Prefix::Disk(db)) => {
+                    da.to_ascii_uppercase() == db.to_ascii_uppercase()
+                }
+                (Prefix::UNC(s_a, sh_a), Prefix::UNC(s_b, sh_b))
+                | (Prefix::VerbatimUNC(s_a, sh_a), Prefix::VerbatimUNC(s_b, sh_b)) => {
+                    Self::str_equal_ignore_case(
+                        s_a.to_string_lossy().as_ref(),
+                        s_b.to_string_lossy().as_ref(),
+                    ) && Self::str_equal_ignore_case(
+                        sh_a.to_string_lossy().as_ref(),
+                        sh_b.to_string_lossy().as_ref(),
+                    )
+                }
+                (Prefix::DeviceNS(d_a), Prefix::DeviceNS(d_b))
+                | (Prefix::Verbatim(d_a), Prefix::Verbatim(d_b)) => Self::str_equal_ignore_case(
+                    d_a.to_string_lossy().as_ref(),
+                    d_b.to_string_lossy().as_ref(),
+                ),
+                _ => false,
+            },
+            (Component::RootDir, Component::RootDir)
+            | (Component::CurDir, Component::CurDir)
+            | (Component::ParentDir, Component::ParentDir) => true,
+            (Component::Normal(oa), Component::Normal(ob)) => Self::str_equal_ignore_case(
+                oa.to_string_lossy().as_ref(),
+                ob.to_string_lossy().as_ref(),
+            ),
+            _ => false,
+        }
+    }
+
+    fn str_equal_ignore_case(a: &str, b: &str) -> bool {
+        a.chars()
+            .flat_map(|c| c.to_lowercase())
+            .eq(b.chars().flat_map(|c| c.to_lowercase()))
+    }
+
     /// Executes full application discovery across Windows registry hives and Start Menu directories.
     pub fn discover_all() -> Result<DiscoveryResult, DomainError> {
         let mut raw_entries = Vec::new();
@@ -36,7 +143,10 @@ impl ApplicationDiscoveryService {
                 DiscoverySource::RegistryHklm64,
             ) {
                 Ok(mut entries) => raw_entries.append(&mut entries),
-                Err(err) => partial_failures.push(format!("HKLM 64-bit: {}", err)),
+                Err(err) => partial_failures.push(Self::format_sanitized_failure(
+                    "Registry (HKLM 64-bit)",
+                    &err,
+                )),
             }
 
             // 2. HKLM 32-bit (Wow6432Node) Registry Hive
@@ -48,7 +158,10 @@ impl ApplicationDiscoveryService {
                 DiscoverySource::RegistryHklm32,
             ) {
                 Ok(mut entries) => raw_entries.append(&mut entries),
-                Err(err) => partial_failures.push(format!("HKLM 32-bit: {}", err)),
+                Err(err) => partial_failures.push(Self::format_sanitized_failure(
+                    "Registry (HKLM 32-bit)",
+                    &err,
+                )),
             }
 
             // 3. HKCU (Current User) Registry Hive
@@ -60,7 +173,8 @@ impl ApplicationDiscoveryService {
                 DiscoverySource::RegistryHkcu,
             ) {
                 Ok(mut entries) => raw_entries.append(&mut entries),
-                Err(err) => partial_failures.push(format!("HKCU User: {}", err)),
+                Err(err) => partial_failures
+                    .push(Self::format_sanitized_failure("Registry (HKCU User)", &err)),
             }
 
             // 4. Common (System-wide) Start Menu Shortcuts
@@ -74,8 +188,14 @@ impl ApplicationDiscoveryService {
                     3,
                 ) {
                     Ok(mut entries) => raw_entries.append(&mut entries),
-                    Err(err) => partial_failures.push(format!("Start Menu Common: {}", err)),
+                    Err(err) => partial_failures
+                        .push(Self::format_sanitized_failure("Start Menu (Common)", &err)),
                 }
+            } else {
+                partial_failures.push(Self::format_sanitized_failure(
+                    "Start Menu (Common)",
+                    "Environment variable unavailable.",
+                ));
             }
 
             // 5. User Start Menu Shortcuts
@@ -89,8 +209,14 @@ impl ApplicationDiscoveryService {
                     3,
                 ) {
                     Ok(mut entries) => raw_entries.append(&mut entries),
-                    Err(err) => partial_failures.push(format!("Start Menu User: {}", err)),
+                    Err(err) => partial_failures
+                        .push(Self::format_sanitized_failure("Start Menu (User)", &err)),
                 }
+            } else {
+                partial_failures.push(Self::format_sanitized_failure(
+                    "Start Menu (User)",
+                    "Environment variable unavailable.",
+                ));
             }
         }
 
@@ -187,10 +313,11 @@ impl ApplicationDiscoveryService {
                 }
 
                 // 4. Distinct install path compatibility: if both have explicit target paths in different directories, do not merge
+                // Uses case-insensitive Windows path comparison to prevent case-mismatch false splits
                 if let (Some(et), Some(nt)) = (&existing.target_path, &target_path) {
                     let ep = Path::new(et);
                     let np = Path::new(nt);
-                    if ep != np && ep.parent() != np.parent() {
+                    if !Self::paths_equal(ep, np) && !Self::path_parents_equal(ep, np) {
                         continue; // Different installation directories -> distinct instances
                     }
                 }
@@ -342,6 +469,155 @@ mod tests {
         assert_eq!(app.sources.len(), 2);
         assert!(app.sources.contains(&DiscoverySource::RegistryHklm32));
         assert!(app.sources.contains(&DiscoverySource::StartMenuCommon));
+    }
+
+    #[test]
+    fn test_path_comparison_case_insensitivity() {
+        assert!(ApplicationDiscoveryService::paths_equal(
+            Path::new(r"C:\Program Files\App\app.exe"),
+            Path::new(r"c:\program files\app\app.exe")
+        ));
+        assert!(ApplicationDiscoveryService::paths_equal(
+            Path::new(r"C:/Program Files/App/app.exe"),
+            Path::new(r"c:\program files\app\app.exe")
+        ));
+        assert!(ApplicationDiscoveryService::paths_equal(
+            Path::new(r"C:\Programme\ÜberTool.exe"),
+            Path::new(r"c:\programme\übertool.exe")
+        ));
+        assert!(!ApplicationDiscoveryService::paths_equal(
+            Path::new(r"C:\App1\app.exe"),
+            Path::new(r"C:\App2\app.exe")
+        ));
+        assert!(ApplicationDiscoveryService::path_parents_equal(
+            Path::new(r"C:\Program Files\App\app.exe"),
+            Path::new(r"c:\program files\app\other.exe")
+        ));
+        assert!(!ApplicationDiscoveryService::path_parents_equal(
+            Path::new(r"C:\App1\app.exe"),
+            Path::new(r"C:\App2\app.exe")
+        ));
+    }
+
+    #[test]
+    fn test_cross_source_merging_different_path_casing() {
+        let entry_reg = RawDiscoveredEntry {
+            raw_display_name: Some("Visual Studio Code".to_string()),
+            raw_publisher: Some("Microsoft Corporation".to_string()),
+            raw_version: Some("1.99.1".to_string()),
+            raw_install_location: None,
+            raw_display_icon: None,
+            raw_target_path: Some(r"C:\Program Files\Microsoft VS Code\Code.exe".to_string()),
+            source: DiscoverySource::RegistryHkcu,
+        };
+
+        let entry_shortcut = RawDiscoveredEntry {
+            raw_display_name: Some("Visual Studio Code".to_string()),
+            raw_publisher: None,
+            raw_version: None,
+            raw_install_location: None,
+            raw_display_icon: None,
+            // Different drive-letter casing and folder casing
+            raw_target_path: Some(r"c:\program files\microsoft vs code\code.exe".to_string()),
+            source: DiscoverySource::StartMenuUser,
+        };
+
+        let results =
+            ApplicationDiscoveryService::process_raw_entries(vec![entry_reg, entry_shortcut]);
+        assert_eq!(
+            results.len(),
+            1,
+            "Observations with different path casing must merge into a single application"
+        );
+        assert_eq!(results[0].sources.len(), 2);
+    }
+
+    #[test]
+    fn test_different_installation_directories_do_not_merge() {
+        let entry1 = RawDiscoveredEntry {
+            raw_display_name: Some("Python".to_string()),
+            raw_publisher: Some("Python Software Foundation".to_string()),
+            raw_version: Some("3.11".to_string()),
+            raw_install_location: None,
+            raw_display_icon: None,
+            raw_target_path: Some(r"C:\Python311\python.exe".to_string()),
+            source: DiscoverySource::RegistryHklm64,
+        };
+
+        let entry2 = RawDiscoveredEntry {
+            raw_display_name: Some("Python".to_string()),
+            raw_publisher: Some("Python Software Foundation".to_string()),
+            raw_version: Some("3.12".to_string()),
+            raw_install_location: None,
+            raw_display_icon: None,
+            raw_target_path: Some(r"C:\Python312\python.exe".to_string()),
+            source: DiscoverySource::RegistryHklm64,
+        };
+
+        let results = ApplicationDiscoveryService::process_raw_entries(vec![entry1, entry2]);
+        assert_eq!(
+            results.len(),
+            2,
+            "Distinct installation directories must remain separate applications"
+        );
+        assert_ne!(results[0].id, results[1].id);
+    }
+
+    #[test]
+    fn test_unicode_path_deduplication() {
+        let entry1 = RawDiscoveredEntry {
+            raw_display_name: Some("Editor".to_string()),
+            raw_publisher: None,
+            raw_version: None,
+            raw_install_location: None,
+            raw_display_icon: None,
+            raw_target_path: Some(r"C:\Programme\ÜberApp\App.exe".to_string()),
+            source: DiscoverySource::RegistryHklm64,
+        };
+
+        let entry2 = RawDiscoveredEntry {
+            raw_display_name: Some("Editor".to_string()),
+            raw_publisher: None,
+            raw_version: None,
+            raw_install_location: None,
+            raw_display_icon: None,
+            raw_target_path: Some(r"c:\programme\überapp\app.exe".to_string()),
+            source: DiscoverySource::StartMenuCommon,
+        };
+
+        let results = ApplicationDiscoveryService::process_raw_entries(vec![entry1, entry2]);
+        assert_eq!(
+            results.len(),
+            1,
+            "Unicode paths differing only in casing must merge"
+        );
+    }
+
+    #[test]
+    fn test_partial_failure_sanitization_scrubs_usernames_and_paths() {
+        let synthetic_user_err = r#"Inaccessible directory: "C:\Users\JohnDoe\AppData\Roaming\Microsoft\Windows\Start Menu": Access is denied."#;
+        let sanitized = ApplicationDiscoveryService::format_sanitized_failure(
+            "Start Menu (User)",
+            synthetic_user_err,
+        );
+        assert_eq!(sanitized, "Start Menu (User): Access is denied.");
+        assert!(!sanitized.contains("JohnDoe"));
+        assert!(!sanitized.contains("Users"));
+        assert!(!sanitized.contains(r"C:\"));
+        assert!(!sanitized.contains("AppData"));
+
+        let synthetic_registry_err = r#"Inaccessible registry key Software\Microsoft\Windows\CurrentVersion\Uninstall: Not found."#;
+        let sanitized_reg = ApplicationDiscoveryService::format_sanitized_failure(
+            "Registry (HKLM 64-bit)",
+            synthetic_registry_err,
+        );
+        assert_eq!(
+            sanitized_reg,
+            "Registry (HKLM 64-bit): Resource not found or unavailable."
+        );
+        assert!(!sanitized_reg.contains(r"Software\Microsoft"));
+        assert!(!sanitized_reg.contains("CurrentVersion"));
+        assert!(!sanitized_reg.contains("Uninstall"));
     }
 
     #[test]
