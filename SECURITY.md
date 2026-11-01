@@ -4,6 +4,14 @@ DeskPilot is designed from the ground up as a security-conscious desktop command
 
 ---
 
+## Core Security Invariant
+
+> **Frontend requests are never treated as authorization to perform arbitrary operating-system actions.**
+
+The user interface layer is an untrusted presentation layer. Every request crossing the Tauri IPC boundary must represent a discrete, validated high-level domain intent. The backend Rust kernel alone owns authorization, path canonicalization, pre-flight safety checks, and execution boundaries.
+
+---
+
 ## Core Security Principles
 
 ### 1. Principle of Least Privilege
@@ -13,10 +21,10 @@ The frontend user interface (React running inside Windows WebView2) is treated a
 DeskPilot never invokes command interpreters (`cmd.exe /c`, `powershell.exe -Command`, or bash) to launch applications or execute system actions. All process executions are dispatched directly through native Win32 APIs (`CreateProcessW` or `ShellExecuteExW`) with discrete argument arrays to prevent shell injection, argument injection, and command chaining vulnerabilities.
 
 ### 3. Strongly Typed Domain IPC Boundaries
-Communication between the frontend and Rust core is strictly mediated by strongly-typed Tauri IPC commands. The frontend transmits high-level *domain intents* (e.g., `execute_application(app_id: Uuid)`), never raw executable paths or arbitrary system commands. Every payload is validated against strict Serde schemas in Rust and Zod schemas in TypeScript before execution.
+Communication between the frontend and Rust core is strictly mediated by strongly-typed Tauri IPC commands. The frontend transmits high-level *domain intents* (e.g., `execute_application(app_id: Uuid)`), never raw executable paths or arbitrary system commands. Every payload is validated against strict Serde schemas in Rust and Zod/TypeScript schemas in the frontend before execution.
 
 ### 4. Path Traversal & Filesystem Guards
-All filesystem paths received by the backend must undergo canonicalization (`std::fs::canonicalize`) and pass through a dedicated security guard (`fs_guard`) to prevent directory traversal (`..`), Alternate Data Streams (`:stream`), and unauthorized namespace access.
+All filesystem paths received by the backend must undergo canonicalization (`std::fs::canonicalize`) and pass through a dedicated security guard (`security::InputGuard` / `fs_guard`) to prevent directory traversal (`..`), Alternate Data Streams (`:stream`), null bytes (`\0`), and unauthorized namespace access.
 
 ### 5. Safe Destructive Operations & Rollback Safeguards
 Destructive file operations (such as file deletion or bulk renaming) require explicit safety mechanisms:
