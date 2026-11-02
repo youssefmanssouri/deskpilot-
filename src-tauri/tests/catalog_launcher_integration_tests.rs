@@ -10,6 +10,20 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+fn get_test_system_executable() -> PathBuf {
+    let candidates = [
+        r"C:\Windows\System32\whoami.exe",
+        r"C:\Windows\System32\where.exe",
+    ];
+    for candidate in candidates {
+        let p = PathBuf::from(candidate);
+        if p.is_file() {
+            return p;
+        }
+    }
+    panic!("Standard Windows test executable not found in System32");
+}
+
 fn create_temp_exe_fixture(suffix: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
     let name = format!(
@@ -149,14 +163,14 @@ fn test_catalog_replacement_on_rediscovery() {
 #[test]
 fn test_launcher_resolves_and_validates_from_catalog() {
     let state = AppState::new("DeskPilot", "0.1.0");
-    let temp_exe = create_temp_exe_fixture("valid");
+    let sys_exe = get_test_system_executable();
     let id = "app_33333333333333333333333333333333";
 
     state
         .update_catalog(vec![make_discovered_app(
             id,
             "Launchable App",
-            Some(temp_exe.to_string_lossy().to_string()),
+            Some(sys_exe.to_string_lossy().to_string()),
             AvailabilityState::Available,
         )])
         .unwrap();
@@ -168,8 +182,6 @@ fn test_launcher_resolves_and_validates_from_catalog() {
     assert_eq!(validated.display_name, "Launchable App");
     assert!(validated.executable_path.is_file());
     assert!(validated.working_directory.is_some());
-
-    let _ = std::fs::remove_file(temp_exe);
 }
 
 #[test]
@@ -381,4 +393,101 @@ fn test_concurrent_discovery_serialization() {
     assert_eq!(state.catalog_generation(), 2);
     assert!(state.get_application(id_b).unwrap().is_some());
     assert!(state.get_application(id_a).unwrap().is_none());
+}
+
+#[test]
+fn test_launch_integration_end_to_end() {
+    let state = AppState::new("DeskPilot", "0.1.0");
+    let sys_exe = get_test_system_executable();
+    let id = "app_11112222333344445555666677778888";
+
+    state
+        .update_catalog(vec![make_discovered_app(
+            id,
+            "Integration Launch Target",
+            Some(sys_exe.to_string_lossy().to_string()),
+            AvailabilityState::Available,
+        )])
+        .unwrap();
+
+    let result = ApplicationLauncherService::launch(&state, id)
+        .expect("Integration launch must succeed for registered local executable");
+
+    assert_eq!(result.application_id, id);
+    assert!(result.process_id > 0);
+}
+
+#[test]
+fn test_launch_integration_rejects_transient_temp_directory() {
+    let state = AppState::new("DeskPilot", "0.1.0");
+    let temp_exe = create_temp_exe_fixture("integ_transient");
+    let id = "app_99998888777766665555444433332222";
+
+    state
+        .update_catalog(vec![make_discovered_app(
+            id,
+            "Transient App",
+            Some(temp_exe.to_string_lossy().to_string()),
+            AvailabilityState::Available,
+        )])
+        .unwrap();
+
+    let err = ApplicationLauncherService::launch(&state, id).unwrap_err();
+    match err {
+        DomainError::PermissionDenied(msg) => {
+            assert!(msg.contains("temporary or transient directories is prohibited"));
+            assert!(!msg.contains("AppData"));
+            assert!(!msg.contains("Temp"));
+        }
+        _ => panic!("Expected PermissionDenied for transient target in integration test"),
+    }
+
+    let _ = std::fs::remove_file(temp_exe);
+}
+
+#[test]
+fn test_launch_concurrency_with_rediscovery() {
+    let state = Arc::new(AppState::new("DeskPilot", "0.1.0"));
+    let sys_exe = get_test_system_executable();
+    let id_target = "app_abababababababababababababababab";
+    let id_new = "app_cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+
+    // Initial catalog generation containing the target
+    state
+        .update_catalog(vec![make_discovered_app(
+            id_target,
+            "Concurrent Launch App",
+            Some(sys_exe.to_string_lossy().to_string()),
+            AvailabilityState::Available,
+        )])
+        .unwrap();
+
+    let state_launch = Arc::clone(&state);
+    let launch_handle =
+        std::thread::spawn(move || ApplicationLauncherService::launch(&state_launch, id_target));
+
+    let state_discovery = Arc::clone(&state);
+    let discovery_handle = std::thread::spawn(move || {
+        // Rediscovery updates catalog to generation 2 with a new app
+        state_discovery.update_catalog(vec![make_discovered_app(
+            id_new,
+            "New Rediscovered App",
+            None,
+            AvailabilityState::Available,
+        )])
+    });
+
+    let launch_res = launch_handle
+        .join()
+        .unwrap()
+        .expect("Concurrent launch must succeed");
+    let (gen2, count2) = discovery_handle
+        .join()
+        .unwrap()
+        .expect("Rediscovery must succeed");
+
+    assert_eq!(launch_res.application_id, id_target);
+    assert!(launch_res.process_id > 0);
+    assert_eq!(gen2, 2);
+    assert_eq!(count2, 1);
 }
