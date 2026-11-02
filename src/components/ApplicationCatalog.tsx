@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   deskpilotApi,
   type ApplicationDto,
@@ -105,21 +105,29 @@ export function ApplicationCatalog({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(initialApplications !== undefined);
+  const discoveryRequestIdRef = useRef<number>(0);
 
   const fetchDiscovery = useCallback(async () => {
+    const requestId = ++discoveryRequestIdRef.current;
     setIsLoading(true);
     setErrorMsg(null);
     try {
       const result: DiscoveryResultDto = await deskpilotApi.discoverApplications();
-      setApplications(result.applications);
-      setScannedSources(result.scannedSources);
-      setPartialFailures(result.partialFailures);
-      setHasDiscovered(true);
+      if (requestId === discoveryRequestIdRef.current) {
+        setApplications(result.applications);
+        setScannedSources(result.scannedSources);
+        setPartialFailures(result.partialFailures);
+        setHasDiscovered(true);
+      }
     } catch (err) {
-      const ipcErr = IpcError.fromResponse(err);
-      setErrorMsg(ipcErr.message || 'Applications could not be loaded.');
+      if (requestId === discoveryRequestIdRef.current) {
+        const ipcErr = IpcError.fromResponse(err);
+        setErrorMsg(ipcErr.message || 'Applications could not be loaded.');
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === discoveryRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -257,3 +265,4 @@ export function ApplicationCatalog({
     </div>
   );
 }
+

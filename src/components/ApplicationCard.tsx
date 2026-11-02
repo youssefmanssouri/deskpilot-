@@ -11,19 +11,16 @@ export interface ApplicationCardProps {
 
 /**
  * Returns the CSS modifier class for the availability badge.
+ * Preserves the exact ternary logic and formatting from DeskPilot Phase 3.
  */
 export function getAvailabilityBadgeClass(availability: ApplicationDto['availability']): string {
-  switch (availability) {
-    case 'Available':
-      return 'badge-available';
-    case 'Unverified':
-      return 'badge-unverified';
-    case 'MissingTarget':
-      return 'badge-missing';
-    case 'IncompleteMetadata':
-    default:
-      return 'badge-incomplete';
-  }
+  return availability === 'Available'
+    ? 'badge-available'
+    : availability === 'Unverified'
+      ? 'badge-unverified'
+      : availability === 'MissingTarget'
+        ? 'badge-missing'
+        : 'badge-incomplete';
 }
 
 /**
