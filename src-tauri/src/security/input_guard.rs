@@ -56,6 +56,26 @@ impl InputGuard {
 
         Ok(())
     }
+
+    /// Validates that an application identifier strictly conforms to the `app_[0-9a-f]{32}` format.
+    pub fn validate_application_id(id: &str) -> Result<(), DomainError> {
+        let trimmed = id.trim();
+        if trimmed.len() != 36 || !trimmed.starts_with("app_") {
+            return Err(DomainError::InvalidInput(
+                "Invalid application identifier format. Expected 'app_' followed by 32 hexadecimal characters."
+                    .to_string(),
+            ));
+        }
+
+        let hex_part = &trimmed[4..];
+        if !hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(DomainError::InvalidInput(
+                "Application identifier contains invalid hexadecimal characters.".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -91,5 +111,24 @@ mod tests {
         assert!(InputGuard::validate_action_type("status").is_ok());
         assert!(InputGuard::validate_action_type("execute_arbitrary_shell").is_err());
         assert!(InputGuard::validate_action_type("delete_root").is_err());
+    }
+
+    #[test]
+    fn test_validate_application_id() {
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdef").is_ok()
+        );
+        assert!(
+            InputGuard::validate_application_id("app_A1B2C3D4E5F678901234567890ABCDEF").is_ok()
+        );
+        assert!(InputGuard::validate_application_id("app_short").is_err());
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdeg").is_err()
+        );
+        assert!(InputGuard::validate_application_id("0123456789abcdef0123456789abcdef").is_err());
+        assert!(InputGuard::validate_application_id("").is_err());
+        assert!(
+            InputGuard::validate_application_id("../app_0123456789abcdef0123456789abcdef").is_err()
+        );
     }
 }
