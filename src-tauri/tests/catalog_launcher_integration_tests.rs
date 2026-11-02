@@ -494,3 +494,57 @@ fn test_launch_concurrency_with_rediscovery() {
     assert_eq!(gen2, 2);
     assert_eq!(count2, 1);
 }
+
+#[test]
+fn test_live_host_discovery_and_catalog_stability() {
+    use deskpilot_lib::core::ApplicationDiscoveryService;
+
+    let disc_res = ApplicationDiscoveryService::discover_all();
+    assert!(
+        disc_res.is_ok(),
+        "Live host discovery must execute successfully without panic"
+    );
+    let disc = disc_res.unwrap();
+
+    println!(
+        "HOST_DISCOVERY: total_discovered={}",
+        disc.applications.len()
+    );
+    println!("HOST_DISCOVERY: scanned_sources={:?}", disc.scanned_sources);
+    println!(
+        "HOST_DISCOVERY: partial_failures={:?}",
+        disc.partial_failures
+    );
+
+    for app in disc.applications.iter().take(10) {
+        println!(
+            "HOST_DISCOVERY_APP: id={} name='{}' pub='{:?}' ver='{:?}' avail={:?} sources={:?}",
+            app.id, app.display_name, app.publisher, app.version, app.availability, app.sources
+        );
+    }
+
+    // Verify catalog integration through AppState with repeated discovery cycles
+    let state = AppState::new("DeskPilotLiveTest", "1.0.0");
+    let initial_res = state
+        .execute_serialized_discovery()
+        .expect("AppState serialized live discovery should succeed");
+    assert_eq!(
+        initial_res.applications.len(),
+        disc.applications.len(),
+        "Catalog snapshot must match direct discovery count"
+    );
+
+    let second_res = state
+        .execute_serialized_discovery()
+        .expect("Second AppState serialized live discovery should succeed");
+    assert_eq!(
+        second_res.applications.len(),
+        initial_res.applications.len(),
+        "Repeated live discovery must produce stable application count"
+    );
+    assert_eq!(
+        state.catalog_generation(),
+        2,
+        "Catalog generation must increment to 2 after second live discovery"
+    );
+}
