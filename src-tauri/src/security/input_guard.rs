@@ -59,18 +59,21 @@ impl InputGuard {
 
     /// Validates that an application identifier strictly conforms to the `app_[0-9a-f]{32}` format.
     pub fn validate_application_id(id: &str) -> Result<(), DomainError> {
-        let trimmed = id.trim();
-        if trimmed.len() != 36 || !trimmed.starts_with("app_") {
+        if id.len() != 36 || !id.starts_with("app_") {
             return Err(DomainError::InvalidInput(
-                "Invalid application identifier format. Expected 'app_' followed by 32 hexadecimal characters."
+                "Invalid application identifier format. Expected 'app_' followed by 32 lowercase hexadecimal characters."
                     .to_string(),
             ));
         }
 
-        let hex_part = &trimmed[4..];
-        if !hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+        let hex_part = &id[4..];
+        if !hex_part
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+        {
             return Err(DomainError::InvalidInput(
-                "Application identifier contains invalid hexadecimal characters.".to_string(),
+                "Application identifier contains invalid characters. Only lowercase hexadecimal characters are allowed."
+                    .to_string(),
             ));
         }
 
@@ -115,20 +118,50 @@ mod tests {
 
     #[test]
     fn test_validate_application_id() {
+        // Valid lowercase 36-char ID
         assert!(
             InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdef").is_ok()
         );
+        // Uppercase hexadecimal strictly rejected
         assert!(
-            InputGuard::validate_application_id("app_A1B2C3D4E5F678901234567890ABCDEF").is_ok()
+            InputGuard::validate_application_id("app_A1B2C3D4E5F678901234567890ABCDEF").is_err()
         );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdeF").is_err()
+        );
+        // Whitespace rejection (no trimming)
+        assert!(
+            InputGuard::validate_application_id(" app_0123456789abcdef0123456789abcdef").is_err()
+        );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdef ").is_err()
+        );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcde\n").is_err()
+        );
+        // Length rejection
         assert!(InputGuard::validate_application_id("app_short").is_err());
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdef00").is_err()
+        );
+        // Invalid characters
         assert!(
             InputGuard::validate_application_id("app_0123456789abcdef0123456789abcdeg").is_err()
         );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abcde-").is_err()
+        );
         assert!(InputGuard::validate_application_id("0123456789abcdef0123456789abcdef").is_err());
         assert!(InputGuard::validate_application_id("").is_err());
+        // Traversal / injection attempts
         assert!(
             InputGuard::validate_application_id("../app_0123456789abcdef0123456789abcdef").is_err()
+        );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abc/ef").is_err()
+        );
+        assert!(
+            InputGuard::validate_application_id("app_0123456789abcdef0123456789abc\\ef").is_err()
         );
     }
 }

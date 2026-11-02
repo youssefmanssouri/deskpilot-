@@ -1,4 +1,4 @@
-use deskpilot_lib::core::ApplicationLauncherService;
+use deskpilot_lib::core::{ApplicationLauncherService, DiscoveryResult};
 use deskpilot_lib::error::DomainError;
 use deskpilot_lib::models::ApplicationDto;
 use deskpilot_lib::models::application::{
@@ -8,6 +8,7 @@ use deskpilot_lib::state::AppState;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 fn create_temp_exe_fixture(suffix: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
@@ -86,9 +87,10 @@ fn test_catalog_population_and_dto_consistency() {
     ];
 
     // Simulate discovery result updating catalog
-    let count = state
+    let (generation, count) = state
         .update_catalog(apps.clone())
         .expect("Catalog update must succeed");
+    assert_eq!(generation, 1);
     assert_eq!(count, 2);
     assert_eq!(state.catalog_len().unwrap(), 2);
     assert_eq!(state.catalog_generation(), 1);
@@ -246,4 +248,137 @@ fn test_empty_discovery_clears_catalog() {
     assert_eq!(state.catalog_len().unwrap(), 0);
     assert_eq!(state.catalog_generation(), 2);
     assert!(state.get_application(id).unwrap().is_none());
+}
+
+#[test]
+fn test_launcher_rejects_network_unc_targets_upfront() {
+    let state = AppState::new("DeskPilot", "0.1.0");
+    let test_cases = vec![
+        r"\\192.168.1.50\share\app.exe",
+        "//192.168.1.50/share/app.exe",
+        r"\\?\UNC\corp-server\tools\app.exe",
+        "//?/UNC/corp-server/tools/app.exe",
+        r"\\.\COM1",
+        r"\\.\PhysicalDrive0",
+        r"\\?\Volume{00000000-0000-0000-0000-000000000000}\app.exe",
+        r"\\?\GlobalRoot\Device\Harddisk0\app.exe",
+    ];
+
+    for (idx, target) in test_cases.into_iter().enumerate() {
+        let id = format!("app_{:032x}", idx + 100);
+        state
+            .update_catalog(vec![make_discovered_app(
+                &id,
+                "Network App",
+                Some(target.to_string()),
+                AvailabilityState::Available,
+            )])
+            .unwrap();
+
+        let start = std::time::Instant::now();
+        let err = ApplicationLauncherService::resolve_and_validate(&state, &id).unwrap_err();
+        let elapsed = start.elapsed();
+
+        // Must reject instantaneously via lexical check (< 50ms) without contacting network
+        assert!(
+            elapsed < std::time::Duration::from_millis(50),
+            "Target '{}' took too long: {:?}",
+            target,
+            elapsed
+        );
+        match err {
+            DomainError::PermissionDenied(msg) => {
+                assert!(
+                    msg.contains("prohibited") || msg.contains("network") || msg.contains("device"),
+                    "Target '{}' yielded unexpected message: {}",
+                    target,
+                    msg
+                );
+            }
+            _ => panic!(
+                "Expected PermissionDenied for target '{}', got {:?}",
+                target, err
+            ),
+        }
+    }
+}
+
+#[test]
+fn test_catalog_snapshot_atomic_generation_guarantee() {
+    let state = AppState::new("DeskPilot", "0.1.0");
+    let id = "app_abcdefabcdefabcdefabcdefabcdefab";
+
+    state
+        .update_catalog(vec![make_discovered_app(
+            id,
+            "Snapshot App",
+            Some("C:\\App\\app.exe".to_string()),
+            AvailabilityState::Available,
+        )])
+        .unwrap();
+
+    let (generation, snapshot) = state.catalog_snapshot().unwrap();
+    assert_eq!(generation, 1);
+    assert_eq!(snapshot.len(), 1);
+    assert_eq!(snapshot[0].id, id);
+    assert_eq!(snapshot[0].display_name, "Snapshot App");
+}
+
+#[test]
+fn test_concurrent_discovery_serialization() {
+    let state = Arc::new(AppState::new("DeskPilot", "0.1.0"));
+
+    let id_a = "app_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let id_b = "app_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    let state_1 = Arc::clone(&state);
+    let h1 = std::thread::spawn(move || {
+        state_1
+            .execute_serialized_discovery_with(|| {
+                // Thread 1: slow scan
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                Ok(DiscoveryResult {
+                    applications: vec![make_discovered_app(
+                        id_a,
+                        "App A",
+                        None,
+                        AvailabilityState::Available,
+                    )],
+                    scanned_sources: vec!["SourceA".to_string()],
+                    partial_failures: vec![],
+                })
+            })
+            .unwrap();
+    });
+
+    // Ensure thread 1 acquires the discovery lock first
+    std::thread::sleep(std::time::Duration::from_millis(10));
+
+    let state_2 = Arc::clone(&state);
+    let h2 = std::thread::spawn(move || {
+        state_2
+            .execute_serialized_discovery_with(|| {
+                // Thread 2: fast scan
+                Ok(DiscoveryResult {
+                    applications: vec![make_discovered_app(
+                        id_b,
+                        "App B",
+                        None,
+                        AvailabilityState::Available,
+                    )],
+                    scanned_sources: vec!["SourceB".to_string()],
+                    partial_failures: vec![],
+                })
+            })
+            .unwrap();
+    });
+
+    h1.join().unwrap();
+    h2.join().unwrap();
+
+    // Since discovery is serialized, Thread 2 executed AFTER Thread 1.
+    // The final catalog generation must be 2, containing only App B.
+    assert_eq!(state.catalog_generation(), 2);
+    assert!(state.get_application(id_b).unwrap().is_some());
+    assert!(state.get_application(id_a).unwrap().is_none());
 }
