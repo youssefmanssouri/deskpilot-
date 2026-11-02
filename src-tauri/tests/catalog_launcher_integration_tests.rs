@@ -466,6 +466,9 @@ fn test_launch_concurrency_with_rediscovery() {
     let launch_handle =
         std::thread::spawn(move || ApplicationLauncherService::launch(&state_launch, id_target));
 
+    // Brief yield/pause to allow launch thread to resolve target before rediscovery replaces catalog
+    std::thread::sleep(std::time::Duration::from_millis(5));
+
     let state_discovery = Arc::clone(&state);
     let discovery_handle = std::thread::spawn(move || {
         // Rediscovery updates catalog to generation 2 with a new app

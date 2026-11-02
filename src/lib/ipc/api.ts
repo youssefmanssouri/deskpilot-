@@ -1,5 +1,11 @@
 import { invokeSafe } from './client';
-import type { AppStatusDto, CommandIntentDto, DiscoveryResultDto } from './types';
+import type {
+  AppStatusDto,
+  CommandIntentDto,
+  DiscoveryResultDto,
+  LaunchResult,
+  LaunchResultDto,
+} from './types';
 
 /**
  * Domain-level IPC API client for DeskPilot.
@@ -28,4 +34,22 @@ export const deskpilotApi = {
   discoverApplications(): Promise<DiscoveryResultDto> {
     return invokeSafe<DiscoveryResultDto>('discover_applications');
   },
+
+  /**
+   * Launches an installed application by its catalog identifier.
+   *
+   * Only the opaque application ID is passed across the boundary;
+   * executable paths, arguments, working directories, or environment overrides
+   * are strictly forbidden and cannot be provided.
+   */
+  launchApplication(applicationId: string): Promise<LaunchResultDto> {
+    return invokeSafe<LaunchResultDto>('launch_application', { applicationId });
+  },
 };
+
+/**
+ * Standalone typed helper for launching an application by its catalog ID.
+ */
+export function launchApplication(applicationId: string): Promise<LaunchResult> {
+  return deskpilotApi.launchApplication(applicationId);
+}

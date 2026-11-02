@@ -72,3 +72,17 @@ export interface DiscoveryResultDto {
   partialFailures: string[];
   totalDiscovered: number;
 }
+
+/**
+ * Safe frontend representation of a process launch outcome.
+ *
+ * Contains strictly the opaque application identifier and the assigned OS process ID.
+ * Machine filesystem paths, arguments, working directories, and environment variables are omitted.
+ */
+export interface LaunchResultDto {
+  applicationId: string;
+  processId: number;
+}
+
+export type LaunchResult = LaunchResultDto;
+

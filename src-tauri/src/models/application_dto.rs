@@ -69,3 +69,14 @@ pub struct DiscoveryResultDto {
     pub partialFailures: Vec<String>,
     pub totalDiscovered: usize,
 }
+
+/// Result returned to the frontend by the `launch_application` IPC command.
+///
+/// Contains strictly the opaque application identifier and the operating system process ID.
+/// Sensitive machine paths, arguments, working directories, and environment variables are strictly omitted.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchResultDto {
+    pub application_id: String,
+    pub process_id: u32,
+}

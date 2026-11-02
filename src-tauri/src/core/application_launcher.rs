@@ -1,4 +1,5 @@
 use crate::error::DomainError;
+use crate::models::LaunchResultDto;
 use crate::models::application::AvailabilityState;
 use crate::security::InputGuard;
 use crate::state::AppState;
@@ -30,6 +31,15 @@ pub struct ValidatedLaunchTarget {
 pub struct LaunchResult {
     pub application_id: String,
     pub process_id: u32,
+}
+
+impl From<LaunchResult> for LaunchResultDto {
+    fn from(result: LaunchResult) -> Self {
+        Self {
+            application_id: result.application_id,
+            process_id: result.process_id,
+        }
+    }
 }
 
 /// Launcher domain service for resolving, pre-validating, and natively launching applications.
