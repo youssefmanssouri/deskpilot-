@@ -27,8 +27,14 @@ export interface AvailabilityCounts {
 }
 
 /**
- * Pure, deterministic search filter for applications.
- * Performs normalized case-insensitive substring matching on displayName and publisher.
+ * Pure, deterministic search filter and ranker for applications.
+ *
+ * Ranking precedence:
+ * 1. Exact display-name match
+ * 2. Display-name prefix match
+ * 3. Other display-name substring match
+ * 4. Publisher or secondary metadata match
+ *
  * Does not invoke backend IPC, filesystem queries, or privileged APIs.
  */
 export function filterApplications(
@@ -38,14 +44,45 @@ export function filterApplications(
   if (!searchQuery || !searchQuery.trim()) {
     return applications;
   }
-  const normalizedQuery = searchQuery.trim().toLowerCase();
-  return applications.filter((app) => {
-    const nameMatch = app.displayName.toLowerCase().includes(normalizedQuery);
-    const publisherMatch = Boolean(
-      app.publisher && app.publisher.toLowerCase().includes(normalizedQuery)
-    );
-    return nameMatch || publisherMatch;
+  const q = searchQuery.trim().toLowerCase();
+
+  type RankedApp = {
+    app: ApplicationDto;
+    rank: number;
+    originalIndex: number;
+  };
+
+  const ranked: RankedApp[] = [];
+
+  for (let i = 0; i < applications.length; i++) {
+    const app = applications[i];
+    const nameLower = app.displayName.toLowerCase();
+    const pubLower = app.publisher ? app.publisher.toLowerCase() : '';
+
+    let rank = -1;
+    if (nameLower === q) {
+      rank = 1;
+    } else if (nameLower.startsWith(q)) {
+      rank = 2;
+    } else if (nameLower.includes(q)) {
+      rank = 3;
+    } else if (pubLower.includes(q)) {
+      rank = 4;
+    }
+
+    if (rank !== -1) {
+      ranked.push({ app, rank, originalIndex: i });
+    }
+  }
+
+  ranked.sort((a, b) => {
+    if (a.rank !== b.rank) {
+      return a.rank - b.rank;
+    }
+    return a.originalIndex - b.originalIndex;
   });
+
+  return ranked.map((r) => r.app);
 }
 
 /**
@@ -106,6 +143,9 @@ export function ApplicationCatalog({
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(initialApplications !== undefined);
   const discoveryRequestIdRef = useRef<number>(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoFocusedRef = useRef<boolean>(false);
+  const cardRefs = useRef<(HTMLElement | null)[]>([]);
 
   const fetchDiscovery = useCallback(async () => {
     const requestId = ++discoveryRequestIdRef.current;
@@ -137,6 +177,13 @@ export function ApplicationCatalog({
     }
   }, [autoDiscover, initialApplications, fetchDiscovery]);
 
+  useEffect(() => {
+    if (hasDiscovered && !isLoading && !hasAutoFocusedRef.current) {
+      hasAutoFocusedRef.current = true;
+      searchInputRef.current?.focus();
+    }
+  }, [hasDiscovered, isLoading]);
+
   const filteredApps = useMemo(() => {
     return filterApplications(applications, searchFilter);
   }, [applications, searchFilter]);
@@ -144,6 +191,56 @@ export function ApplicationCatalog({
   const counts = useMemo(() => {
     return computeAvailabilityCounts(applications);
   }, [applications]);
+
+  const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
+    if (e.key === 'Escape') {
+      if (searchFilter.length > 0) {
+        e.preventDefault();
+        setSearchFilter('');
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      // Launch the first available application in filtered results
+      const firstAvailable = filteredApps.find((app) => app.availability === 'Available');
+      if (firstAvailable) {
+        const cardEl = document.querySelector(
+          `[data-testid="app-card-${firstAvailable.id}"]`
+        );
+        const btn = cardEl?.querySelector('button.launch-button') as HTMLButtonElement | null;
+        btn?.click();
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (filteredApps.length > 0) {
+        e.preventDefault();
+        cardRefs.current[0]?.focus();
+      }
+    }
+  };
+
+  const handleCardKeyDown = (index: number): React.KeyboardEventHandler<HTMLElement> => (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (index + 1 < filteredApps.length) {
+        cardRefs.current[index + 1]?.focus();
+      }
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      if (index > 0) {
+        cardRefs.current[index - 1]?.focus();
+      } else {
+        searchInputRef.current?.focus();
+      }
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      cardRefs.current[0]?.focus();
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      cardRefs.current[filteredApps.length - 1]?.focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    }
+  };
 
   return (
     <div className={`catalog-container ${className}`.trim()}>
@@ -153,12 +250,14 @@ export function ApplicationCatalog({
             Search Applications
           </label>
           <input
+            ref={searchInputRef}
             id="catalog-search-input"
             className="catalog-search-input"
             type="search"
             placeholder="Search applications by name or publisher..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             disabled={isLoading && !hasDiscovered}
             aria-label="Search applications"
           />
@@ -252,9 +351,14 @@ export function ApplicationCatalog({
         </div>
       ) : (
         <div className="catalog-grid" role="region" aria-label="Discovered applications list">
-          {filteredApps.map((app) => (
+          {filteredApps.map((app, index) => (
             <ApplicationCard
               key={app.id}
+              cardRef={(el) => {
+                cardRefs.current[index] = el;
+              }}
+              tabIndex={0}
+              onKeyDown={handleCardKeyDown(index)}
               application={app}
               onLaunchSuccess={onLaunchSuccess}
               onLaunchError={onLaunchError}

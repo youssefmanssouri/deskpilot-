@@ -3,6 +3,9 @@ import { launchApplication, IpcError, type LaunchResultDto } from '../lib/ipc';
 
 export type LaunchStatus = 'idle' | 'launching' | 'launched' | 'failed';
 
+/** Default duration in milliseconds to display launch feedback before resetting to idle. */
+export const DEFAULT_LAUNCH_RESET_DELAY_MS = 3000;
+
 export interface LaunchButtonProps {
   applicationId: string;
   disabled?: boolean;
@@ -66,12 +69,13 @@ export function LaunchButton({
   onSuccess,
   onError,
   className = '',
-  autoResetDelayMs = 0,
+  autoResetDelayMs = DEFAULT_LAUNCH_RESET_DELAY_MS,
 }: LaunchButtonProps) {
   const [internalStatus, setInternalStatus] = useState<LaunchStatus>('idle');
   const [launchedPid, setLaunchedPid] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const launchAttemptRef = useRef<number>(0);
 
   const status = controlledStatus ?? internalStatus;
   const isLaunching = status === 'launching';
@@ -80,17 +84,25 @@ export function LaunchButton({
     return () => {
       if (resetTimerRef.current) {
         clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
       }
     };
   }, []);
 
-  function scheduleReset() {
+  function scheduleReset(attempt: number) {
     if (autoResetDelayMs > 0) {
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
       resetTimerRef.current = setTimeout(() => {
-        setInternalStatus('idle');
-        setLaunchedPid(null);
-        setErrorMessage(null);
+        // Prevent stale timers from resetting a newer launch attempt
+        if (attempt === launchAttemptRef.current) {
+          setInternalStatus('idle');
+          setLaunchedPid(null);
+          setErrorMessage(null);
+          resetTimerRef.current = null;
+        }
       }, autoResetDelayMs);
     }
   }
@@ -100,6 +112,12 @@ export function LaunchButton({
       return;
     }
 
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+
+    const currentAttempt = ++launchAttemptRef.current;
     setInternalStatus('launching');
     setErrorMessage(null);
 
@@ -107,16 +125,20 @@ export function LaunchButton({
       await executeLaunch(applicationId, {
         isBusy: () => isLaunching || disabled,
         onSuccess: (pid) => {
-          setInternalStatus('launched');
-          setLaunchedPid(pid);
-          onSuccess?.(pid);
-          scheduleReset();
+          if (currentAttempt === launchAttemptRef.current) {
+            setInternalStatus('launched');
+            setLaunchedPid(pid);
+            onSuccess?.(pid);
+            scheduleReset(currentAttempt);
+          }
         },
         onError: (err) => {
-          setInternalStatus('failed');
-          setErrorMessage(err.message);
-          onError?.(err);
-          scheduleReset();
+          if (currentAttempt === launchAttemptRef.current) {
+            setInternalStatus('failed');
+            setErrorMessage(err.message);
+            onError?.(err);
+            scheduleReset(currentAttempt);
+          }
         },
       });
     } catch {

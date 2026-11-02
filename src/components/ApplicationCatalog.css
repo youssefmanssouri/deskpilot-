@@ -78,6 +78,13 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.app-card:focus-visible {
+  outline: none;
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.4);
+  transform: translateY(-1px);
+}
+
 .app-card-header {
   display: flex;
   justify-content: space-between;

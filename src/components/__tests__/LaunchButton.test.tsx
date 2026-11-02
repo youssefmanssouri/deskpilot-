@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ReactDOMServer from 'react-dom/server';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import {
   LaunchButton,
   executeLaunch,
+  DEFAULT_LAUNCH_RESET_DELAY_MS,
 } from '../LaunchButton';
 import * as tauriCore from '@tauri-apps/api/core';
 import { IpcError } from '../../lib/ipc';
@@ -14,6 +17,11 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('LaunchButton Component & Execution Layer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
   });
 
   describe('executeLaunch Core Logic', () => {
@@ -154,6 +162,148 @@ describe('LaunchButton Component & Execution Layer', () => {
       );
 
       expect(html).toContain('disabled=""');
+    });
+  });
+
+  describe('LaunchButton Timer & State Recovery Lifecycle', () => {
+    it('automatically resets from launched state back to idle after DEFAULT_LAUNCH_RESET_DELAY_MS', async () => {
+      vi.useFakeTimers();
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: 'app_timer_test',
+        processId: 7890,
+      });
+
+      render(<LaunchButton applicationId="app_timer_test" />);
+
+      const button = screen.getByRole('button', { name: /launch application app_timer_test/i });
+      expect(button.textContent).toBe('Launch');
+
+      // Click to launch
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      // Status becomes launched
+      expect(button.textContent).toBe('Launched (PID 7890)');
+      expect(button.classList.contains('launched')).toBe(true);
+
+      // Fast-forward 2999ms (not yet reset)
+      act(() => {
+        vi.advanceTimersByTime(2999);
+      });
+      expect(button.textContent).toBe('Launched (PID 7890)');
+
+      // Fast-forward past DEFAULT_LAUNCH_RESET_DELAY_MS (3000ms)
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+
+      // State is recovered back to idle, allowing repeated launches
+      expect(button.textContent).toBe('Launch');
+      expect(button.classList.contains('idle')).toBe(true);
+    });
+
+    it('automatically resets from failed state back to idle after configured delay', async () => {
+      vi.useFakeTimers();
+      vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+        code: 'UNAVAILABLE',
+        message: 'Executable target not found on disk',
+      });
+
+      render(<LaunchButton applicationId="app_timer_fail" autoResetDelayMs={1500} />);
+
+      const button = screen.getByRole('button', { name: /launch application app_timer_fail/i });
+
+      // Click to launch (fails)
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      expect(button.textContent).toBe('Launch Failed');
+      expect(button.classList.contains('failed')).toBe(true);
+
+      // Advance by 1500ms
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+
+      // State recovered to idle
+      expect(button.textContent).toBe('Launch');
+      expect(button.classList.contains('idle')).toBe(true);
+    });
+
+    it('cleans up pending timer on component unmount without error', async () => {
+      vi.useFakeTimers();
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: 'app_unmount',
+        processId: 1111,
+      });
+
+      const { unmount } = render(<LaunchButton applicationId="app_unmount" />);
+      const button = screen.getByRole('button', { name: /launch application app_unmount/i });
+
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      expect(button.textContent).toBe('Launched (PID 1111)');
+
+      // Unmount before timer fires
+      unmount();
+
+      // Advancing timer after unmount should not trigger any exceptions or warnings
+      expect(() => {
+        act(() => {
+          vi.advanceTimersByTime(DEFAULT_LAUNCH_RESET_DELAY_MS);
+        });
+      }).not.toThrow();
+    });
+
+    it('cancels pending reset timer when user initiates a new launch attempt', async () => {
+      vi.useFakeTimers();
+      vi.mocked(tauriCore.invoke).mockResolvedValue({
+        applicationId: 'app_multilaunch',
+        processId: 2222,
+      });
+
+      render(<LaunchButton applicationId="app_multilaunch" autoResetDelayMs={3000} />);
+      const button = screen.getByRole('button', { name: /launch application app_multilaunch/i });
+
+      // First launch
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(button.textContent).toBe('Launched (PID 2222)');
+
+      // 1000ms passes (timer is pending)
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // User launches again before the 3000ms timer completes
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: 'app_multilaunch',
+        processId: 3333,
+      });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      expect(button.textContent).toBe('Launched (PID 3333)');
+
+      // Another 2000ms passes (total 3000ms since first launch, but only 2000ms since second launch)
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      // Stale timer from first launch MUST NOT reset the second launch early!
+      expect(button.textContent).toBe('Launched (PID 3333)');
+
+      // Another 1000ms passes (3000ms since second launch)
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      // Now resets to idle
+      expect(button.textContent).toBe('Launch');
     });
   });
 });

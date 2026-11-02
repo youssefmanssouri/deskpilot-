@@ -304,4 +304,146 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(screen.getAllByRole('button', { name: /launch application/i })).toHaveLength(3);
     });
   });
+
+  describe('Keyboard Navigation & Catalog Hotkeys', () => {
+    it('auto-focuses search input on initial catalog ready state', async () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('clears active search query when user presses Escape in search input', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+      expect((searchInput as HTMLInputElement).value).toBe('chrome');
+
+      // Press Escape
+      fireEvent.keyDown(searchInput, { key: 'Escape' });
+      expect((searchInput as HTMLInputElement).value).toBe('');
+      // All apps restored
+      expect(screen.getByText('Visual Studio Code')).toBeDefined();
+    });
+
+    it('launches first available application when user presses Enter in search input', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[1].id,
+        processId: 4444,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+
+      // User presses Enter in search input
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+          applicationId: sampleApps[1].id,
+        });
+      });
+    });
+
+    it('does not launch any application on Enter when no available application matches', async () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      // "broken" matches sampleApps[2], which has availability='MissingTarget'
+      fireEvent.change(searchInput, { target: { value: 'broken' } });
+
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      // No launch invoke should be dispatched
+      expect(tauriCore.invoke).not.toHaveBeenCalledWith('launch_application', expect.anything());
+    });
+
+    it('navigates focus between search input and cards using arrow keys', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      const cards = screen.getAllByRole('article');
+
+      expect(document.activeElement).toBe(searchInput);
+
+      // ArrowDown from search input moves focus to first card
+      fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(cards[0]);
+
+      // ArrowRight moves focus to second card
+      fireEvent.keyDown(cards[0], { key: 'ArrowRight' });
+      expect(document.activeElement).toBe(cards[1]);
+
+      // ArrowDown moves focus to third card
+      fireEvent.keyDown(cards[1], { key: 'ArrowDown' });
+      expect(document.activeElement).toBe(cards[2]);
+
+      // ArrowUp moves focus back to second card
+      fireEvent.keyDown(cards[2], { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(cards[1]);
+
+      // ArrowLeft moves focus to first card
+      fireEvent.keyDown(cards[1], { key: 'ArrowLeft' });
+      expect(document.activeElement).toBe(cards[0]);
+
+      // ArrowUp on first card returns focus to search input
+      fireEvent.keyDown(cards[0], { key: 'ArrowUp' });
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('launches application when pressing Enter on a focused card', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[0].id,
+        processId: 5555,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const cards = screen.getAllByRole('article');
+      cards[0].focus();
+      expect(document.activeElement).toBe(cards[0]);
+
+      // Press Enter on the card
+      fireEvent.keyDown(cards[0], { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+          applicationId: sampleApps[0].id,
+        });
+      });
+    });
+  });
 });

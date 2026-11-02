@@ -7,6 +7,10 @@ export interface ApplicationCardProps {
   onLaunchError?: (applicationId: string, error: IpcError) => void;
   disabled?: boolean;
   className?: string;
+  tabIndex?: number;
+  onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  cardRef?: (el: HTMLElement | null) => void;
+  autoResetDelayMs?: number;
 }
 
 /**
@@ -37,16 +41,34 @@ export function ApplicationCard({
   onLaunchError,
   disabled = false,
   className = '',
+  tabIndex,
+  onKeyDown,
+  cardRef,
+  autoResetDelayMs,
 }: ApplicationCardProps) {
   const isLaunchDisabled = disabled || application.availability === 'MissingTarget';
   const badgeClass = getAvailabilityBadgeClass(application.availability);
   const cardTitleId = `app-card-title-${application.id}`;
 
+  const handleKeyDown: React.KeyboardEventHandler<HTMLElement> = (e) => {
+    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+      if (!isLaunchDisabled) {
+        e.preventDefault();
+        const btn = e.currentTarget.querySelector('button.launch-button') as HTMLButtonElement | null;
+        btn?.click();
+      }
+    }
+    onKeyDown?.(e);
+  };
+
   return (
     <article
+      ref={cardRef}
+      tabIndex={tabIndex ?? 0}
       className={`app-card ${className}`.trim()}
       aria-labelledby={cardTitleId}
       data-testid={`app-card-${application.id}`}
+      onKeyDown={handleKeyDown}
     >
       <div className="app-card-header">
         <div className="app-card-title-group">
@@ -84,6 +106,7 @@ export function ApplicationCard({
         <LaunchButton
           applicationId={application.id}
           disabled={isLaunchDisabled}
+          autoResetDelayMs={autoResetDelayMs}
           onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
           onError={(err) => onLaunchError?.(application.id, err)}
         />

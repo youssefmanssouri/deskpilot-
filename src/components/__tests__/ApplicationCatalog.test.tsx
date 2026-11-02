@@ -89,6 +89,55 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       filterApplications(sampleApps, 'chrome');
       expect(sampleApps).toEqual(appsCopy);
     });
+
+    it('ranks exact display-name match above prefix, substring, and publisher matches', () => {
+      const rankingApps: ApplicationDto[] = [
+        {
+          id: 'app_pub_match',
+          displayName: 'Terminal Tool',
+          publisher: 'Code Corporation',
+          sources: ['Registry'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_substring_match',
+          displayName: 'Visual Studio Code',
+          publisher: 'Microsoft',
+          sources: ['Registry'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_prefix_match',
+          displayName: 'Code Lite',
+          publisher: 'Independent',
+          sources: ['Registry'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_exact_match',
+          displayName: 'Code',
+          publisher: 'Editor',
+          sources: ['Registry'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ];
+
+      const ranked = filterApplications(rankingApps, 'code');
+
+      expect(ranked).toHaveLength(4);
+      // Rank 1: exact match ("Code")
+      expect(ranked[0].id).toBe('app_exact_match');
+      // Rank 2: prefix match ("Code Lite")
+      expect(ranked[1].id).toBe('app_prefix_match');
+      // Rank 3: substring match ("Visual Studio Code")
+      expect(ranked[2].id).toBe('app_substring_match');
+      // Rank 4: publisher match ("Terminal Tool" by "Code Corporation")
+      expect(ranked[3].id).toBe('app_pub_match');
+    });
   });
 
   describe('computeAvailabilityCounts Helper', () => {
