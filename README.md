@@ -1,98 +1,199 @@
 # DeskPilot
 
-> A serious, local-first Windows desktop command center.
+<div align="center">
 
-DeskPilot is designed as an open-source, technically disciplined, and security-conscious command center for Windows. It provides fast keyboard-driven navigation, application indexing, safe local file operations, and productivity utilities without mandatory cloud dependencies or telemetry.
+![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![Tauri](https://img.shields.io/badge/Tauri-v2.0-FFC131?style=for-the-badge&logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-1.80%2B-DEA584?style=for-the-badge&logo=rust&logoColor=white)
+![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-205%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+
+<p align="center">
+  <strong>A high-performance, local-first Windows command center built for privacy, determinism, and speed.</strong>
+</p>
+
+</div>
 
 ---
 
-## Mission & Philosophy
+## Overview
 
-- **Local-First & Offline:** All persistent data, indexing, and operational state remain on the local machine in SQLite. No cloud account is required.
-- **Deterministic Core First:** Essential system operations and utilities are engineered for reliability and determinism before introducing any optional AI features.
-- **Zero Telemetry by Default:** DeskPilot does not collect, track, or transmit usage metrics, telemetry, or system information.
-- **Strict Security Boundaries:** Destructive actions (such as file modifications and deletions) incorporate pre-flight validation, preview mechanisms, Windows Recycle Bin integration, and rollback ledgers. The frontend interface never receives unfettered shell or filesystem access.
+**DeskPilot** is an open-source, technically disciplined command center and launcher engineered natively for Windows. It provides lightning-fast application indexing, sub-millisecond search, safe Win32 execution, and system control without telemetry, cloud dependencies, or background tracking.
+
+Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 performance with modern UI ergonomics while enforcing defense-in-depth isolation boundaries between the web presentation layer and host operating system privileges.
 
 ---
 
-## Architecture Overview
+## Preview
 
-DeskPilot enforces strict separation of concerns across a multi-tier boundary:
+### Application Discovery Catalog
+Discovers applications across Windows Registry hives and Start Menu hierarchies with provenance tracking, operational availability badges, and secure launch controls.
+
+![DeskPilot Application Catalog](docs/screenshots/deskpilot_overview.png)
+
+### Real-Time Deterministic Search & Ranking
+Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, prefix match, substring match, and publisher metadata) with keyboard-first navigation.
+
+![DeskPilot Real-Time Search](docs/screenshots/deskpilot_search.png)
+
+---
+
+## Core Capabilities
+
+### 🔍 Deterministic Windows Application Discovery
+- **Multi-Hive Registry Enumeration:** Exhaustively indexes 64-bit (`KEY_WOW64_64KEY`) and 32-bit (`KEY_WOW64_32KEY`) system software keys across `HKEY_LOCAL_MACHINE` and `HKEY_CURRENT_USER`.
+- **Start Menu Hierarchy Scanner:** Traversing both Common (`C:\ProgramData\Microsoft\Windows\Start Menu\Programs`) and Per-User Start Menu directories.
+- **128-bit Collision-Resistant Application Identity:** Deterministic SHA-256 identity generation (`app_<32-hex>`) incorporating normalized publishers, application titles, and target paths to eliminate duplicate merge collisions.
+- **Availability State Engine:** Continuously tracks target executables and categorizes entries into `Available`, `Unverified`, `IncompleteMetadata`, and `MissingTarget`.
+
+### 🛡️ Memory-Safe MS-SHLLINK Shortcut Parser
+- Handcrafted, memory-safe binary parser complying with Microsoft Shell Link specification (`[MS-SHLLINK]`).
+- Strict Shell Link Header CLSID verification (`00021401-0000-0000-C000-000000000046`).
+- Checked offset arithmetic and bounded file reads (64 KB ceiling) protecting against malicious link-bomb attacks.
+- Robust decoding supporting both legacy Windows-1252 ANSI strings and modern UTF-16LE Unicode paths.
+
+### ⚡ Secure Win32 Native Launcher
+- **Direct Win32 API Invocation:** Spawns processes directly via Windows `CreateProcessW` without intermediate shell interpreters (`cmd.exe` or `powershell.exe`), eliminating command injection vulnerabilities.
+- **Safe Working Directory Binding:** Resolves working directories to target executable parent directories or system roots, preventing DLL hijacking in shared folders.
+- **Process Isolation:** Detaches launched applications into independent process trees without inheriting privileged handles.
+
+### 🔌 Strongly Typed, Least-Privilege IPC Boundary
+- **Opaque ID Addressing:** The frontend presentation layer only holds opaque application IDs (`app_<hex>`) and never handles raw filesystem paths, executable arguments, or environment variables.
+- **Input Guard Validation:** Rigorous backend validation rejecting malformed identifiers, invalid UTF-8 sequences, and forbidden payload structures.
+- **Safe Serialization:** Structured error envelopes ensuring system path leaks do not reach frontend error toasts.
+
+### 🪟 Desktop Lifecycle & System Tray Integration
+- **Single-Instance Enforcement:** Automatically detects secondary launches, forwards focus signals, and summons the primary instance without spawning duplicate processes.
+- **Native System Tray:** Lives quietly in the Windows notification area with a native context menu (`Show DeskPilot`, `Hide DeskPilot`, `Quit DeskPilot`).
+- **Predictable Hide-to-Tray:** Window close events (`X`) gracefully hide the window to the tray while preserving warm state and catalog indices; explicit quit terminates cleanly.
+- **Ergonomic Window Constraints:** Configured with a default dimension of 960×680 and strict minimum bounds of 520×450 to guarantee consistent UI layout.
+
+---
+
+## Architecture
 
 ```text
-React 19 / TypeScript (Vite)
-        │
-        │ Typed Tauri 2 IPC (Domain Intents)
-        ▼
-Tauri 2 / Rust Core Engine
-        │
-        ├── Domain Services (Application Indexer, Search Engine)
-        ├── Security Kernel (Path Traversal Guard, Least-Privilege Policies)
-        ├── SQLite Persistence (Local State & Operation History)
-        └── Native Windows Subsystem (Direct Win32 APIs, Recycle Bin)
+┌────────────────────────────────────────────────────────┐
+│               Frontend Presentation Layer              │
+│               React 19 • TypeScript • Vite             │
+│   • ApplicationCatalog        • Search & 4-Tier Rank   │
+│   • ApplicationCard           • Keyboard Navigation    │
+│   • LaunchButton (Feedback)   • Real-Time Status Badges│
+└───────────────────────────┬────────────────────────────┘
+                            │
+               Typed Tauri 2 IPC Boundary
+         (Domain Intents & Opaque Application IDs)
+                            │
+┌───────────────────────────▼────────────────────────────┐
+│                Rust Backend Core (Kernel)              │
+│                                                        │
+│  ┌───────────────────────┐   ┌──────────────────────┐  │
+│  │   Security Kernel     │   │  Application Catalog │  │
+│  │ • Input Guard         │   │ • Generational Cache │  │
+│  │ • Path Bounds Checker │   │ • RwLock Concurrency │  │
+│  └───────────────────────┘   └──────────────────────┘  │
+│  ┌───────────────────────┐   ┌──────────────────────┐  │
+│  │   Discovery Engine    │   │   System Tray & Win  │  │
+│  │ • Registry Scanners   │   │ • Single-Instance    │  │
+│  │ • MS-SHLLINK Parser   │   │ • Intercepted Close  │  │
+│  └───────────────────────┘   └──────────────────────┘  │
+└───────────────────────────┬────────────────────────────┘
+                            │ Direct Win32 APIs
+┌───────────────────────────▼────────────────────────────┐
+│                 Windows 10 / 11 Native                 │
+│  • Advapi32 (Registry)       • Shell32 (Shortcuts)     │
+│  • Kernel32 (CreateProcessW) • User32 (Tray & Window)  │
+└────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend (Presentation):** React + TypeScript running in WebView2. Responsible solely for user interaction and UI state rendering. It has no direct access to the Windows filesystem, shell, or processes.
-- **Backend (Privileged Kernel):** Rust inside Tauri 2. Enforces security capabilities, manages local SQLite databases, executes Win32 APIs directly (`CreateProcessW`, `IFileOperation`), and validates all IPC payloads.
-- **Python / AI:** Deferred. Python is excluded from the core architecture to maintain a lightweight, single-binary distribution and eliminate IPC serialization attack surfaces. Any future scripting or AI capabilities will operate as isolated optional extensions.
+---
+
+## Security Model & Invariants
+
+DeskPilot is designed around strict defense-in-depth principles:
+
+1. **Least-Privilege Web View:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, and Node.js primitives are completely disabled.
+2. **Path Traversal Guard:** Any filesystem access strictly sanitizes relative segments (`..`, `.\`, `%TEMP%`) and normalizes paths before verification.
+3. **No Shell Intermediate:** Launch commands are never formatted as string shell scripts. Process creation bypasses shell parsing entirely.
+4. **Local Data Sovereignty:** No network calls are made during indexing or launching. Zero analytics, telemetry, or user tracking exist in the codebase.
 
 ---
 
-## Current Status
+## Development & Build
 
-**Phase 1, Phase 2, Phase 3 & Phase 3.1: Architecture & Hardened Application Discovery (Completed)**
-- Official MSVC Rust toolchain (`rustc`/`cargo` v1.99.1) configured with LLVM linker (`rust-lld`) and Windows SDK / CRT libraries.
-- Tauri 2 + React + TypeScript scaffolding established.
-- Comprehensive `.gitignore` and security baseline implemented.
-- Domain structure (`commands`, `core`, `models`, `security`, `state`) and typed IPC contract (`deskpilotApi`) established.
-- Error architecture and trust boundary validation (`InputGuard`) operational.
-- **Deterministic Windows Application Discovery Engine:** Scans HKLM (64-bit `KEY_WOW64_64KEY` & 32-bit `KEY_WOW64_32KEY`), HKCU, and Start Menu shortcuts (Common & User) with bounded key enumeration and zero shell execution.
-- **Hardened MS-SHLLINK Shortcut Parser:** Memory-safe binary parser with Shell Link CLSID validation, checked offset arithmetic, bounded reads (64KB), and support for both ANSI and UTF-16LE Unicode paths.
-- **128-bit Collision-Resistant Application Identity:** SHA-256 identity generation (`app_<32-hex>`) incorporating normalized publishers, display names, target executables, and installation discriminators to prevent false merges.
-- **Application Catalog Interface:** React catalog view displaying discovered applications, metadata, source provenance badges, and operational availability status (`Available`, `Unverified`, `IncompleteMetadata`, `MissingTarget`).
+### Prerequisites
 
-*Application launching, SQLite persistence, file manager, and system monitoring will be implemented in subsequent phases.*
+| Component | Minimum Version | Recommended |
+|---|---|---|
+| **OS** | Windows 10 (64-bit) | Windows 11 Build 22631+ |
+| **Node.js** | Node.js v20+ | Node.js v22+ LTS |
+| **Rust** | Rust 1.80+ | Rust MSVC Toolchain (`x86_64-pc-windows-msvc`) |
+| **C++ Build Tools** | Visual Studio Build Tools 2022 | MSVC v143 / Windows 10/11 SDK |
+| **WebView2** | Evergreen Runtime | Pre-installed on Windows 10/11 |
 
----
+### Setup & Commands
 
-## Development Prerequisites
-
-- **Operating System:** Windows 10/11 (64-bit)
-- **Node.js:** Node.js v20+ (tested on Node v24.15.0 with npm 11.12.1)
-- **Rust Toolchain:** Stable MSVC (`x86_64-pc-windows-msvc`), version 1.80+ (v1.99.1 recommended)
-- **Windows Build Tools:** MSVC CRT & Windows SDK libraries (managed via `~/.xwin` or Visual Studio C++ Build Tools)
-- **WebView2:** Microsoft Edge WebView2 Runtime (pre-installed on Windows 10/11)
-
----
-
-## Basic Development Commands
-
-All npm commands should be invoked using `npm.cmd` on Windows if PowerShell execution policies restrict `.ps1` scripts:
+All commands can be run via PowerShell or Command Prompt. Use `npm.cmd` on Windows if PowerShell execution policies restrict script execution:
 
 ```powershell
+# Clone the repository
+git clone https://github.com/youssefmanssouri/deskpilot-.git
+cd deskpilot-
+
 # Install frontend dependencies
 npm.cmd install
 
-# Type-check TypeScript and build frontend bundle
+# Type-check TypeScript and build the production web bundle
 npm.cmd run build
 
-# Run unit tests
-npm.cmd run test
+# Run frontend test suite (62 tests across 7 suites)
+npm.cmd test -- --run
 
-# Start the Vite development server (UI only)
-npm.cmd run dev
-
-# Run Rust tests in the backend
-cd src-tauri
-cargo test
-cd ..
-
-# Launch the full Tauri 2 desktop application in development mode
+# Launch full desktop application in development mode (with hot reload)
 npm.cmd run tauri dev
 ```
 
 ---
 
+## Automated Verification Suite
+
+DeskPilot features a comprehensive suite of **205 automated tests** across both frontend and native backend layers:
+
+### Frontend Test Breakdown (Vitest)
+- `ApplicationCatalog.test.tsx` (13 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
+- `interaction.test.tsx` (13 tests): Keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
+- `LaunchButton.test.tsx` (12 tests): Launch invocation, pending state, success confirmation reset, error recovery, and timer unmount hygiene.
+- `discovery.test.ts` (8 tests): Typed IPC contract validation for application discovery and payload integrity.
+- `launcher.test.ts` (6 tests): Launch IPC contract validation and error mapping.
+- `ApplicationCard.test.tsx` (6 tests): Card rendering, availability badge states, publisher provenance display.
+- `ipc.test.ts` (4 tests): Typed error serialization and boundary protection.
+
+### Backend Test Breakdown (Cargo / Rust)
+- Application discovery across registry hives and Start Menu directories.
+- MS-SHLLINK binary parser boundary checks, CLSID validation, and malformed header rejection.
+- Secure Win32 process creation and argument isolation.
+- Single-instance mutex validation and second-instance summon mechanics.
+- System tray action dispatching, tooltip configuration, and hide-to-tray lifecycle invariants.
+- Thread-safe generational catalog cache concurrency under `RwLock`.
+
+---
+
+## Project Roadmap
+
+- [x] **Phase 1:** Architectural Foundation & Security Baseline
+- [x] **Phase 2:** Hardened Discovery Engine & Registry Scanner
+- [x] **Phase 3:** MS-SHLLINK Binary Parser & Application Identity
+- [x] **Phase 4:** Win32 Secure Launcher, Typed IPC & Catalog Integration
+- [x] **Phase 5.1:** Window Lifecycle Hardening, Single-Instance & 4-Tier Search Ranking
+- [x] **Phase 5.2:** Native System Tray & Summon Integration
+- [ ] **Phase 6:** Safe Local File Operations (Recycle Bin Integration & Rollback Ledgers)
+- [ ] **Phase 7:** SQLite Persistence & Operation Audit Trail
+- [ ] **Phase 8:** System Resource Monitoring & Health Metrics
+
+---
+
 ## License
 
-This project is open-source software licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).

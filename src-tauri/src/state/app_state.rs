@@ -27,6 +27,7 @@ pub struct AppState {
     version: String,
     started_at: Instant,
     is_healthy: AtomicBool,
+    is_quitting: AtomicBool,
     catalog: RwLock<CatalogState>,
     discovery_lock: Mutex<()>,
 }
@@ -38,6 +39,7 @@ impl AppState {
             version: version.into(),
             started_at: Instant::now(),
             is_healthy: AtomicBool::new(true),
+            is_quitting: AtomicBool::new(false),
             catalog: RwLock::new(CatalogState::default()),
             discovery_lock: Mutex::new(()),
         }
@@ -61,6 +63,14 @@ impl AppState {
 
     pub fn set_healthy(&self, healthy: bool) {
         self.is_healthy.store(healthy, Ordering::Relaxed);
+    }
+
+    pub fn is_quitting(&self) -> bool {
+        self.is_quitting.load(Ordering::Relaxed)
+    }
+
+    pub fn set_quitting(&self, quitting: bool) {
+        self.is_quitting.store(quitting, Ordering::Relaxed);
     }
 
     /// Atomically replaces the current application catalog with a new discovery generation.
@@ -242,6 +252,7 @@ mod tests {
         assert_eq!(state.app_name(), "DeskPilot");
         assert_eq!(state.version(), "0.1.0");
         assert!(state.is_healthy());
+        assert!(!state.is_quitting());
         let _ = state.uptime_seconds();
         assert_eq!(state.catalog_len().unwrap(), 0);
         assert_eq!(state.catalog_generation(), 0);
@@ -254,6 +265,16 @@ mod tests {
         assert!(!state.is_healthy());
         state.set_healthy(true);
         assert!(state.is_healthy());
+    }
+
+    #[test]
+    fn test_app_state_quitting_toggle() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        assert!(!state.is_quitting());
+        state.set_quitting(true);
+        assert!(state.is_quitting());
+        state.set_quitting(false);
+        assert!(!state.is_quitting());
     }
 
     #[test]
@@ -288,18 +309,14 @@ mod tests {
 
         // Malformed IDs return InvalidInput error
         assert!(state.get_application("invalid-id").is_err());
-        assert!(
-            state
-                .get_application("../app_0123456789abcdef0123456789abcdef")
-                .is_err()
-        );
+        assert!(state
+            .get_application("../app_0123456789abcdef0123456789abcdef")
+            .is_err());
         assert!(state.get_application("").is_err());
         // Whitespace rejected
-        assert!(
-            state
-                .get_application(" app_11111111111111111111111111111111")
-                .is_err()
-        );
+        assert!(state
+            .get_application(" app_11111111111111111111111111111111")
+            .is_err());
 
         // Valid syntax ID that is not in catalog returns Ok(None)
         let result = state.get_application(valid_unknown).unwrap();
