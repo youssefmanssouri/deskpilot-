@@ -3,7 +3,7 @@ use crate::error::DomainError;
 use crate::models::application::DiscoveredApplication;
 use crate::security::InputGuard;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 
@@ -28,6 +28,7 @@ pub struct AppState {
     started_at: Instant,
     is_healthy: AtomicBool,
     is_quitting: AtomicBool,
+    process_snapshot_seq: AtomicU64,
     catalog: RwLock<CatalogState>,
     discovery_lock: Mutex<()>,
 }
@@ -40,6 +41,7 @@ impl AppState {
             started_at: Instant::now(),
             is_healthy: AtomicBool::new(true),
             is_quitting: AtomicBool::new(false),
+            process_snapshot_seq: AtomicU64::new(1),
             catalog: RwLock::new(CatalogState::default()),
             discovery_lock: Mutex::new(()),
         }
@@ -71,6 +73,46 @@ impl AppState {
 
     pub fn set_quitting(&self, quitting: bool) {
         self.is_quitting.store(quitting, Ordering::Relaxed);
+    }
+
+    /// Allocates the next monotonic process snapshot sequence number using a checked atomic increment.
+    ///
+    /// # Explicit Overflow Policy
+    /// Snapshot sequence numbers increment monotonically starting from 1 up to `u64::MAX - 1`.
+    /// When the sequence reaches `u64::MAX`, rather than wrapping or reusing sequence numbers,
+    /// the function refuses further allocation and returns `Err(DomainError::OperationFailed)`.
+    /// Concurrent callers are guaranteed never to receive duplicate sequence values or wrapped values.
+    /// Used strictly to scope ephemeral process identities across snapshot iterations.
+    /// Does not store process handles or records in `AppState`.
+    pub fn next_process_snapshot_seq(&self) -> Result<u64, DomainError> {
+        let mut current = self.process_snapshot_seq.load(Ordering::Relaxed);
+        loop {
+            if current == u64::MAX {
+                return Err(DomainError::OperationFailed(
+                    "Process snapshot sequence numbers exhausted (u64 overflow)".to_string(),
+                ));
+            }
+            let next = current + 1;
+            match self.process_snapshot_seq.compare_exchange_weak(
+                current,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(allocated) => return Ok(allocated),
+                Err(actual) => current = actual,
+            }
+        }
+    }
+
+    /// Sets the process snapshot sequence number. Provided for deterministic boundary and overflow testing.
+    pub fn set_process_snapshot_seq_for_testing(&self, seq: u64) {
+        self.process_snapshot_seq.store(seq, Ordering::Relaxed);
+    }
+
+    /// Returns the current process snapshot sequence number without incrementing.
+    pub fn current_process_snapshot_seq(&self) -> u64 {
+        self.process_snapshot_seq.load(Ordering::Relaxed)
     }
 
     /// Atomically replaces the current application catalog with a new discovery generation.
@@ -278,6 +320,72 @@ mod tests {
     }
 
     #[test]
+    fn test_process_snapshot_seq_lifecycle() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        assert_eq!(state.current_process_snapshot_seq(), 1);
+        assert_eq!(state.next_process_snapshot_seq().unwrap(), 1);
+        assert_eq!(state.next_process_snapshot_seq().unwrap(), 2);
+        assert_eq!(state.next_process_snapshot_seq().unwrap(), 3);
+        assert_eq!(state.current_process_snapshot_seq(), 4);
+    }
+
+    #[test]
+    fn test_process_snapshot_seq_overflow_boundary() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        // Set counter to u64::MAX - 1
+        state.set_process_snapshot_seq_for_testing(u64::MAX - 1);
+        assert_eq!(state.current_process_snapshot_seq(), u64::MAX - 1);
+
+        // Allocating u64::MAX - 1 succeeds and moves counter to u64::MAX
+        let seq = state.next_process_snapshot_seq().unwrap();
+        assert_eq!(seq, u64::MAX - 1);
+        assert_eq!(state.current_process_snapshot_seq(), u64::MAX);
+
+        // Once counter reaches u64::MAX, further allocations return Err
+        let err1 = state.next_process_snapshot_seq();
+        assert!(err1.is_err());
+        assert_eq!(state.current_process_snapshot_seq(), u64::MAX);
+
+        // Repeated attempts remain blocked and do not wrap
+        let err2 = state.next_process_snapshot_seq();
+        assert!(err2.is_err());
+        assert_eq!(state.current_process_snapshot_seq(), u64::MAX);
+    }
+
+    #[test]
+    fn test_process_snapshot_seq_concurrency() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let state = Arc::new(AppState::new("DeskPilot", "0.1.0"));
+        let mut handles = Vec::new();
+
+        for _ in 0..10 {
+            let state_clone = Arc::clone(&state);
+            handles.push(thread::spawn(move || {
+                let mut seqs = Vec::new();
+                for _ in 0..50 {
+                    seqs.push(state_clone.next_process_snapshot_seq().unwrap());
+                }
+                seqs
+            }));
+        }
+
+        let mut all_seqs = Vec::new();
+        for h in handles {
+            all_seqs.extend(h.join().unwrap());
+        }
+
+        assert_eq!(all_seqs.len(), 500);
+        all_seqs.sort_unstable();
+        all_seqs.dedup();
+        // Strict uniqueness across concurrent threads
+        assert_eq!(all_seqs.len(), 500);
+        assert_eq!(all_seqs[0], 1);
+        assert_eq!(all_seqs[499], 500);
+    }
+
+    #[test]
     fn test_catalog_update_and_lookup() {
         let state = AppState::new("DeskPilot", "0.1.0");
         let id = "app_0123456789abcdef0123456789abcdef";
@@ -309,14 +417,18 @@ mod tests {
 
         // Malformed IDs return InvalidInput error
         assert!(state.get_application("invalid-id").is_err());
-        assert!(state
-            .get_application("../app_0123456789abcdef0123456789abcdef")
-            .is_err());
+        assert!(
+            state
+                .get_application("../app_0123456789abcdef0123456789abcdef")
+                .is_err()
+        );
         assert!(state.get_application("").is_err());
         // Whitespace rejected
-        assert!(state
-            .get_application(" app_11111111111111111111111111111111")
-            .is_err());
+        assert!(
+            state
+                .get_application(" app_11111111111111111111111111111111")
+                .is_err()
+        );
 
         // Valid syntax ID that is not in catalog returns Ok(None)
         let result = state.get_application(valid_unknown).unwrap();
