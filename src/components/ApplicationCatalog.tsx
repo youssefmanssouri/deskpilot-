@@ -6,13 +6,17 @@ import {
   IpcError,
 } from '../lib/ipc';
 import { ApplicationCard } from './ApplicationCard';
+import { ProcessMonitor } from './ProcessMonitor';
 import './ApplicationCatalog.css';
+
+export type CatalogView = 'applications' | 'processes';
 
 export interface ApplicationCatalogProps {
   initialApplications?: ApplicationDto[];
   initialScannedSources?: string[];
   initialPartialFailures?: string[];
   autoDiscover?: boolean;
+  defaultView?: CatalogView;
   onLaunchSuccess?: (applicationId: string, processId: number) => void;
   onLaunchError?: (applicationId: string, error: IpcError) => void;
   className?: string;
@@ -127,10 +131,12 @@ export function ApplicationCatalog({
   initialScannedSources = [],
   initialPartialFailures = [],
   autoDiscover = true,
+  defaultView = 'applications',
   onLaunchSuccess,
   onLaunchError,
   className = '',
 }: ApplicationCatalogProps) {
+  const [activeView, setActiveView] = useState<CatalogView>(defaultView);
   const [applications, setApplications] = useState<ApplicationDto[]>(
     initialApplications ?? []
   );
@@ -244,126 +250,159 @@ export function ApplicationCatalog({
 
   return (
     <div className={`catalog-container ${className}`.trim()}>
-      <div className="catalog-toolbar">
-        <div className="catalog-search-wrapper">
-          <label htmlFor="catalog-search-input" className="catalog-search-label">
-            Search Applications
-          </label>
-          <input
-            ref={searchInputRef}
-            id="catalog-search-input"
-            className="catalog-search-input"
-            type="search"
-            placeholder="Search applications by name or publisher..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            disabled={isLoading && !hasDiscovered}
-            aria-label="Search applications"
-          />
-        </div>
-
+      <div className="catalog-view-switcher" role="tablist" aria-label="Catalog Navigation">
         <button
           type="button"
-          className="refresh-button"
-          onClick={fetchDiscovery}
-          disabled={isLoading}
-          aria-label="Refresh catalog"
+          role="tab"
+          id="tab-applications"
+          aria-selected={activeView === 'applications'}
+          aria-controls="panel-applications"
+          className={`view-tab-button ${activeView === 'applications' ? 'active' : ''}`}
+          onClick={() => setActiveView('applications')}
         >
-          {isLoading ? 'Scanning...' : 'Refresh Catalog'}
+          Applications
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tab-processes"
+          aria-selected={activeView === 'processes'}
+          aria-controls="panel-processes"
+          className={`view-tab-button ${activeView === 'processes' ? 'active' : ''}`}
+          onClick={() => setActiveView('processes')}
+        >
+          Active Processes
         </button>
       </div>
 
-      {errorMsg && (
-        <div className="error-banner" role="alert">
-          <p className="error-message">Applications could not be loaded.</p>
-          <p className="error-detail">{errorMsg}</p>
-          <div className="error-actions">
-            <button
-              type="button"
-              className="retry-button"
-              onClick={fetchDiscovery}
-              aria-label="Retry application discovery"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {partialFailures.length > 0 && (
-        <div className="warning-banner" role="status">
-          <strong>Partial Discovery Notice:</strong> Some registry or directory locations could not be scanned:
-          <ul>
-            {partialFailures.map((failure, idx) => (
-              <li key={idx}>{failure}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {hasDiscovered && !errorMsg && (
-        <div className="summary-bar" role="region" aria-label="Catalog summary metrics">
-          <div className="summary-item">
-            Total Discovered: <strong>{counts.total}</strong>
-          </div>
-          <div className="summary-item">
-            Available: <strong style={{ color: '#58a6ff' }}>{counts.available}</strong>
-          </div>
-          <div className="summary-item">
-            Unverified: <strong style={{ color: '#d29922' }}>{counts.unverified}</strong>
-          </div>
-          {counts.incomplete > 0 && (
-            <div className="summary-item">
-              Incomplete: <strong style={{ color: '#8b949e' }}>{counts.incomplete}</strong>
-            </div>
-          )}
-          {counts.missing > 0 && (
-            <div className="summary-item">
-              Missing Target: <strong style={{ color: '#f85149' }}>{counts.missing}</strong>
-            </div>
-          )}
-        </div>
-      )}
-
-      {scannedSources.length > 0 && (
-        <div className="sources-list" aria-label="Scanned sources">
-          {scannedSources.map((source, idx) => (
-            <span key={idx} className="source-pill">
-              ✓ {source}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {isLoading && !hasDiscovered ? (
-        <div className="loading-state" role="status">
-          <p>Loading applications...</p>
-        </div>
-      ) : applications.length === 0 && hasDiscovered && !errorMsg ? (
-        <div className="empty-state" role="status">
-          <p className="empty-title">No applications found.</p>
-          <p className="empty-subtitle">Try refreshing the application catalog.</p>
-        </div>
-      ) : filteredApps.length === 0 && applications.length > 0 ? (
-        <div className="empty-state" role="status">
-          <p>No applications match your filter.</p>
+      {activeView === 'processes' ? (
+        <div id="panel-processes" role="tabpanel" aria-labelledby="tab-processes">
+          <ProcessMonitor />
         </div>
       ) : (
-        <div className="catalog-grid" role="region" aria-label="Discovered applications list">
-          {filteredApps.map((app, index) => (
-            <ApplicationCard
-              key={app.id}
-              cardRef={(el) => {
-                cardRefs.current[index] = el;
-              }}
-              tabIndex={0}
-              onKeyDown={handleCardKeyDown(index)}
-              application={app}
-              onLaunchSuccess={onLaunchSuccess}
-              onLaunchError={onLaunchError}
-            />
-          ))}
+        <div id="panel-applications" role="tabpanel" aria-labelledby="tab-applications" className="catalog-tab-content">
+          <div className="catalog-toolbar">
+            <div className="catalog-search-wrapper">
+              <label htmlFor="catalog-search-input" className="catalog-search-label">
+                Search Applications
+              </label>
+              <input
+                ref={searchInputRef}
+                id="catalog-search-input"
+                className="catalog-search-input"
+                type="search"
+                placeholder="Search applications by name or publisher..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                disabled={isLoading && !hasDiscovered}
+                aria-label="Search applications"
+              />
+            </div>
+
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={fetchDiscovery}
+              disabled={isLoading}
+              aria-label="Refresh catalog"
+            >
+              {isLoading ? 'Scanning...' : 'Refresh Catalog'}
+            </button>
+          </div>
+
+          {errorMsg && (
+            <div className="error-banner" role="alert">
+              <p className="error-message">Applications could not be loaded.</p>
+              <p className="error-detail">{errorMsg}</p>
+              <div className="error-actions">
+                <button
+                  type="button"
+                  className="retry-button"
+                  onClick={fetchDiscovery}
+                  aria-label="Retry application discovery"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {partialFailures.length > 0 && (
+            <div className="warning-banner" role="status">
+              <strong>Partial Discovery Notice:</strong> Some registry or directory locations could not be scanned:
+              <ul>
+                {partialFailures.map((failure, idx) => (
+                  <li key={idx}>{failure}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {hasDiscovered && !errorMsg && (
+            <div className="summary-bar" role="region" aria-label="Catalog summary metrics">
+              <div className="summary-item">
+                Total Discovered: <strong>{counts.total}</strong>
+              </div>
+              <div className="summary-item">
+                Available: <strong style={{ color: '#58a6ff' }}>{counts.available}</strong>
+              </div>
+              <div className="summary-item">
+                Unverified: <strong style={{ color: '#d29922' }}>{counts.unverified}</strong>
+              </div>
+              {counts.incomplete > 0 && (
+                <div className="summary-item">
+                  Incomplete: <strong style={{ color: '#8b949e' }}>{counts.incomplete}</strong>
+                </div>
+              )}
+              {counts.missing > 0 && (
+                <div className="summary-item">
+                  Missing Target: <strong style={{ color: '#f85149' }}>{counts.missing}</strong>
+                </div>
+              )}
+            </div>
+          )}
+
+          {scannedSources.length > 0 && (
+            <div className="sources-list" aria-label="Scanned sources">
+              {scannedSources.map((source, idx) => (
+                <span key={idx} className="source-pill">
+                  ✓ {source}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {isLoading && !hasDiscovered ? (
+            <div className="loading-state" role="status">
+              <p>Loading applications...</p>
+            </div>
+          ) : applications.length === 0 && hasDiscovered && !errorMsg ? (
+            <div className="empty-state" role="status">
+              <p className="empty-title">No applications found.</p>
+              <p className="empty-subtitle">Try refreshing the application catalog.</p>
+            </div>
+          ) : filteredApps.length === 0 && applications.length > 0 ? (
+            <div className="empty-state" role="status">
+              <p>No applications match your filter.</p>
+            </div>
+          ) : (
+            <div className="catalog-grid" role="region" aria-label="Discovered applications list">
+              {filteredApps.map((app, index) => (
+                <ApplicationCard
+                  key={app.id}
+                  cardRef={(el) => {
+                    cardRefs.current[index] = el;
+                  }}
+                  tabIndex={0}
+                  onKeyDown={handleCardKeyDown(index)}
+                  application={app}
+                  onLaunchSuccess={onLaunchSuccess}
+                  onLaunchError={onLaunchError}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

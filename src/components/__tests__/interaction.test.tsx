@@ -446,4 +446,80 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
     });
   });
+
+  describe('Catalog & Process Monitor View Switching', () => {
+    it('switches between Applications and Active Processes views cleanly', async () => {
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'list_processes') {
+          return {
+            processes: [
+              {
+                id: 'v1:1234:01db2d5843a0e120',
+                pid: 1234,
+                parentPid: 500,
+                name: 'deskpilot.exe',
+                executablePath: 'C:\\DeskPilot\\deskpilot.exe',
+                createdAt: '2026-11-03T12:00:00.000Z',
+                workingSetBytes: 52428800,
+                cpuTimeMs: 1200,
+                sessionId: 1,
+                status: 'full',
+              },
+            ],
+            totalProcesses: 1,
+            capturedAtMs: 1730678400000,
+            isTruncated: false,
+          };
+        }
+        if (cmd === 'discover_applications') {
+          return {
+            applications: sampleApps,
+            scannedSources: ['Registry (HKLM 64-bit)'],
+            partialFailures: [],
+            totalDiscovered: 3,
+          };
+        }
+        throw new Error(`Unexpected command: ${cmd}`);
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Initially on Applications view
+      const appTab = screen.getByRole('tab', { name: 'Applications' });
+      const procTab = screen.getByRole('tab', { name: 'Active Processes' });
+
+      expect(appTab.getAttribute('aria-selected')).toBe('true');
+      expect(procTab.getAttribute('aria-selected')).toBe('false');
+      expect(screen.getByText('Visual Studio Code')).toBeDefined();
+      expect(screen.queryByText('deskpilot.exe')).toBeNull();
+
+      // Click "Active Processes" tab
+      fireEvent.click(procTab);
+
+      expect(appTab.getAttribute('aria-selected')).toBe('false');
+      expect(procTab.getAttribute('aria-selected')).toBe('true');
+
+      // Process Monitor is rendered and fetches processes
+      await waitFor(() => {
+        expect(screen.getByText('deskpilot.exe')).toBeDefined();
+      });
+      expect(screen.getByRole('columnheader', { name: /process/i })).toBeDefined();
+
+      // Application cards are not in DOM while on Processes tab
+      expect(screen.queryByText('Visual Studio Code')).toBeNull();
+
+      // Click "Applications" tab to return
+      fireEvent.click(appTab);
+
+      expect(appTab.getAttribute('aria-selected')).toBe('true');
+      expect(procTab.getAttribute('aria-selected')).toBe('false');
+      expect(screen.getByText('Visual Studio Code')).toBeDefined();
+      expect(screen.queryByText('deskpilot.exe')).toBeNull();
+    });
+  });
 });

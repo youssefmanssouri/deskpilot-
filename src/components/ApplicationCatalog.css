@@ -1,5 +1,50 @@
 /* Application Catalog & Card Styles */
 
+/* View Switcher Tabs */
+.catalog-view-switcher {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.view-tab-button {
+  background: none;
+  border: 1px solid transparent;
+  color: #8b949e;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.view-tab-button:hover {
+  color: #c9d1d9;
+  background-color: #161b22;
+}
+
+.view-tab-button.active {
+  color: #ffffff;
+  background-color: #21262d;
+  border-color: #30363d;
+  font-weight: 600;
+}
+
+.view-tab-button:focus-visible {
+  outline: 2px solid #58a6ff;
+  outline-offset: -1px;
+}
+
+.catalog-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
 .catalog-container {
   display: flex;
   flex-direction: column;

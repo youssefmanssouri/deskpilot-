@@ -86,3 +86,50 @@ export interface LaunchResultDto {
 
 export type LaunchResult = LaunchResultDto;
 
+/**
+ * Factual query status returned by the operating system for a process.
+ * Matches Rust `ProcessQueryStatus` camelCase serde serialization.
+ */
+export type ProcessQueryStatusDto = 'full' | 'partial' | 'handleUnavailable' | 'exited';
+
+/**
+ * Safe frontend Data Transfer Object representing an enumerated Windows process.
+ * Encapsulates process metadata without granting executable capabilities.
+ */
+export interface ProcessDto {
+  /** Deterministic process identity token (`v1:{pid}:{ticksHex}` or `eph:{seq}:{pid}`). */
+  id: string;
+  /** Operating system Process Identifier (PID). */
+  pid: number;
+  /** Parent process identifier reported at creation time. */
+  parentPid: number;
+  /** Base executable image name (e.g. "code.exe", "explorer.exe"). */
+  name: string;
+  /** Full canonical executable path if accessible, otherwise null. */
+  executablePath: string | null;
+  /** Creation timestamp formatted as an ISO-8601 UTC string if accessible, otherwise null. */
+  createdAt: string | null;
+  /** Physical resident memory (working set) in bytes if accessible, otherwise null. */
+  workingSetBytes: number | null;
+  /** Cumulative CPU execution time in milliseconds (kernel + user) if accessible, otherwise null. */
+  cpuTimeMs: number | null;
+  /** Terminal Services session identifier if accessible, otherwise null. */
+  sessionId: number | null;
+  /** Factual query status returned by the operating system. */
+  status: ProcessQueryStatusDto;
+}
+
+/**
+ * Payload returned by `list_processes` IPC command.
+ */
+export interface ProcessListResultDto {
+  /** Deterministically ordered list of at most K retained processes. */
+  processes: ProcessDto[];
+  /** Exact count of all processes enumerated in the snapshot walk before truncation. */
+  totalProcesses: number;
+  /** Point in time (Unix epoch milliseconds) when snapshot acquisition succeeded. */
+  capturedAtMs: number;
+  /** True if total observed processes exceeded the maximum retention ceiling (2,000). */
+  isTruncated: boolean;
+}
+

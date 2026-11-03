@@ -5,6 +5,7 @@ import type {
   DiscoveryResultDto,
   LaunchResult,
   LaunchResultDto,
+  ProcessListResultDto,
 } from './types';
 
 /**
@@ -45,6 +46,13 @@ export const deskpilotApi = {
   launchApplication(applicationId: string): Promise<LaunchResultDto> {
     return invokeSafe<LaunchResultDto>('launch_application', { applicationId });
   },
+
+  /**
+   * Enumerate running Windows processes with bounded top-K selection and limited privilege.
+   */
+  listProcesses(): Promise<ProcessListResultDto> {
+    return invokeSafe<ProcessListResultDto>('list_processes');
+  },
 };
 
 /**
@@ -52,4 +60,11 @@ export const deskpilotApi = {
  */
 export function launchApplication(applicationId: string): Promise<LaunchResult> {
   return deskpilotApi.launchApplication(applicationId);
+}
+
+/**
+ * Standalone typed helper for enumerating running processes.
+ */
+export function listProcesses(): Promise<ProcessListResultDto> {
+  return deskpilotApi.listProcesses();
 }
