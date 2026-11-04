@@ -1,11 +1,18 @@
 use crate::core::{ApplicationDiscoveryService, DiscoveryResult};
 use crate::error::DomainError;
 use crate::models::application::DiscoveredApplication;
+use crate::models::system::{CpuCoordinatorState, SystemTimesSample};
 use crate::security::InputGuard;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+/// Minimum interval in milliseconds between fresh Win32 CPU kernel sampling evaluations.
+pub const MIN_CPU_SAMPLING_INTERVAL_MS: u64 = 500;
+
+/// Default wait time in milliseconds for cold-start CPU baseline calibration.
+pub const DEFAULT_CPU_BASELINE_WAIT_MS: u64 = 100;
 
 /// Single synchronized in-memory catalog state.
 ///
@@ -31,6 +38,7 @@ pub struct AppState {
     process_snapshot_seq: AtomicU64,
     catalog: RwLock<CatalogState>,
     discovery_lock: Mutex<()>,
+    cpu_coordinator: Mutex<Option<CpuCoordinatorState>>,
 }
 
 impl AppState {
@@ -44,6 +52,7 @@ impl AppState {
             process_snapshot_seq: AtomicU64::new(1),
             catalog: RwLock::new(CatalogState::default()),
             discovery_lock: Mutex::new(()),
+            cpu_coordinator: Mutex::new(None),
         }
     }
 
@@ -113,6 +122,144 @@ impl AppState {
     /// Returns the current process snapshot sequence number without incrementing.
     pub fn current_process_snapshot_seq(&self) -> u64 {
         self.process_snapshot_seq.load(Ordering::Relaxed)
+    }
+
+    /// Returns the current CPU coordinator state, if initialized.
+    pub fn cpu_coordinator_state(&self) -> Option<CpuCoordinatorState> {
+        let guard = self
+            .cpu_coordinator
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard
+    }
+
+    /// Explicitly sets or resets the CPU coordinator state (provided for deterministic testing).
+    pub fn set_cpu_coordinator_state_for_testing(&self, state: Option<CpuCoordinatorState>) {
+        let mut guard = self
+            .cpu_coordinator
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = state;
+    }
+
+    /// Coordinates CPU utilization sampling with mutual exclusion on cold start and rate limiting.
+    ///
+    /// Uses native Win32 `WindowsSystemProvider::query_system_times` and standard thread sleeping.
+    pub fn sample_cpu_utilization(&self) -> Result<(f64, u64), DomainError> {
+        self.sample_cpu_utilization_with(
+            MIN_CPU_SAMPLING_INTERVAL_MS,
+            DEFAULT_CPU_BASELINE_WAIT_MS,
+            crate::platform::windows::WindowsSystemProvider::query_system_times,
+            |dur| std::thread::sleep(dur),
+        )
+    }
+
+    /// Coordinates CPU utilization sampling with custom sample and sleep providers.
+    pub fn sample_cpu_utilization_with<S, W>(
+        &self,
+        min_interval_ms: u64,
+        baseline_wait_ms: u64,
+        sample_fn: S,
+        sleep_fn: W,
+    ) -> Result<(f64, u64), DomainError>
+    where
+        S: FnMut() -> Result<SystemTimesSample, DomainError>,
+        W: FnOnce(Duration),
+    {
+        self.sample_cpu_utilization_with_clock(
+            min_interval_ms,
+            baseline_wait_ms,
+            sample_fn,
+            sleep_fn,
+            || {
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0)
+            },
+        )
+    }
+
+    /// Fully parameterized CPU utilization sampling coordinator with custom clock supplier.
+    ///
+    /// # Concurrency & Synchronization Guarantees
+    /// 1. **Cold-Start Mutual Exclusion:**
+    ///    When uninitialized (`*guard == None`), the lock is held across the baseline sample,
+    ///    the baseline delay (`baseline_wait_ms`), and the delta calculation.
+    ///    Any concurrent threads attempting to sample block on this mutex. When they acquire
+    ///    the lock after the baseline is established, they observe an initialized coordinator
+    ///    with elapsed time ~0 ms, immediately returning the cached result without repeating
+    ///    the baseline delay or querying the kernel again.
+    /// 2. **Rate Limiting & Baseline Preservation:**
+    ///    Subsequent queries arriving within `min_interval_ms` immediately return the cached
+    ///    utilization percentage and timestamp without querying Win32 or perturbing the baseline.
+    /// 3. **Monotonic Progression & Skew Resilience:**
+    ///    Once `min_interval_ms` has elapsed (or if clock skew occurred), a fresh sample is taken,
+    ///    delta utilization is computed against `baseline_sample`, and the coordinator is updated
+    ///    with the new baseline and timestamp in a single atomic lock acquisition.
+    pub fn sample_cpu_utilization_with_clock<S, W, C>(
+        &self,
+        min_interval_ms: u64,
+        baseline_wait_ms: u64,
+        mut sample_fn: S,
+        sleep_fn: W,
+        clock_fn: C,
+    ) -> Result<(f64, u64), DomainError>
+    where
+        S: FnMut() -> Result<SystemTimesSample, DomainError>,
+        W: FnOnce(Duration),
+        C: Fn() -> u64,
+    {
+        let mut guard = self
+            .cpu_coordinator
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        let now_ms = clock_fn();
+
+        match *guard {
+            None => {
+                // Cold start: acquire initial baseline, sleep on background worker, acquire second sample
+                let s0 = sample_fn()?;
+                sleep_fn(Duration::from_millis(baseline_wait_ms));
+                let s1 = sample_fn()?;
+                let util = crate::core::SystemService::calculate_cpu_utilization(&s0, &s1);
+                let evaluated_at = if s1.sampled_at_ms > 0 {
+                    s1.sampled_at_ms
+                } else {
+                    now_ms
+                };
+
+                let state = CpuCoordinatorState::new(s1, util, evaluated_at);
+                *guard = Some(state);
+                Ok((util, evaluated_at))
+            }
+            Some(coord) => {
+                let clock_skewed = now_ms < coord.last_evaluated_at_ms;
+                let elapsed = now_ms.saturating_sub(coord.last_evaluated_at_ms);
+
+                if !clock_skewed && elapsed < min_interval_ms {
+                    // Cache hit: reuse prior utilization without perturbing baseline
+                    return Ok((coord.last_utilization, coord.last_evaluated_at_ms));
+                }
+
+                // Minimum interval elapsed (or clock jump): compute delta against existing baseline
+                let current = sample_fn()?;
+                let util = crate::core::SystemService::calculate_cpu_utilization(
+                    &coord.baseline_sample,
+                    &current,
+                );
+                let evaluated_at = if current.sampled_at_ms > 0 {
+                    current.sampled_at_ms
+                } else {
+                    now_ms
+                };
+
+                let state = CpuCoordinatorState::new(current, util, evaluated_at);
+                *guard = Some(state);
+                Ok((util, evaluated_at))
+            }
+        }
     }
 
     /// Atomically replaces the current application catalog with a new discovery generation.
@@ -645,5 +792,209 @@ mod tests {
         assert_eq!(generation, 1);
         assert_eq!(count, 1);
         assert!(state.get_application(id).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_cold_start_initialization() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        assert!(state.cpu_coordinator_state().is_none());
+
+        let mut sample_count = 0;
+        let mut sleep_called = false;
+
+        let res = state.sample_cpu_utilization_with_clock(
+            500,
+            100,
+            || {
+                sample_count += 1;
+                if sample_count == 1 {
+                    Ok(SystemTimesSample::new(1000, 1000, 500, 1000))
+                } else {
+                    // Delta: Idle=100, Kernel=100, User=0 => 0% busy
+                    Ok(SystemTimesSample::new(1100, 1100, 500, 1100))
+                }
+            },
+            |_dur| {
+                sleep_called = true;
+            },
+            || 1100,
+        );
+
+        assert!(res.is_ok());
+        let (util, evaluated_at) = res.unwrap();
+        assert_eq!(util, 0.0);
+        assert_eq!(evaluated_at, 1100);
+        assert_eq!(sample_count, 2);
+        assert!(sleep_called);
+
+        let coord = state.cpu_coordinator_state().expect("Must be initialized");
+        assert_eq!(coord.last_utilization, 0.0);
+        assert_eq!(coord.last_evaluated_at_ms, 1100);
+        assert_eq!(coord.baseline_sample.sampled_at_ms, 1100);
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_cache_hit_under_interval() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        // Pre-seed state at t=1000 with 45.0%
+        let baseline = SystemTimesSample::new(1000, 1000, 500, 1000);
+        state.set_cpu_coordinator_state_for_testing(Some(CpuCoordinatorState::new(
+            baseline, 45.0, 1000,
+        )));
+
+        let mut sample_called = false;
+        // Query at t=1200 (200ms elapsed < 500ms min interval)
+        let res = state.sample_cpu_utilization_with_clock(
+            500,
+            100,
+            || {
+                sample_called = true;
+                Ok(SystemTimesSample::new(2000, 2000, 1000, 1200))
+            },
+            |_| panic!("Sleep should never be called on cache hit"),
+            || 1200,
+        );
+
+        assert!(res.is_ok());
+        let (util, evaluated_at) = res.unwrap();
+        assert_eq!(util, 45.0);
+        assert_eq!(evaluated_at, 1000);
+        assert!(
+            !sample_called,
+            "Win32 sampling must not be called when inside cache interval"
+        );
+
+        // Baseline must be unchanged
+        let coord = state.cpu_coordinator_state().unwrap();
+        assert_eq!(coord.baseline_sample, baseline);
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_recalculation_after_interval() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        // Pre-seed state at t=1000 with baseline
+        let baseline = SystemTimesSample::new(1000, 1000, 500, 1000);
+        state.set_cpu_coordinator_state_for_testing(Some(CpuCoordinatorState::new(
+            baseline, 20.0, 1000,
+        )));
+
+        let mut sample_called = false;
+        // Query at t=1600 (600ms elapsed >= 500ms min interval)
+        // Delta: Idle=0, Kernel=50, User=50 => Total=100, Busy=100 => 100.0%
+        let s2 = SystemTimesSample::new(1000, 1050, 550, 1600);
+        let res = state.sample_cpu_utilization_with_clock(
+            500,
+            100,
+            || {
+                sample_called = true;
+                Ok(s2)
+            },
+            |_| panic!("Sleep should never be called on delta update"),
+            || 1600,
+        );
+
+        assert!(res.is_ok());
+        let (util, evaluated_at) = res.unwrap();
+        assert_eq!(util, 100.0);
+        assert_eq!(evaluated_at, 1600);
+        assert!(sample_called);
+
+        // Baseline must advance to s2
+        let coord = state.cpu_coordinator_state().unwrap();
+        assert_eq!(coord.baseline_sample, s2);
+        assert_eq!(coord.last_utilization, 100.0);
+        assert_eq!(coord.last_evaluated_at_ms, 1600);
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_clock_backward_skew_recovery() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        let baseline = SystemTimesSample::new(1000, 1000, 500, 5000);
+        state.set_cpu_coordinator_state_for_testing(Some(CpuCoordinatorState::new(
+            baseline, 30.0, 5000,
+        )));
+
+        // System clock jumped backward from 5000 to 2000 (NTP correction)
+        let s_new = SystemTimesSample::new(1000, 1100, 500, 2000);
+        let res = state.sample_cpu_utilization_with_clock(
+            500,
+            100,
+            || Ok(s_new),
+            |_| panic!("Sleep should never be called on refresh"),
+            || 2000,
+        );
+
+        assert!(res.is_ok());
+        let (util, evaluated_at) = res.unwrap();
+        assert_eq!(evaluated_at, 2000);
+        assert_eq!(util, 100.0); // Delta: Idle=0, Kernel=100, User=0 => Total=100, Busy=100 => 100.0% busy
+        let coord = state.cpu_coordinator_state().unwrap();
+        assert_eq!(coord.last_evaluated_at_ms, 2000);
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_concurrent_single_cold_start_wait() {
+        use std::sync::Arc;
+        use std::sync::atomic::AtomicUsize;
+        use std::thread;
+
+        let state = Arc::new(AppState::new("DeskPilot", "0.1.0"));
+        let sleep_counter = Arc::new(AtomicUsize::new(0));
+        let sample_counter = Arc::new(AtomicUsize::new(0));
+
+        let mut handles = Vec::new();
+
+        for _ in 0..8 {
+            let state_clone = Arc::clone(&state);
+            let sleep_counter_clone = Arc::clone(&sleep_counter);
+            let sample_counter_clone = Arc::clone(&sample_counter);
+
+            handles.push(thread::spawn(move || {
+                state_clone.sample_cpu_utilization_with_clock(
+                    500,
+                    50,
+                    || {
+                        sample_counter_clone.fetch_add(1, Ordering::Relaxed);
+                        Ok(SystemTimesSample::new(1000, 1050, 550, 1000))
+                    },
+                    |dur| {
+                        sleep_counter_clone.fetch_add(1, Ordering::Relaxed);
+                        thread::sleep(dur);
+                    },
+                    || 1000,
+                )
+            }));
+        }
+
+        let mut results = Vec::new();
+        for h in handles {
+            results.push(h.join().expect("Concurrent sampler thread must not panic"));
+        }
+
+        // Exactly one thread performed the cold-start wait
+        assert_eq!(sleep_counter.load(Ordering::Relaxed), 1);
+        // Initial cold start took exactly 2 samples, subsequent threads used the cache
+        assert_eq!(sample_counter.load(Ordering::Relaxed), 2);
+
+        // Every thread received Ok
+        for r in results {
+            assert!(r.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_sample_cpu_utilization_error_propagation_leaves_state_clean() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        let res = state.sample_cpu_utilization_with_clock(
+            500,
+            100,
+            || Err(DomainError::Unavailable("Win32 API error".to_string())),
+            |_| (),
+            || 1000,
+        );
+
+        assert!(res.is_err());
+        // Coordinator must remain None
+        assert!(state.cpu_coordinator_state().is_none());
     }
 }

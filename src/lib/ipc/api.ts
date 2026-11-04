@@ -6,6 +6,7 @@ import type {
   LaunchResult,
   LaunchResultDto,
   ProcessListResultDto,
+  SystemMetricsDto,
 } from './types';
 
 /**
@@ -53,6 +54,13 @@ export const deskpilotApi = {
   listProcesses(): Promise<ProcessListResultDto> {
     return invokeSafe<ProcessListResultDto>('list_processes');
   },
+
+  /**
+   * Queries real-time System Intelligence metrics (CPU, memory, storage, uptime).
+   */
+  getSystemMetrics(): Promise<SystemMetricsDto> {
+    return invokeSafe<SystemMetricsDto>('get_system_metrics');
+  },
 };
 
 /**
@@ -67,4 +75,11 @@ export function launchApplication(applicationId: string): Promise<LaunchResult> 
  */
 export function listProcesses(): Promise<ProcessListResultDto> {
   return deskpilotApi.listProcesses();
+}
+
+/**
+ * Standalone typed helper for querying system metrics.
+ */
+export function getSystemMetrics(): Promise<SystemMetricsDto> {
+  return deskpilotApi.getSystemMetrics();
 }

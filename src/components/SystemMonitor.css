@@ -1,0 +1,463 @@
+/* System Intelligence Monitor Component Styles */
+
+.system-monitor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* Toolbar */
+.system-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #21262d;
+}
+
+.system-toolbar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.system-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f0f6fc;
+  margin: 0;
+}
+
+.system-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.system-timestamp {
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.system-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  line-height: 1;
+}
+
+.paused-badge {
+  background-color: rgba(210, 153, 34, 0.15);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.3);
+}
+
+.arch-badge,
+.os-badge,
+.storage-badge {
+  background-color: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.3);
+}
+
+.mem-badge {
+  background-color: rgba(63, 185, 80, 0.15);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.fs-badge {
+  background-color: rgba(139, 148, 158, 0.15);
+  color: #8b949e;
+  border: 1px solid rgba(139, 148, 158, 0.3);
+}
+
+.low-space-badge {
+  background-color: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+/* Actions */
+.system-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.system-refresh-mode-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.system-mode-label {
+  font-size: 0.8rem;
+  color: #8b949e;
+}
+
+.system-mode-select {
+  background-color: #0d1117;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.system-mode-select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.system-refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.system-refresh-button:hover:not(:disabled) {
+  background-color: #30363d;
+  border-color: #8b949e;
+  color: #f0f6fc;
+}
+
+.system-refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-icon {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(201, 209, 217, 0.3);
+  border-radius: 50%;
+  border-top-color: #c9d1d9;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error Banner */
+.system-error-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  gap: 1rem;
+}
+
+.system-error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.system-error-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f85149;
+  margin: 0;
+}
+
+.system-error-detail {
+  font-size: 0.8rem;
+  color: #c9d1d9;
+  margin: 0;
+}
+
+.system-retry-button {
+  background-color: #da3633;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.system-retry-button:hover {
+  background-color: #f85149;
+}
+
+/* Loading State */
+.system-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 1rem;
+  gap: 1rem;
+  color: #8b949e;
+  font-size: 0.9rem;
+}
+
+.system-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(88, 166, 255, 0.2);
+  border-radius: 50%;
+  border-top-color: #58a6ff;
+  animation: spin 0.9s linear infinite;
+}
+
+/* Content Layout */
+.system-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Metrics Grid (4 Hero Cards) */
+.system-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.system-card {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.system-card:hover {
+  border-color: #484f58;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.system-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.system-card-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.system-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.system-metric-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.system-metric-hero {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #f0f6fc;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.system-metric-sub {
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+/* Progress Bars */
+.system-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: #21262d;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.system-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.load-normal {
+  background-color: #3fb950;
+}
+
+.load-warning {
+  background-color: #d29922;
+}
+
+.load-critical {
+  background-color: #f85149;
+}
+
+.system-hardware-desc {
+  font-size: 0.75rem;
+  color: #8b949e;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* System Uptime Details */
+.system-uptime-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.25rem;
+}
+
+.system-uptime-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.uptime-label {
+  color: #8b949e;
+}
+
+.uptime-val {
+  color: #c9d1d9;
+  font-weight: 500;
+}
+
+/* Fixed Volume Details Section */
+.system-drives-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.system-section-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f0f6fc;
+  margin: 0;
+}
+
+.system-drives-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.system-drive-card {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: border-color 0.15s ease;
+}
+
+.system-drive-card:focus {
+  outline: none;
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
+}
+
+.system-drive-card.drive-warning {
+  border-color: rgba(248, 81, 73, 0.4);
+}
+
+.system-drive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drive-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.drive-root {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f0f6fc;
+}
+
+.drive-name {
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+.drive-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.system-drive-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.drive-capacity-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.drive-used {
+  font-weight: 600;
+  color: #c9d1d9;
+}
+
+.drive-total {
+  color: #8b949e;
+}
+
+.drive-footer-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+}
+
+.drive-free {
+  color: #8b949e;
+}
+
+.drive-percent {
+  font-weight: 600;
+  color: #c9d1d9;
+}

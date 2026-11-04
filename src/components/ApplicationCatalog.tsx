@@ -7,9 +7,10 @@ import {
 } from '../lib/ipc';
 import { ApplicationCard } from './ApplicationCard';
 import { ProcessMonitor } from './ProcessMonitor';
+import { SystemMonitor } from './SystemMonitor';
 import './ApplicationCatalog.css';
 
-export type CatalogView = 'applications' | 'processes';
+export type CatalogView = 'applications' | 'processes' | 'system';
 
 export interface ApplicationCatalogProps {
   initialApplications?: ApplicationDto[];
@@ -273,9 +274,24 @@ export function ApplicationCatalog({
         >
           Active Processes
         </button>
+        <button
+          type="button"
+          role="tab"
+          id="tab-system"
+          aria-selected={activeView === 'system'}
+          aria-controls="panel-system"
+          className={`view-tab-button ${activeView === 'system' ? 'active' : ''}`}
+          onClick={() => setActiveView('system')}
+        >
+          System Intelligence
+        </button>
       </div>
 
-      {activeView === 'processes' ? (
+      {activeView === 'system' ? (
+        <div id="panel-system" role="tabpanel" aria-labelledby="tab-system">
+          <SystemMonitor />
+        </div>
+      ) : activeView === 'processes' ? (
         <div id="panel-processes" role="tabpanel" aria-labelledby="tab-processes">
           <ProcessMonitor />
         </div>

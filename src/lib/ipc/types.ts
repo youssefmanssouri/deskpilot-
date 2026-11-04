@@ -133,3 +133,64 @@ export interface ProcessListResultDto {
   isTruncated: boolean;
 }
 
+/**
+ * CPU metrics returned by `get_system_metrics`.
+ */
+export interface CpuMetricsDto {
+  brandName: string;
+  logicalCores: number;
+  architecture: string;
+  utilizationPercent: number;
+}
+
+/**
+ * Physical RAM metrics returned by `get_system_metrics`.
+ */
+export interface MemoryMetricsDto {
+  totalBytes: number;
+  availableBytes: number;
+  usedBytes: number;
+  usedPercent: number;
+}
+
+/**
+ * Fixed storage drive metrics returned by `get_system_metrics`.
+ */
+export interface DriveMetricsDto {
+  rootPath: string;
+  volumeName: string;
+  fileSystem: string;
+  totalBytes: number;
+  availableBytes: number;
+  usedBytes: number;
+  usedPercent: number;
+}
+
+/**
+ * Local storage collection returned by `get_system_metrics`.
+ */
+export interface StorageMetricsDto {
+  drives: DriveMetricsDto[];
+}
+
+/**
+ * System and application uptime information returned by `get_system_metrics`.
+ */
+export interface OsInfoMetricsDto {
+  uptimeSeconds: number;
+  appUptimeSeconds: number;
+  osName: string;
+  architecture: string;
+}
+
+/**
+ * Top-level System Intelligence snapshot returned by `get_system_metrics`.
+ */
+export interface SystemMetricsDto {
+  cpu: CpuMetricsDto;
+  memory: MemoryMetricsDto;
+  storage: StorageMetricsDto;
+  system: OsInfoMetricsDto;
+  sampledAtMs: number;
+}
+

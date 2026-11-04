@@ -246,5 +246,33 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       expect(html).not.toContain('cwd');
       expect(html).not.toContain('env');
     });
+
+    it('renders all three view switcher tabs including System Intelligence', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      expect(html).toContain('id="tab-applications"');
+      expect(html).toContain('id="tab-processes"');
+      expect(html).toContain('id="tab-system"');
+      expect(html).toContain('System Intelligence');
+    });
+
+    it('renders System Intelligence tabpanel when defaultView is system', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+          defaultView="system"
+        />
+      );
+
+      expect(html).toContain('id="panel-system"');
+      expect(html).toContain('aria-labelledby="tab-system"');
+      expect(html).toContain('system-monitor-container');
+    });
   });
 });
