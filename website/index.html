@@ -38,58 +38,38 @@
         DeskPilot brings deterministic application discovery and native Win32 process monitoring into one local desktop command center. Engineered with Rust, Tauri 2, and React 19 for maximum speed and privacy.
       </p>
 
-      <!-- Primary Download Grid -->
-      <div id="download" class="download-grid">
-        <!-- NSIS Installer -->
-        <div class="download-card">
-          <div class="card-header">
-            <span class="card-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1;">Alternative (NSIS)</span>
-            <h3 class="card-title">Windows Installer (NSIS)</h3>
-            <p class="card-desc">Standard standalone Windows setup wizard.</p>
-          </div>
-          <ul class="specs-list">
-            <li><span class="label">Release Version</span><span class="val">v0.1.0</span></li>
-            <li><span class="label">Architecture</span><span class="val">Windows x64 (64-bit)</span></li>
-            <li><span class="label">File Format</span><span class="val">.exe (NSIS Setup)</span></li>
-            <li><span class="label">File Size</span><span class="val">1.49 MiB (1,557,528 B)</span></li>
-            <li><span class="label">Release Date</span><span class="val">November 4, 2026</span></li>
-          </ul>
-          <a href="releases/deskpilot_0.1.0_x64-setup.exe" class="download-btn secondary" download="deskpilot_0.1.0_x64-setup.exe">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Download Setup (.exe)
-          </a>
-        </div>
-
-        <!-- MSI Package -->
+      <!-- Primary Download Area (MSI) -->
+      <div id="download" class="download-grid" style="max-width: 580px; margin: 40px auto 0; grid-template-columns: 1fr;">
+        <!-- Verified Production MSI Package -->
         <div class="download-card featured">
           <div class="card-header">
-            <span class="card-badge">Recommended</span>
+            <span class="card-badge">Official Production Release</span>
             <h3 class="card-title">Windows Package (MSI)</h3>
-            <p class="card-desc">Windows Installer package built with WiX Toolset. Verified per-user install and uninstall.</p>
+            <p class="card-desc">Production Windows Installer package built with WiX Toolset. Seamless per-user install and deterministic Windows Installer uninstallation.</p>
           </div>
           <ul class="specs-list">
             <li><span class="label">Release Version</span><span class="val">v0.1.0</span></li>
             <li><span class="label">Architecture</span><span class="val">Windows x64 (64-bit)</span></li>
-            <li><span class="label">File Format</span><span class="val">.msi (WiX Package)</span></li>
+            <li><span class="label">File Format</span><span class="val">.msi (Windows Installer Package)</span></li>
             <li><span class="label">File Size</span><span class="val">2.17 MiB (2,273,280 B)</span></li>
+            <li><span class="label">Product Code</span><span class="val" style="font-family: monospace; font-size: 0.8rem;">{9D976768-CC79-4F25-97BB-CBCF5A25B377}</span></li>
             <li><span class="label">Release Date</span><span class="val">November 4, 2026</span></li>
           </ul>
           <a href="releases/deskpilot_0.1.0_x64_en-US.msi" class="download-btn" download="deskpilot_0.1.0_x64_en-US.msi">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Download MSI (.msi)
+            Download Production MSI (.msi)
           </a>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 14px; text-align: center;">
+            Note: NSIS setup (.exe) is not offered because its uninstallation experience is unreliable under Windows Application Control policies.
+          </p>
         </div>
       </div>
 
       <!-- Release Checksums -->
-      <div class="checksum-panel">
+      <div class="checksum-panel" style="max-width: 580px; margin: 24px auto 0;">
         <div class="checksum-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           Cryptographic Integrity Verification (SHA-256)
-        </div>
-        <div class="checksum-row">
-          <span class="checksum-name">deskpilot_0.1.0_x64-setup.exe</span>
-          <span class="checksum-value">274BCBC627C287298465A47B9BD94D094C65D63145E01B515C9F6C834FB59EB5</span>
         </div>
         <div class="checksum-row">
           <span class="checksum-name">deskpilot_0.1.0_x64_en-US.msi</span>
@@ -125,7 +105,7 @@
         <div class="feature-box">
           <div class="feature-icon">🛡️</div>
           <h3>Zero Telemetry & Isolated IPC</h3>
-          <p>100% local execution. No background tracking, analytics, or network calls. Direct Win32 process creation bypasses shell interpreters (`cmd.exe` / `powershell.exe`).</p>
+          <p>100% local execution. No background tracking, analytics, or network calls. Direct Win32 process creation bypasses shell interpreters (<code>cmd.exe</code> / <code>powershell.exe</code>).</p>
         </div>
       </div>
     </div>
@@ -198,43 +178,53 @@
     <div class="container">
       <div class="section-head">
         <div class="section-subtitle">Step-by-Step</div>
-        <h2>Installation & SmartScreen Guide</h2>
+        <h2>Installation & Security Notice</h2>
       </div>
 
       <div class="callout warning">
-        <strong>Security Disclosure — Windows SmartScreen Warning:</strong><br>
-        Because DeskPilot is an independent release distributed without an expensive corporate Authenticode EV signing certificate, Windows Defender SmartScreen may display: <em>"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."</em>
+        <strong>Security Transparency Notice — Unsigned Release:</strong><br>
+        DeskPilot is an independent open-source project and is currently distributed without an expensive corporate Authenticode EV signing certificate. Because it is unsigned, Windows Defender SmartScreen may display: <em>"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."</em><br>
+        <strong>Never disable Windows Defender, Smart App Control, or any system security controls.</strong> Instead, verify the published SHA-256 cryptographic hash below prior to installation to ensure binary integrity.
       </div>
 
       <div class="guide-steps">
         <div class="guide-step">
           <div class="step-num">1</div>
           <div class="step-body">
-            <h4>Download the Installer</h4>
-            <p>Download <code>deskpilot_0.1.0_x64-setup.exe</code> or the MSI package from the download section above.</p>
+            <h4>Download the Production MSI Package</h4>
+            <p>Download <code>deskpilot_0.1.0_x64_en-US.msi</code> from the download section above.</p>
           </div>
         </div>
         <div class="guide-step">
           <div class="step-num">2</div>
           <div class="step-body">
-            <h4>Verify Cryptographic Checksum (Optional but Recommended)</h4>
-            <p>Open Windows PowerShell and verify that the file's SHA-256 hash matches the published checksum:</p>
-            <code class="code-snippet">Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.0_x64-setup.exe</code>
+            <h4>Verify Cryptographic Checksum (Recommended)</h4>
+            <p>Open Windows PowerShell in your download folder and verify that the file's SHA-256 hash matches the published checksum:</p>
+            <code class="code-snippet">Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.0_x64_en-US.msi</code>
+            <p style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);">Confirm the output matches: <code>93098705A694696D752EDE93E9F121758B2A5873F392E392B87F3C2617AF5ECD</code></p>
           </div>
         </div>
         <div class="guide-step">
           <div class="step-num">3</div>
           <div class="step-body">
             <h4>Run the Installer</h4>
-            <p>Double-click the installer. If the SmartScreen prompt appears, click <strong>"More info"</strong> and then click <strong>"Run anyway"</strong>.</p>
+            <p>Double-click <code>deskpilot_0.1.0_x64_en-US.msi</code>. If the SmartScreen prompt appears, click <strong>"More info"</strong> and then click <strong>"Run anyway"</strong>.</p>
           </div>
         </div>
         <div class="guide-step">
           <div class="step-num">4</div>
           <div class="step-body">
             <h4>Silent Unattended Installation (Optional)</h4>
-            <p>For automated administrative deployments, run the installer with the silent flag:</p>
-            <code class="code-snippet">Start-Process .\deskpilot_0.1.0_x64-setup.exe -ArgumentList "/S" -Wait</code>
+            <p>For scripted or administrative deployments, install quietly via the native Windows Installer engine:</p>
+            <code class="code-snippet">msiexec.exe /i .\deskpilot_0.1.0_x64_en-US.msi /qn</code>
+          </div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <h4>Complete Uninstallation</h4>
+            <p>DeskPilot cleanly and completely uninstalls through standard Windows Settings (<strong>Settings &gt; Apps &gt; Installed Apps &gt; DeskPilot &gt; Uninstall</strong>) or via command-line:</p>
+            <code class="code-snippet">msiexec.exe /x {9D976768-CC79-4F25-97BB-CBCF5A25B377} /qn</code>
           </div>
         </div>
       </div>
@@ -277,7 +267,7 @@
         <h2>Known Limitations & Scope</h2>
       </div>
       <ul style="list-style: disc; margin-left: 20px; color: var(--text-secondary); line-height: 1.8; font-size: 0.95rem;">
-        <li><strong>Unsigned Binary:</strong> Does not currently include an EV Authenticode digital signature. Windows SmartScreen prompt is expected on initial run.</li>
+        <li><strong>Unsigned Release:</strong> Does not currently include an EV Authenticode digital signature. Windows SmartScreen prompt is expected on initial run.</li>
         <li><strong>Protected System Handles:</strong> Core OS processes (e.g. PID 0, secure system processes) yield <code>Handle Unavailable</code> badges with fallback placeholders, respecting Windows security boundaries.</li>
         <li><strong>Windows x64 Only:</strong> Compiled natively for 64-bit Windows architectures (x86_64). ARM64 and 32-bit-only builds are not yet provided.</li>
       </ul>
@@ -300,8 +290,9 @@
           <li>Deterministic Windows Application Discovery across 64-bit/32-bit registry hives and Start Menu directories.</li>
           <li>Memory-safe MS-SHLLINK shortcut binary parser.</li>
           <li>Sub-millisecond 4-tier ranked search filtering with keyboard navigation.</li>
-          <li>Native Win32 Process Monitor with bounded Top-K selection and memory/cumulative CPU tracking.</li>
+          <li>Native Win32 Process Monitor with bounded Top-K selection and memory/cumulative CPU tracking off the UI thread.</li>
           <li>System tray integration with hide-to-tray window lifecycle and single-instance enforcement.</li>
+          <li>Production WiX-built Windows Installer (MSI) with verified per-user installation and complete uninstallation.</li>
         </ul>
       </div>
     </div>
