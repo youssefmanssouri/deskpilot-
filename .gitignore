@@ -12,6 +12,7 @@ dist-ssr/
 build/
 out/
 *.local
+website/releases/
 
 # Tauri / Rust build artifacts
 target/
