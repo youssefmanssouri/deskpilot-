@@ -10,6 +10,9 @@ export interface LaunchButtonProps {
   applicationId: string;
   disabled?: boolean;
   status?: LaunchStatus;
+  launchedPid?: number | null;
+  errorMessage?: string | null;
+  onLaunch?: () => void;
   onSuccess?: (processId: number) => void;
   onError?: (error: IpcError) => void;
   className?: string;
@@ -66,19 +69,24 @@ export function LaunchButton({
   applicationId,
   disabled = false,
   status: controlledStatus,
+  launchedPid: controlledLaunchedPid,
+  errorMessage: controlledErrorMessage,
+  onLaunch,
   onSuccess,
   onError,
   className = '',
   autoResetDelayMs = DEFAULT_LAUNCH_RESET_DELAY_MS,
 }: LaunchButtonProps) {
   const [internalStatus, setInternalStatus] = useState<LaunchStatus>('idle');
-  const [launchedPid, setLaunchedPid] = useState<number | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [internalLaunchedPid, setInternalLaunchedPid] = useState<number | null>(null);
+  const [internalErrorMessage, setInternalErrorMessage] = useState<string | null>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const launchAttemptRef = useRef<number>(0);
 
   const status = controlledStatus ?? internalStatus;
   const isLaunching = status === 'launching';
+  const displayPid = controlledLaunchedPid !== undefined ? controlledLaunchedPid : internalLaunchedPid;
+  const displayError = controlledErrorMessage !== undefined ? controlledErrorMessage : internalErrorMessage;
 
   useEffect(() => {
     return () => {
@@ -99,8 +107,8 @@ export function LaunchButton({
         // Prevent stale timers from resetting a newer launch attempt
         if (attempt === launchAttemptRef.current) {
           setInternalStatus('idle');
-          setLaunchedPid(null);
-          setErrorMessage(null);
+          setInternalLaunchedPid(null);
+          setInternalErrorMessage(null);
           resetTimerRef.current = null;
         }
       }, autoResetDelayMs);
@@ -119,7 +127,7 @@ export function LaunchButton({
 
     const currentAttempt = ++launchAttemptRef.current;
     setInternalStatus('launching');
-    setErrorMessage(null);
+    setInternalErrorMessage(null);
 
     try {
       await executeLaunch(applicationId, {
@@ -127,7 +135,7 @@ export function LaunchButton({
         onSuccess: (pid) => {
           if (currentAttempt === launchAttemptRef.current) {
             setInternalStatus('launched');
-            setLaunchedPid(pid);
+            setInternalLaunchedPid(pid);
             onSuccess?.(pid);
             scheduleReset(currentAttempt);
           }
@@ -135,7 +143,7 @@ export function LaunchButton({
         onError: (err) => {
           if (currentAttempt === launchAttemptRef.current) {
             setInternalStatus('failed');
-            setErrorMessage(err.message);
+            setInternalErrorMessage(err.message);
             onError?.(err);
             scheduleReset(currentAttempt);
           }
@@ -146,12 +154,22 @@ export function LaunchButton({
     }
   }
 
+  function handleClick() {
+    if (onLaunch) {
+      if (!disabled && !isLaunching) {
+        onLaunch();
+      }
+    } else {
+      void handleLaunch();
+    }
+  }
+
   const getButtonText = () => {
     switch (status) {
       case 'launching':
         return 'Launching...';
       case 'launched':
-        return launchedPid ? `Launched (PID ${launchedPid})` : 'Launched';
+        return displayPid ? `Launched (PID ${displayPid})` : 'Launched';
       case 'failed':
         return 'Launch Failed';
       case 'idle':
@@ -166,11 +184,11 @@ export function LaunchButton({
     <button
       type="button"
       className={statusClass}
-      onClick={handleLaunch}
+      onClick={handleClick}
       disabled={disabled || isLaunching}
       aria-label={`Launch application ${applicationId}`}
       aria-busy={isLaunching}
-      title={errorMessage ? `Error: ${errorMessage}` : undefined}
+      title={displayError ? `Error: ${displayError}` : undefined}
     >
       {getButtonText()}
     </button>

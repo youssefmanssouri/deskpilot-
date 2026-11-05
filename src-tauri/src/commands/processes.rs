@@ -1,21 +1,28 @@
 use crate::core::ProcessService;
-use crate::error::IpcErrorDto;
+use crate::error::{DomainError, IpcErrorDto};
 use crate::models::ProcessListResultDto;
 use crate::state::AppState;
-use tauri::State;
+use tauri::Manager;
 
 /// Thin Tauri command controller for enumerating running Windows processes.
 ///
-/// Dispatches execution to `ProcessService::list_processes`, which performs
-/// bounded Toolhelp32 snapshot enumeration, deterministic top-K selection,
-/// least-privilege attribute queries, and maps domain errors to safe `IpcErrorDto`s.
+/// Dispatches execution to a dedicated blocking worker thread pool via `tauri::async_runtime::spawn_blocking`,
+/// ensuring synchronous Win32 Toolhelp32 snapshot traversal and process handle inspection never block
+/// Tokio async workers or the application UI thread.
 ///
 /// Accepts no user-controlled process IDs, executable paths, shell arguments, or OS instructions.
-/// Configured with `(async)` to dispatch blocking Win32 Toolhelp32 snapshot enumeration
-/// to a background worker thread, ensuring the main application UI thread is never blocked.
-#[tauri::command(async)]
-pub fn list_processes(state: State<'_, AppState>) -> Result<ProcessListResultDto, IpcErrorDto> {
-    list_processes_impl(&state)
+#[tauri::command]
+pub async fn list_processes(app: tauri::AppHandle) -> Result<ProcessListResultDto, IpcErrorDto> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        list_processes_impl(&state)
+    })
+    .await
+    .map_err(|_join_err| {
+        IpcErrorDto::from(DomainError::InternalError(
+            "Failed to complete process enumeration task".to_string(),
+        ))
+    })?
 }
 
 /// Internal implementation of `list_processes` separated from `State` extraction
@@ -100,5 +107,18 @@ mod tests {
         assert!(json.contains(r#""cpuTimeMs":250"#));
         assert!(json.contains(r#""sessionId":1"#));
         assert!(json.contains(r#""status":"full""#));
+    }
+
+    #[test]
+    fn test_list_processes_worker_join_error_sanitization() {
+        let err =
+            DomainError::InternalError("Failed to complete process enumeration task".to_string());
+        let ipc_err: IpcErrorDto = err.into();
+        assert_eq!(ipc_err.code, "INTERNAL_ERROR");
+        assert_eq!(
+            ipc_err.message,
+            "An internal system error occurred. Please consult backend logs."
+        );
+        assert!(ipc_err.details.is_none());
     }
 }

@@ -8,6 +8,7 @@ import {
 import { ApplicationCard } from './ApplicationCard';
 import { ProcessMonitor } from './ProcessMonitor';
 import { SystemMonitor } from './SystemMonitor';
+import { useApplicationLauncher } from './useApplicationLauncher';
 import './ApplicationCatalog.css';
 
 export type CatalogView = 'applications' | 'processes' | 'system';
@@ -154,6 +155,11 @@ export function ApplicationCatalog({
   const hasAutoFocusedRef = useRef<boolean>(false);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
 
+  const { activeLaunch, launch } = useApplicationLauncher({
+    onSuccess: onLaunchSuccess,
+    onError: onLaunchError,
+  });
+
   const fetchDiscovery = useCallback(async () => {
     const requestId = ++discoveryRequestIdRef.current;
     setIsLoading(true);
@@ -210,11 +216,7 @@ export function ApplicationCatalog({
       // Launch the first available application in filtered results
       const firstAvailable = filteredApps.find((app) => app.availability === 'Available');
       if (firstAvailable) {
-        const cardEl = document.querySelector(
-          `[data-testid="app-card-${firstAvailable.id}"]`
-        );
-        const btn = cardEl?.querySelector('button.launch-button') as HTMLButtonElement | null;
-        btn?.click();
+        void launch(firstAvailable.id);
       }
     } else if (e.key === 'ArrowDown') {
       if (filteredApps.length > 0) {
@@ -404,19 +406,26 @@ export function ApplicationCatalog({
             </div>
           ) : (
             <div className="catalog-grid" role="region" aria-label="Discovered applications list">
-              {filteredApps.map((app, index) => (
-                <ApplicationCard
-                  key={app.id}
-                  cardRef={(el) => {
-                    cardRefs.current[index] = el;
-                  }}
-                  tabIndex={0}
-                  onKeyDown={handleCardKeyDown(index)}
-                  application={app}
-                  onLaunchSuccess={onLaunchSuccess}
-                  onLaunchError={onLaunchError}
-                />
-              ))}
+              {filteredApps.map((app, index) => {
+                const isAppActive = activeLaunch?.applicationId === app.id;
+                return (
+                  <ApplicationCard
+                    key={app.id}
+                    cardRef={(el) => {
+                      cardRefs.current[index] = el;
+                    }}
+                    tabIndex={0}
+                    onKeyDown={handleCardKeyDown(index)}
+                    application={app}
+                    launchStatus={isAppActive ? activeLaunch.status : undefined}
+                    launchedPid={isAppActive ? activeLaunch.launchedPid : undefined}
+                    launchErrorMessage={isAppActive ? activeLaunch.errorMessage : undefined}
+                    onLaunchRequest={() => launch(app.id)}
+                    onLaunchSuccess={onLaunchSuccess}
+                    onLaunchError={onLaunchError}
+                  />
+                );
+              })}
             </div>
           )}
         </div>

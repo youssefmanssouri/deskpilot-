@@ -27,7 +27,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            tray::setup_tray(app)?;
+            tray::init_tray_lifecycle(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

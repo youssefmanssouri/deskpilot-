@@ -1,5 +1,5 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
-import { LaunchButton } from './LaunchButton';
+import { LaunchButton, type LaunchStatus } from './LaunchButton';
 
 export interface ApplicationCardProps {
   application: ApplicationDto;
@@ -11,6 +11,10 @@ export interface ApplicationCardProps {
   onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
   cardRef?: (el: HTMLElement | null) => void;
   autoResetDelayMs?: number;
+  launchStatus?: LaunchStatus;
+  launchedPid?: number | null;
+  launchErrorMessage?: string | null;
+  onLaunchRequest?: () => void;
 }
 
 /**
@@ -45,6 +49,10 @@ export function ApplicationCard({
   onKeyDown,
   cardRef,
   autoResetDelayMs,
+  launchStatus,
+  launchedPid,
+  launchErrorMessage,
+  onLaunchRequest,
 }: ApplicationCardProps) {
   const isLaunchDisabled = disabled || application.availability === 'MissingTarget';
   const badgeClass = getAvailabilityBadgeClass(application.availability);
@@ -107,6 +115,10 @@ export function ApplicationCard({
           applicationId={application.id}
           disabled={isLaunchDisabled}
           autoResetDelayMs={autoResetDelayMs}
+          status={launchStatus}
+          launchedPid={launchedPid}
+          errorMessage={launchErrorMessage}
+          onLaunch={onLaunchRequest}
           onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
           onError={(err) => onLaunchError?.(application.id, err)}
         />

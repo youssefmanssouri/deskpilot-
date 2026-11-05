@@ -35,6 +35,7 @@ pub struct AppState {
     started_at: Instant,
     is_healthy: AtomicBool,
     is_quitting: AtomicBool,
+    tray_available: AtomicBool,
     process_snapshot_seq: AtomicU64,
     catalog: RwLock<CatalogState>,
     discovery_lock: Mutex<()>,
@@ -49,6 +50,7 @@ impl AppState {
             started_at: Instant::now(),
             is_healthy: AtomicBool::new(true),
             is_quitting: AtomicBool::new(false),
+            tray_available: AtomicBool::new(false),
             process_snapshot_seq: AtomicU64::new(1),
             catalog: RwLock::new(CatalogState::default()),
             discovery_lock: Mutex::new(()),
@@ -82,6 +84,14 @@ impl AppState {
 
     pub fn set_quitting(&self, quitting: bool) {
         self.is_quitting.store(quitting, Ordering::Relaxed);
+    }
+
+    pub fn is_tray_available(&self) -> bool {
+        self.tray_available.load(Ordering::Relaxed)
+    }
+
+    pub fn set_tray_available(&self, available: bool) {
+        self.tray_available.store(available, Ordering::Relaxed);
     }
 
     /// Allocates the next monotonic process snapshot sequence number using a checked atomic increment.
@@ -442,6 +452,7 @@ mod tests {
         assert_eq!(state.version(), "0.1.0");
         assert!(state.is_healthy());
         assert!(!state.is_quitting());
+        assert!(!state.is_tray_available());
         let _ = state.uptime_seconds();
         assert_eq!(state.catalog_len().unwrap(), 0);
         assert_eq!(state.catalog_generation(), 0);
@@ -464,6 +475,16 @@ mod tests {
         assert!(state.is_quitting());
         state.set_quitting(false);
         assert!(!state.is_quitting());
+    }
+
+    #[test]
+    fn test_app_state_tray_available_toggle() {
+        let state = AppState::new("DeskPilot", "0.1.0");
+        assert!(!state.is_tray_available());
+        state.set_tray_available(true);
+        assert!(state.is_tray_available());
+        state.set_tray_available(false);
+        assert!(!state.is_tray_available());
     }
 
     #[test]

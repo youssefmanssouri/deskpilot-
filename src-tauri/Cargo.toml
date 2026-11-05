@@ -1,6 +1,6 @@
 [package]
 name = "deskpilot"
-version = "0.1.0"
+version = "0.1.1"
 description = "DeskPilot Desktop Command Center"
 authors = ["DeskPilot Contributors"]
 edition = "2024"

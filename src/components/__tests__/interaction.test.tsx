@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { ApplicationCatalog } from '../ApplicationCatalog';
 import { LaunchButton } from '../LaunchButton';
 import App from '../../App';
 import * as tauriCore from '@tauri-apps/api/core';
-import type { ApplicationDto, DiscoveryResultDto, LaunchResultDto, AppStatusDto } from '../../lib/ipc';
+import {
+  IpcError,
+  type ApplicationDto,
+  type DiscoveryResultDto,
+  type LaunchResultDto,
+  type AppStatusDto,
+} from '../../lib/ipc';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -47,6 +53,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   describe('Search Input Interactive Filtering', () => {
@@ -379,6 +386,253 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // No launch invoke should be dispatched
       expect(tauriCore.invoke).not.toHaveBeenCalledWith('launch_application', expect.anything());
+    });
+
+    it('launches first available application on Enter when search filter is empty', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[0].id,
+        processId: 7777,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+          applicationId: sampleApps[0].id,
+        });
+      });
+    });
+
+    it('delivers correct application ID to backend IPC and onLaunchSuccess handler without DOM querying', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[1].id,
+        processId: 8888,
+      });
+
+      const onLaunchSuccess = vi.fn();
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+          onLaunchSuccess={onLaunchSuccess}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+          applicationId: sampleApps[1].id,
+        });
+        expect(onLaunchSuccess).toHaveBeenCalledWith(sampleApps[1].id, 8888);
+      });
+    });
+
+    it('displays launching state on corresponding card LaunchButton while Enter-key launch is in-flight', async () => {
+      let resolveLaunch!: (val: LaunchResultDto) => void;
+      const pendingPromise = new Promise<LaunchResultDto>((resolve) => {
+        resolveLaunch = resolve;
+      });
+
+      vi.mocked(tauriCore.invoke).mockReturnValueOnce(pendingPromise);
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      const chromeBtn = screen.getByRole('button', {
+        name: `Launch application ${sampleApps[1].id}`,
+      });
+
+      await waitFor(() => {
+        expect(chromeBtn.textContent).toBe('Launching...');
+      });
+      expect(chromeBtn.classList.contains('launching')).toBe(true);
+      expect((chromeBtn as HTMLButtonElement).disabled).toBe(true);
+      expect(chromeBtn.getAttribute('aria-busy')).toBe('true');
+
+      resolveLaunch({ applicationId: sampleApps[1].id, processId: 4444 });
+      await waitFor(() => {
+        expect(chromeBtn.textContent).toBe('Launched (PID 4444)');
+      });
+    });
+
+    it('displays launched feedback with process ID and auto-resets on successful Enter launch', async () => {
+      vi.useFakeTimers();
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[1].id,
+        processId: 5555,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+
+      await act(async () => {
+        fireEvent.keyDown(searchInput, { key: 'Enter' });
+      });
+
+      const chromeBtn = screen.getByRole('button', {
+        name: `Launch application ${sampleApps[1].id}`,
+      });
+
+      expect(chromeBtn.textContent).toBe('Launched (PID 5555)');
+      expect(chromeBtn.classList.contains('launched')).toBe(true);
+
+      // Fast-forward past 3000ms auto-reset
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+
+      expect(chromeBtn.textContent).toBe('Launch');
+      expect(chromeBtn.classList.contains('idle')).toBe(true);
+    });
+
+    it('displays failed feedback and error tooltip on failed Enter launch', async () => {
+      vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+        code: 'OPERATION_FAILED',
+        message: 'Executable spawn failed in test environment',
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      const chromeBtn = screen.getByRole('button', {
+        name: `Launch application ${sampleApps[1].id}`,
+      });
+
+      await waitFor(() => {
+        expect(chromeBtn.textContent).toBe('Launch Failed');
+      });
+      expect(chromeBtn.classList.contains('failed')).toBe(true);
+      expect(chromeBtn.getAttribute('title')).toContain('Executable spawn failed in test environment');
+    });
+
+    it('clicking a card LaunchButton shares the consolidated launcher state', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[0].id,
+        processId: 3333,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const vscodeBtn = screen.getByRole('button', {
+        name: `Launch application ${sampleApps[0].id}`,
+      });
+
+      fireEvent.click(vscodeBtn);
+
+      await waitFor(() => {
+        expect(vscodeBtn.textContent).toBe('Launched (PID 3333)');
+      });
+      expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+        applicationId: sampleApps[0].id,
+      });
+    });
+
+    it('propagates launch errors to onLaunchError handler on Enter', async () => {
+      vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+        code: 'PERMISSION_DENIED',
+        message: 'Launch forbidden by security policy',
+      });
+
+      const onLaunchError = vi.fn();
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+          onLaunchError={onLaunchError}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(onLaunchError).toHaveBeenCalledTimes(1);
+        const [appId, err] = onLaunchError.mock.calls[0];
+        expect(appId).toBe(sampleApps[1].id);
+        expect(err).toBeInstanceOf(IpcError);
+        expect(err.code).toBe('PERMISSION_DENIED');
+        expect(err.message).toBe('Launch forbidden by security policy');
+      });
+    });
+
+    it('prevents duplicate concurrent launches when Enter is pressed repeatedly while in-flight', async () => {
+      let resolveLaunch!: (val: LaunchResultDto) => void;
+      const pendingPromise = new Promise<LaunchResultDto>((resolve) => {
+        resolveLaunch = resolve;
+      });
+
+      vi.mocked(tauriCore.invoke).mockReturnValueOnce(pendingPromise);
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'chrome' } });
+
+      // First Enter
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+
+      // Rapid second and third Enter presses while in-flight
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+      fireEvent.keyDown(searchInput, { key: 'Enter' });
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+
+      // Resolve pending launch
+      resolveLaunch({
+        applicationId: sampleApps[1].id,
+        processId: 9999,
+      });
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('navigates focus between search input and cards using arrow keys', () => {
