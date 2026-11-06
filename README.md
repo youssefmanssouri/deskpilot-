@@ -66,6 +66,13 @@ Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, 
 - **Fixed Storage Partition Telemetry:** Enumerates mounted fixed storage drives using `GetLogicalDriveStringsW` and `GetDiskFreeSpaceExW`, calculating total volume size, free capacity, and percentage used for local partitions while excluding volatile optical or remote network media.
 - **Monotonic System & App Uptime:** Tracks host system uptime via `GetTickCount64` and measures continuous DeskPilot application session duration.
 
+### 🧵 Read-Only Process Intelligence & Monitoring
+- **Kernel Process Enumeration:** Non-blocking enumeration of active Windows processes via Win32 Toolhelp32 snapshots (`CreateToolhelp32Snapshot`), offloaded to background worker threads.
+- **Process Hierarchy & Identification:** Captures process IDs (PIDs), parent PIDs, executable names, and creation timestamps where accessible.
+- **Resource Footprint Accounting:** Measures working-set memory footprint and kernel/user CPU times for standard unprivileged processes.
+- **Access Limitation & Status Engine:** Gracefully handles protected system processes via query-status categorization (`full`, `partial`, `handleUnavailable`, and `exited`).
+- **Read-Only Scope:** Strictly provides process monitoring and enumeration. Process termination, suspension, and killing are deliberately unimplemented in the current release.
+
 ### 🔌 Strongly Typed, Least-Privilege IPC Boundary
 - **Opaque ID Addressing:** The frontend presentation layer only holds opaque application IDs (`app_<hex>`) and never handles raw filesystem paths, executable arguments, or environment variables.
 - **Input Guard Validation:** Rigorous backend validation rejecting malformed identifiers, invalid UTF-8 sequences, and forbidden payload structures.
@@ -172,13 +179,13 @@ DeskPilot maintains a total of **293 automated test definitions identified** acr
 - **Rust Backend Structural Inventory:** **180 test definitions identified** in source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
 
 ### Frontend Test Breakdown (Vitest — 113 Passing)
-- `ProcessMonitor.test.tsx` (16 tests): Process list rendering, state sorting, CPU/memory formatting, interactive termination confirmations, and error envelopes.
+- `ProcessMonitor.test.tsx` (16 tests): Read-only process list rendering, column sorting, CPU/memory formatting, truncation banner, stale response protection, and error recovery.
 - `ApplicationCatalog.test.tsx` (15 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
 - `SystemMonitor.test.tsx` (13 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, and uptime formatting.
 - `interaction.test.tsx` (22 tests): Component interaction, keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
 - `LaunchButton.test.tsx` (12 tests): Launch invocation, pending state, success confirmation reset, error recovery, and timer unmount hygiene.
 - `discovery.test.ts` (8 tests): Typed IPC contract validation for application discovery and payload integrity.
-- `processes.test.ts` (7 tests): Process enumeration, kill command IPC contract, and error deserialization.
+- `processes.test.ts` (7 tests): Process enumeration, snapshot IPC contracts, status enum validation, and typed error deserialization.
 - `launcher.test.ts` (6 tests): Launch IPC contract validation and error mapping.
 - `ApplicationCard.test.tsx` (6 tests): Card rendering, availability badge states, publisher provenance display.
 - `system.test.ts` (4 tests): Typed IPC contracts for system times, memory metrics, and drive partitions.
@@ -189,7 +196,7 @@ DeskPilot maintains a total of **293 automated test definitions identified** acr
 - **Integration Test Definitions (`src-tauri/tests/`):** **37 integration test definitions** identified across 3 integration suites:
   - `catalog_launcher_integration_tests.rs` (13 test definitions): End-to-end catalog indexing, state transition, and launch validation.
   - `discovery_unit_tests.rs` (12 test definitions): Multi-source discovery merging, shortcut inspection, and uninstaller filtering.
-  - `process_integration_tests.rs` (12 test definitions): Process snapshot queries, system provider metrics, and termination contracts.
+  - `process_integration_tests.rs` (12 test definitions): Toolhelp32 process snapshot queries, bounded list truncation, access-denied handling, and exited-process status classification.
 - **Execution Note:** Execution of the backend test definitions is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
 
 ---
