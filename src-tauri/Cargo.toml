@@ -4,6 +4,10 @@ version = "0.1.1"
 description = "DeskPilot Desktop Command Center"
 authors = ["DeskPilot Contributors"]
 edition = "2024"
+license = "MIT"
+repository = "https://github.com/youssefmanssouri/deskpilot-"
+homepage = "https://deskpilot.youssefmanssouri.site"
+readme = "../README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

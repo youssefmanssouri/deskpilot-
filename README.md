@@ -7,7 +7,8 @@
 ![Rust](https://img.shields.io/badge/Rust-1.80%2B-DEA584?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-205%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
+![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-113%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
+![Test Definitions](https://img.shields.io/badge/Test%20Definitions-293%20Automated-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 <p align="center">
@@ -20,7 +21,7 @@
 
 ## Overview
 
-**DeskPilot** is an open-source, technically disciplined command center and launcher engineered natively for Windows. It provides lightning-fast application indexing, sub-millisecond search, safe Win32 execution, and system control without telemetry, cloud dependencies, or background tracking.
+**DeskPilot** is an open-source, technically disciplined command center and launcher engineered natively for Windows. It provides lightning-fast application indexing, sub-millisecond search, safe Win32 execution, and system monitoring with no implemented outbound network client, analytics, telemetry, or cloud dependencies (see [PRIVACY.md](PRIVACY.md)).
 
 Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 performance with modern UI ergonomics while enforcing defense-in-depth isolation boundaries between the web presentation layer and host operating system privileges.
 
@@ -58,6 +59,12 @@ Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, 
 - **Direct Win32 API Invocation:** Spawns processes directly via Windows `CreateProcessW` without intermediate shell interpreters (`cmd.exe` or `powershell.exe`), eliminating command injection vulnerabilities.
 - **Safe Working Directory Binding:** Resolves working directories to target executable parent directories or system roots, preventing DLL hijacking in shared folders.
 - **Process Isolation:** Detaches launched applications into independent process trees without inheriting privileged handles.
+
+### 📊 Native Win32 System Intelligence Monitoring
+- **Hardware & CPU Utilization:** Periodic non-blocking retrieval of total processor utilization across system cores via Windows `GetSystemTimes`.
+- **Physical Memory Accounting:** Queries system RAM configuration through `GlobalMemoryStatusEx`, presenting total physical capacity, available RAM, and real-time memory pressure.
+- **Fixed Storage Partition Telemetry:** Enumerates mounted fixed storage drives using `GetLogicalDriveStringsW` and `GetDiskFreeSpaceExW`, calculating total volume size, free capacity, and percentage used for local partitions while excluding volatile optical or remote network media.
+- **Monotonic System & App Uptime:** Tracks host system uptime via `GetTickCount64` and measures continuous DeskPilot application session duration.
 
 ### 🔌 Strongly Typed, Least-Privilege IPC Boundary
 - **Opaque ID Addressing:** The frontend presentation layer only holds opaque application IDs (`app_<hex>`) and never handles raw filesystem paths, executable arguments, or environment variables.
@@ -117,7 +124,7 @@ DeskPilot is designed around strict defense-in-depth principles:
 1. **Least-Privilege Web View:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, and Node.js primitives are completely disabled.
 2. **Path Traversal Guard:** Any filesystem access strictly sanitizes relative segments (`..`, `.\`, `%TEMP%`) and normalizes paths before verification.
 3. **No Shell Intermediate:** Launch commands are never formatted as string shell scripts. Process creation bypasses shell parsing entirely.
-4. **Local Data Sovereignty:** No network calls are made during indexing or launching. Zero analytics, telemetry, or user tracking exist in the codebase.
+4. **Local Data Sovereignty:** The audited application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. (Note: Windows, WebView2, the installer, and applications launched by the user may independently perform network activity; see [`PRIVACY.md`](PRIVACY.md)).
 
 ---
 
@@ -148,7 +155,7 @@ npm.cmd install
 # Type-check TypeScript and build the production web bundle
 npm.cmd run build
 
-# Run frontend test suite (62 tests across 7 suites)
+# Run frontend test suite (113 tests across 11 suites)
 npm.cmd test -- --run
 
 # Launch full desktop application in development mode (with hot reload)
@@ -159,24 +166,31 @@ npm.cmd run tauri dev
 
 ## Automated Verification Suite
 
-DeskPilot features a comprehensive suite of **205 automated tests** across both frontend and native backend layers:
+DeskPilot maintains a total of **293 automated test definitions identified** across both frontend presentation and native backend layers:
 
-### Frontend Test Breakdown (Vitest)
-- `ApplicationCatalog.test.tsx` (13 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
-- `interaction.test.tsx` (13 tests): Keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
+- **Frontend Execution Evidence:** **113 tests passed** at the audited baseline (`npm test -- --run`), executed across 11 Vitest suites.
+- **Rust Backend Structural Inventory:** **180 test definitions identified** in source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
+
+### Frontend Test Breakdown (Vitest — 113 Passing)
+- `ProcessMonitor.test.tsx` (16 tests): Process list rendering, state sorting, CPU/memory formatting, interactive termination confirmations, and error envelopes.
+- `ApplicationCatalog.test.tsx` (15 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
+- `SystemMonitor.test.tsx` (13 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, and uptime formatting.
+- `interaction.test.tsx` (22 tests): Component interaction, keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
 - `LaunchButton.test.tsx` (12 tests): Launch invocation, pending state, success confirmation reset, error recovery, and timer unmount hygiene.
 - `discovery.test.ts` (8 tests): Typed IPC contract validation for application discovery and payload integrity.
+- `processes.test.ts` (7 tests): Process enumeration, kill command IPC contract, and error deserialization.
 - `launcher.test.ts` (6 tests): Launch IPC contract validation and error mapping.
 - `ApplicationCard.test.tsx` (6 tests): Card rendering, availability badge states, publisher provenance display.
+- `system.test.ts` (4 tests): Typed IPC contracts for system times, memory metrics, and drive partitions.
 - `ipc.test.ts` (4 tests): Typed error serialization and boundary protection.
 
-### Backend Test Breakdown (Cargo / Rust)
-- Application discovery across registry hives and Start Menu directories.
-- MS-SHLLINK binary parser boundary checks, CLSID validation, and malformed header rejection.
-- Secure Win32 process creation and argument isolation.
-- Single-instance mutex validation and second-instance summon mechanics.
-- System tray action dispatching, tooltip configuration, and hide-to-tray lifecycle invariants.
-- Thread-safe generational catalog cache concurrency under `RwLock`.
+### Backend Test Inventory (Cargo / Rust — 180 Definitions Identified)
+- **Unit Test Definitions (`src-tauri/src/`):** **143 unit test definitions** identified across 19 source modules covering application discovery and registry scanning, application identity hashing, safe process launching and path traversal checks, process service and provider integration, system intelligence metrics (CPU, RAM, fixed disks, uptime), in-memory `AppState` concurrency, system tray lifecycle, error sanitization, and input guard validation.
+- **Integration Test Definitions (`src-tauri/tests/`):** **37 integration test definitions** identified across 3 integration suites:
+  - `catalog_launcher_integration_tests.rs` (13 test definitions): End-to-end catalog indexing, state transition, and launch validation.
+  - `discovery_unit_tests.rs` (12 test definitions): Multi-source discovery merging, shortcut inspection, and uninstaller filtering.
+  - `process_integration_tests.rs` (12 test definitions): Process snapshot queries, system provider metrics, and termination contracts.
+- **Execution Note:** Execution of the backend test definitions is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
 
 ---
 
@@ -191,6 +205,12 @@ DeskPilot features a comprehensive suite of **205 automated tests** across both 
 - [ ] **Phase 6:** Safe Local File Operations (Recycle Bin Integration & Rollback Ledgers)
 - [ ] **Phase 7:** SQLite Persistence & Operation Audit Trail
 - [ ] **Phase 8:** System Resource Monitoring & Health Metrics
+
+---
+
+## Documentation & Privacy
+
+- **Privacy Architecture:** Technical details regarding local data sovereignty, in-memory state, and host platform boundaries are documented in [`PRIVACY.md`](PRIVACY.md).
 
 ---
 
