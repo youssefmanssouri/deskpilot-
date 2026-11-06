@@ -8,7 +8,7 @@
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-113%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
-![Test Definitions](https://img.shields.io/badge/Test%20Definitions-293%20Automated-blue?style=for-the-badge)
+![Test Definitions](https://img.shields.io/badge/Test%20Definitions-293%20Identified-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 <p align="center">
