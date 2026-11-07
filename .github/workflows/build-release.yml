@@ -53,20 +53,32 @@ jobs:
       - name: Assert Lockfile Baselines
         shell: powershell
         run: |
-          $expectedPkgLockSha = "A7F44E62C7A7842411AF16D95B44D02172DB0845900C000F9E8D7B229E30A9EB"
-          $actualPkgLockSha = (Get-FileHash -Path "package-lock.json" -Algorithm SHA256).Hash
-          if ($actualPkgLockSha -ne $expectedPkgLockSha) {
-            Write-Error "CRITICAL: package-lock.json SHA-256 mismatch before installation! Expected $expectedPkgLockSha, got $actualPkgLockSha"
+          $expectedPkgLockBlob = "40cf9b1ac59b6f4487b4df40f0960f42008e4dae"
+          $pkgBlobRaw = & git rev-parse HEAD:package-lock.json
+          $pkgBlobExit = $LASTEXITCODE
+          if ($pkgBlobExit -ne 0) {
+            Write-Error "CRITICAL: git rev-parse HEAD:package-lock.json failed with exit code $pkgBlobExit!"
+            exit $pkgBlobExit
+          }
+          $actualPkgLockBlob = ($pkgBlobRaw -join "`n").Trim()
+          if ($actualPkgLockBlob -ne $expectedPkgLockBlob) {
+            Write-Error "CRITICAL: package-lock.json Git blob mismatch before installation! Expected $expectedPkgLockBlob, got $actualPkgLockBlob"
             exit 1
           }
 
-          $expectedCargoLockSha = "0A43B4532477C3FE04CBF6215F54087BF2D620242D6B6BF97F4948BFF93B09E1"
-          $actualCargoLockSha = (Get-FileHash -Path "src-tauri/Cargo.lock" -Algorithm SHA256).Hash
-          if ($actualCargoLockSha -ne $expectedCargoLockSha) {
-            Write-Error "CRITICAL: Cargo.lock SHA-256 mismatch before build! Expected $expectedCargoLockSha, got $actualCargoLockSha"
+          $expectedCargoLockBlob = "8bba7e3f0927a83ad98b4aee6a03faf694ea475f"
+          $cargoBlobRaw = & git rev-parse HEAD:src-tauri/Cargo.lock
+          $cargoBlobExit = $LASTEXITCODE
+          if ($cargoBlobExit -ne 0) {
+            Write-Error "CRITICAL: git rev-parse HEAD:src-tauri/Cargo.lock failed with exit code $cargoBlobExit!"
+            exit $cargoBlobExit
+          }
+          $actualCargoLockBlob = ($cargoBlobRaw -join "`n").Trim()
+          if ($actualCargoLockBlob -ne $expectedCargoLockBlob) {
+            Write-Error "CRITICAL: Cargo.lock Git blob mismatch before build! Expected $expectedCargoLockBlob, got $actualCargoLockBlob"
             exit 1
           }
-          Write-Output "Pre-build lockfile SHA-256 baselines verified successfully."
+          Write-Output "Pre-build lockfile Git blob baselines verified successfully."
 
       - name: Setup Node.js Toolchain
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
@@ -396,13 +408,7 @@ jobs:
             exit $buildExit
           }
 
-          $postCargoLockSha = (Get-FileHash -Path "src-tauri/Cargo.lock" -Algorithm SHA256).Hash
-          if ($postCargoLockSha -ne "0A43B4532477C3FE04CBF6215F54087BF2D620242D6B6BF97F4948BFF93B09E1") {
-            Write-Error "CRITICAL: Cargo.lock SHA-256 changed during tauri build! Got $postCargoLockSha"
-            exit 1
-          }
-
-          & git diff --exit-code src-tauri/Cargo.lock
+          & git diff --exit-code -- src-tauri/Cargo.lock
           $gitCargoDiffExit = $LASTEXITCODE
           if ($gitCargoDiffExit -ne 0) {
             Write-Error "CRITICAL: Cargo.lock was modified during tauri build!"
