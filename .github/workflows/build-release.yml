@@ -357,7 +357,12 @@ jobs:
             exit 1
           }
 
-          $clRaw = & $clPath 2>&1
+          $clRaw = & cmd.exe /c "`"$clPath`" 2>&1"
+          $clExit = $LASTEXITCODE
+          if ($clExit -ne 0) {
+            Write-Output "CRITICAL: cl.exe invocation failed with exit code $clExit! Output: $($clRaw -join ' ')"
+            exit $clExit
+          }
           $clBanner = ($clRaw -join "`n")
           if ($clBanner -notmatch 'for x64') {
             Write-Error "CRITICAL: cl.exe banner does not target x64! Output: $clBanner"
