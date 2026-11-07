@@ -1,0 +1,829 @@
+name: Build Release Windows MSI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build DeskPilot Windows x64 MSI
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      CARGO_TARGET_DIR: "${{ github.workspace }}/target"
+    steps:
+      - name: Checkout Source Revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: 22bb81cfe02418b39f444204411e430c61075a37
+          persist-credentials: false
+
+      - name: Verify Pinned Commit and Source Tree
+        shell: powershell
+        run: |
+          $expectedCommit = "22bb81cfe02418b39f444204411e430c61075a37"
+          $commitRaw = & git rev-parse HEAD
+          $commitExit = $LASTEXITCODE
+          if ($commitExit -ne 0) {
+            Write-Error "CRITICAL: git rev-parse HEAD failed with exit code $commitExit!"
+            exit $commitExit
+          }
+          $actualCommit = ($commitRaw -join "`n").Trim()
+          if ($actualCommit -ne $expectedCommit) {
+            Write-Error "CRITICAL: Checked out commit ($actualCommit) does not match expected commit ($expectedCommit)!"
+            exit 1
+          }
+          Write-Output "Source commit verified: $actualCommit"
+
+          $statusRaw = & git status --porcelain
+          $statusExit = $LASTEXITCODE
+          if ($statusExit -ne 0) {
+            Write-Error "CRITICAL: git status --porcelain failed with exit code $statusExit!"
+            exit $statusExit
+          }
+          $statusOut = ($statusRaw -join "`n").Trim()
+          if (-not [string]::IsNullOrWhiteSpace($statusOut)) {
+            Write-Error "CRITICAL: Working tree is not clean after checkout! Modified or untracked files detected."
+            exit 1
+          }
+          Write-Output "Working tree verified clean."
+
+      - name: Assert Lockfile Baselines
+        shell: powershell
+        run: |
+          $expectedPkgLockSha = "A7F44E62C7A7842411AF16D95B44D02172DB0845900C000F9E8D7B229E30A9EB"
+          $actualPkgLockSha = (Get-FileHash -Path "package-lock.json" -Algorithm SHA256).Hash
+          if ($actualPkgLockSha -ne $expectedPkgLockSha) {
+            Write-Error "CRITICAL: package-lock.json SHA-256 mismatch before installation! Expected $expectedPkgLockSha, got $actualPkgLockSha"
+            exit 1
+          }
+
+          $expectedCargoLockSha = "0A43B4532477C3FE04CBF6215F54087BF2D620242D6B6BF97F4948BFF93B09E1"
+          $actualCargoLockSha = (Get-FileHash -Path "src-tauri/Cargo.lock" -Algorithm SHA256).Hash
+          if ($actualCargoLockSha -ne $expectedCargoLockSha) {
+            Write-Error "CRITICAL: Cargo.lock SHA-256 mismatch before build! Expected $expectedCargoLockSha, got $actualCargoLockSha"
+            exit 1
+          }
+          Write-Output "Pre-build lockfile SHA-256 baselines verified successfully."
+
+      - name: Setup Node.js Toolchain
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: '24.15.0'
+
+      - name: Assert Exact Node and npm Versions
+        shell: powershell
+        run: |
+          function Write-WorkflowEnv {
+              param([string]$Name, [string]$Value)
+              if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) { Write-Error "CRITICAL: GITHUB_ENV is not defined"; exit 1 }
+              if ($Name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { Write-Error "CRITICAL: Invalid variable name '$Name'"; exit 1 }
+              if ($Value -match '[\r\n]') { Write-Error "CRITICAL: Value contains newline"; exit 1 }
+              $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+              [System.IO.File]::AppendAllText($env:GITHUB_ENV, "$Name=$Value`n", $utf8NoBom)
+          }
+
+          $nodeRaw = & node --version
+          $nodeExit = $LASTEXITCODE
+          if ($nodeExit -ne 0) {
+            Write-Error "CRITICAL: node --version failed with exit code $nodeExit!"
+            exit $nodeExit
+          }
+          $nodeVer = ($nodeRaw -join "`n").Trim()
+
+          $npmRaw = & npm.cmd --version
+          $npmExit = $LASTEXITCODE
+          if ($npmExit -ne 0) {
+            Write-Error "CRITICAL: npm.cmd --version failed with exit code $npmExit!"
+            exit $npmExit
+          }
+          $npmVer = ($npmRaw -join "`n").Trim()
+
+          Write-Output "Node version: $nodeVer"
+          Write-Output "npm version:  $npmVer"
+
+          if ($nodeVer -ne "v24.15.0") {
+            Write-Error "CRITICAL: Node.js version mismatch! Expected v24.15.0, got $nodeVer"
+            exit 1
+          }
+          if ($npmVer -ne "11.12.1") {
+            Write-Error "CRITICAL: npm version mismatch! Expected 11.12.1, got $npmVer"
+            exit 1
+          }
+
+          Write-WorkflowEnv -Name "DESKPILOT_NODE_VERSION" -Value $nodeVer
+          Write-WorkflowEnv -Name "DESKPILOT_NPM_VERSION" -Value $npmVer
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: '1.99.1'
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Assert Exact Rust and Cargo Toolchain Versions
+        shell: powershell
+        run: |
+          function Write-WorkflowEnv {
+              param([string]$Name, [string]$Value)
+              if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) { Write-Error "CRITICAL: GITHUB_ENV is not defined"; exit 1 }
+              if ($Name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { Write-Error "CRITICAL: Invalid variable name '$Name'"; exit 1 }
+              if ($Value -match '[\r\n]') { Write-Error "CRITICAL: Value contains newline"; exit 1 }
+              $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+              [System.IO.File]::AppendAllText($env:GITHUB_ENV, "$Name=$Value`n", $utf8NoBom)
+          }
+
+          $rustcRaw = & rustc --version
+          $rustcExit = $LASTEXITCODE
+          if ($rustcExit -ne 0) {
+            Write-Error "CRITICAL: rustc --version failed with exit code $rustcExit!"
+            exit $rustcExit
+          }
+          $rustcVer = ($rustcRaw -join "`n").Trim()
+
+          $cargoRaw = & cargo --version
+          $cargoExit = $LASTEXITCODE
+          if ($cargoExit -ne 0) {
+            Write-Error "CRITICAL: cargo --version failed with exit code $cargoExit!"
+            exit $cargoExit
+          }
+          $cargoVer = ($cargoRaw -join "`n").Trim()
+
+          Write-Output "rustc version: $rustcVer"
+          Write-Output "cargo version: $cargoVer"
+
+          if ($rustcVer -notmatch '^rustc 1\.99\.1 ') {
+            Write-Error "CRITICAL: Rust compiler mismatch! Expected rustc 1.99.1, got $rustcVer"
+            exit 1
+          }
+          if ($cargoVer -notmatch '^cargo 1\.99\.1 ') {
+            Write-Error "CRITICAL: Cargo tool mismatch! Expected cargo 1.99.1, got $cargoVer"
+            exit 1
+          }
+
+          Write-WorkflowEnv -Name "DESKPILOT_RUSTC_VERSION" -Value $rustcVer
+          Write-WorkflowEnv -Name "DESKPILOT_CARGO_VERSION" -Value $cargoVer
+
+      - name: Locate and Assert WiX Toolset v3.14
+        shell: powershell
+        run: |
+          function Write-WorkflowEnv {
+              param([string]$Name, [string]$Value)
+              if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) { Write-Error "CRITICAL: GITHUB_ENV is not defined"; exit 1 }
+              if ($Name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { Write-Error "CRITICAL: Invalid variable name '$Name'"; exit 1 }
+              if ($Value -match '[\r\n]') { Write-Error "CRITICAL: Value contains newline"; exit 1 }
+              $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+              [System.IO.File]::AppendAllText($env:GITHUB_ENV, "$Name=$Value`n", $utf8NoBom)
+          }
+
+          $wixCandidateDirs = @(
+            "C:\Program Files (x86)\WiX Toolset v3.14\bin",
+            "C:\Program Files\WiX Toolset v3.14\bin"
+          )
+          $resolvedWixDir = $null
+          foreach ($dir in $wixCandidateDirs) {
+            if ((Test-Path (Join-Path $dir "candle.exe")) -and (Test-Path (Join-Path $dir "light.exe"))) {
+              $resolvedWixDir = $dir
+              break
+            }
+          }
+          if (-not $resolvedWixDir) {
+            $cCmd = Get-Command "candle.exe" -ErrorAction SilentlyContinue
+            $lCmd = Get-Command "light.exe" -ErrorAction SilentlyContinue
+            if ($cCmd -and $lCmd) {
+              $cDir = Split-Path $cCmd.Source -Parent
+              $lDir = Split-Path $lCmd.Source -Parent
+              if ($cDir -eq $lDir) {
+                $resolvedWixDir = $cDir
+              } else {
+                Write-Error "CRITICAL: candle.exe ($cDir) and light.exe ($lDir) reside in different directories!"
+                exit 1
+              }
+            }
+          }
+          if (-not $resolvedWixDir) {
+            Write-Error "CRITICAL: WiX Toolset v3.14 binaries (candle.exe and light.exe) could not be located in a single directory!"
+            exit 1
+          }
+
+          $candlePath = Join-Path $resolvedWixDir "candle.exe"
+          $lightPath = Join-Path $resolvedWixDir "light.exe"
+          $candleVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($candlePath)
+          $lightVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($lightPath)
+
+          $expectedWixVersion = "3.14.1.8722"
+          if ($candleVer.ProductVersion -ne $expectedWixVersion) {
+            Write-Error "CRITICAL: candle.exe ProductVersion ($($candleVer.ProductVersion)) does not match expected exact version ($expectedWixVersion)!"
+            exit 1
+          }
+          if ($lightVer.ProductVersion -ne $expectedWixVersion) {
+            Write-Error "CRITICAL: light.exe ProductVersion ($($lightVer.ProductVersion)) does not match expected exact version ($expectedWixVersion)!"
+            exit 1
+          }
+
+          "$resolvedWixDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Output "WiX Toolset verified and added to GITHUB_PATH: $resolvedWixDir (version: $expectedWixVersion)"
+
+          Write-WorkflowEnv -Name "DESKPILOT_WIX_DIR" -Value $resolvedWixDir
+          Write-WorkflowEnv -Name "DESKPILOT_WIX_CANDLE_PATH" -Value $candlePath
+          Write-WorkflowEnv -Name "DESKPILOT_WIX_CANDLE_VERSION" -Value $candleVer.ProductVersion
+          Write-WorkflowEnv -Name "DESKPILOT_WIX_LIGHT_PATH" -Value $lightPath
+          Write-WorkflowEnv -Name "DESKPILOT_WIX_LIGHT_VERSION" -Value $lightVer.ProductVersion
+
+      - name: Verify MSVC and Windows SDK Compatibility
+        shell: powershell
+        run: |
+          function Write-WorkflowEnv {
+              param([string]$Name, [string]$Value)
+              if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) { Write-Error "CRITICAL: GITHUB_ENV is not defined"; exit 1 }
+              if ($Name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { Write-Error "CRITICAL: Invalid variable name '$Name'"; exit 1 }
+              if ($Value -match '[\r\n]') { Write-Error "CRITICAL: Value contains newline"; exit 1 }
+              $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+              [System.IO.File]::AppendAllText($env:GITHUB_ENV, "$Name=$Value`n", $utf8NoBom)
+          }
+
+          function Test-PathContainment {
+              param([string]$ParentDir, [string]$ChildPath)
+              $parentNorm = [System.IO.Path]::GetFullPath($ParentDir).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+              $childNorm = [System.IO.Path]::GetFullPath($ChildPath)
+              return $childNorm.StartsWith($parentNorm, [System.StringComparison]::OrdinalIgnoreCase)
+          }
+
+          if ($env:VSCMD_ARG_TGT_ARCH -ne "x64") {
+            Write-Error "CRITICAL: VSCMD_ARG_TGT_ARCH is not 'x64'! Found: '$env:VSCMD_ARG_TGT_ARCH'"
+            exit 1
+          }
+          if ($env:VSCMD_ARG_HOST_ARCH -ne "x64") {
+            Write-Error "CRITICAL: VSCMD_ARG_HOST_ARCH is not 'x64'! Found: '$env:VSCMD_ARG_HOST_ARCH'"
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:VCToolsInstallDir)) {
+            Write-Error "CRITICAL: VCToolsInstallDir environment variable is not defined or empty!"
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WindowsSDKVersion)) {
+            Write-Error "CRITICAL: WindowsSDKVersion environment variable is not defined or empty!"
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WindowsSdkDir)) {
+            Write-Error "CRITICAL: WindowsSdkDir environment variable is not defined or empty!"
+            exit 1
+          }
+
+          $vcToolsDir = $env:VCToolsInstallDir.Trim().TrimEnd('\')
+          $winSdkDir = $env:WindowsSdkDir.Trim().TrimEnd('\')
+          $sdkVer = $env:WindowsSDKVersion.Trim().TrimEnd('\')
+
+          Write-Output "Active VCToolsInstallDir: $vcToolsDir"
+          Write-Output "Active WindowsSdkDir:     $winSdkDir"
+          Write-Output "Active WindowsSDKVersion: $sdkVer"
+
+          $clCmd = Get-Command "cl.exe" -ErrorAction Stop
+          $linkCmd = Get-Command "link.exe" -ErrorAction Stop
+          $rcCmd = Get-Command "rc.exe" -ErrorAction Stop
+
+          $clPath = $clCmd.Source
+          $linkPath = $linkCmd.Source
+          $rcPath = $rcCmd.Source
+
+          $clDir = Split-Path $clPath -Parent
+          $linkDir = Split-Path $linkPath -Parent
+
+          if ($clDir -ne $linkDir) {
+            Write-Error "CRITICAL: cl.exe ($clDir) and link.exe ($linkDir) originate from different directories!"
+            exit 1
+          }
+
+          if (-not (Test-PathContainment -ParentDir $vcToolsDir -ChildPath $clPath)) {
+            Write-Error "CRITICAL: cl.exe ($clPath) does not reside within VCToolsInstallDir ($vcToolsDir)!"
+            exit 1
+          }
+          if (-not (Test-PathContainment -ParentDir $vcToolsDir -ChildPath $linkPath)) {
+            Write-Error "CRITICAL: link.exe ($linkPath) does not reside within VCToolsInstallDir ($vcToolsDir)!"
+            exit 1
+          }
+          if ($clDir -notlike "*Hostx64\x64") {
+            Write-Error "CRITICAL: MSVC toolchain directory ($clDir) does not match expected native Hostx64\x64 architecture!"
+            exit 1
+          }
+
+          if (-not (Test-PathContainment -ParentDir $winSdkDir -ChildPath $rcPath)) {
+            Write-Error "CRITICAL: rc.exe ($rcPath) does not reside within WindowsSdkDir ($winSdkDir)!"
+            exit 1
+          }
+          if ($rcPath -notlike "*$sdkVer*") {
+            Write-Error "CRITICAL: rc.exe ($rcPath) does not belong to active WindowsSDKVersion ($sdkVer)!"
+            exit 1
+          }
+          $rcDir = Split-Path $rcPath -Parent
+          $rcArch = Split-Path $rcDir -Leaf
+          if ($rcArch -ne "x64") {
+            Write-Error "CRITICAL: rc.exe architecture directory is not 'x64'! Found: $rcArch (Path: $rcPath)"
+            exit 1
+          }
+
+          $clVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($clPath)
+          $linkVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($linkPath)
+          $rcVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($rcPath)
+
+          Write-Output "cl.exe:   $clPath (FileVersion: $($clVer.FileVersion), ProductVersion: $($clVer.ProductVersion))"
+          Write-Output "link.exe: $linkPath (FileVersion: $($linkVer.FileVersion), ProductVersion: $($linkVer.ProductVersion))"
+          Write-Output "rc.exe:   $rcPath (ProductVersion: $($rcVer.ProductVersion))"
+
+          if ($clVer.FileVersion -notmatch '^19\.') {
+            Write-Error "CRITICAL: cl.exe compiler version mismatch! Expected MSVC 2022 (^19.), got $($clVer.FileVersion)"
+            exit 1
+          }
+          if ($clVer.ProductVersion -ne $linkVer.ProductVersion) {
+            Write-Error "CRITICAL: MSVC toolset mismatch! cl.exe ($($clVer.ProductVersion)) != link.exe ($($linkVer.ProductVersion))"
+            exit 1
+          }
+
+          $clRaw = & $clPath 2>&1
+          $clBanner = ($clRaw -join "`n")
+          if ($clBanner -notmatch 'for x64') {
+            Write-Error "CRITICAL: cl.exe banner does not target x64! Output: $clBanner"
+            exit 1
+          }
+          Write-Output "cl.exe confirmed targeting x64."
+
+          Write-WorkflowEnv -Name "DESKPILOT_MSVC_CL_PATH" -Value $clPath
+          Write-WorkflowEnv -Name "DESKPILOT_MSVC_CL_FILE_VERSION" -Value $clVer.FileVersion
+          Write-WorkflowEnv -Name "DESKPILOT_MSVC_CL_PRODUCT_VERSION" -Value $clVer.ProductVersion
+          Write-WorkflowEnv -Name "DESKPILOT_MSVC_LINK_PATH" -Value $linkPath
+          Write-WorkflowEnv -Name "DESKPILOT_MSVC_LINK_PRODUCT_VERSION" -Value $linkVer.ProductVersion
+          Write-WorkflowEnv -Name "DESKPILOT_WINDOWS_RC_PATH" -Value $rcPath
+          Write-WorkflowEnv -Name "DESKPILOT_WINDOWS_RC_VERSION" -Value $rcVer.ProductVersion
+          Write-WorkflowEnv -Name "DESKPILOT_WINDOWS_SDK_VERSION" -Value $sdkVer
+
+      - name: Install Frontend Dependencies
+        shell: powershell
+        run: |
+          & npm.cmd ci
+          $npmCiExit = $LASTEXITCODE
+          if ($npmCiExit -ne 0) {
+            Write-Error "CRITICAL: npm.cmd ci failed with exit code $npmCiExit!"
+            exit $npmCiExit
+          }
+
+          $postPkgLockSha = (Get-FileHash -Path "package-lock.json" -Algorithm SHA256).Hash
+          if ($postPkgLockSha -ne "A7F44E62C7A7842411AF16D95B44D02172DB0845900C000F9E8D7B229E30A9EB") {
+            Write-Error "CRITICAL: package-lock.json SHA-256 changed during npm ci! Got $postPkgLockSha"
+            exit 1
+          }
+
+          & git diff --exit-code package-lock.json
+          $gitDiffExit = $LASTEXITCODE
+          if ($gitDiffExit -ne 0) {
+            Write-Error "CRITICAL: package-lock.json was modified during npm ci!"
+            exit $gitDiffExit
+          }
+          Write-Output "Frontend dependencies installed and lockfile verified unchanged."
+
+      - name: Build Desktop Application and MSI Installer
+        shell: powershell
+        run: |
+          & npm.cmd run tauri -- build --bundles msi -- --locked
+          $buildExit = $LASTEXITCODE
+          if ($buildExit -ne 0) {
+            Write-Error "CRITICAL: Tauri build command failed with exit code $buildExit!"
+            exit $buildExit
+          }
+
+          $postCargoLockSha = (Get-FileHash -Path "src-tauri/Cargo.lock" -Algorithm SHA256).Hash
+          if ($postCargoLockSha -ne "0A43B4532477C3FE04CBF6215F54087BF2D620242D6B6BF97F4948BFF93B09E1") {
+            Write-Error "CRITICAL: Cargo.lock SHA-256 changed during tauri build! Got $postCargoLockSha"
+            exit 1
+          }
+
+          & git diff --exit-code src-tauri/Cargo.lock
+          $gitCargoDiffExit = $LASTEXITCODE
+          if ($gitCargoDiffExit -ne 0) {
+            Write-Error "CRITICAL: Cargo.lock was modified during tauri build!"
+            exit $gitCargoDiffExit
+          }
+          Write-Output "DeskPilot MSI build completed and Cargo.lock verified unchanged."
+
+      - name: Verify Build Artifact Existence
+        shell: powershell
+        run: |
+          $msiPath = "${{ github.workspace }}/target/release/bundle/msi/deskpilot_0.1.1_x64_en-US.msi"
+          $exePath = "${{ github.workspace }}/target/release/deskpilot.exe"
+
+          if (-not (Test-Path $msiPath)) {
+            Write-Error "CRITICAL: Target MSI artifact does not exist at $msiPath!"
+            exit 1
+          }
+          if (-not (Test-Path $exePath)) {
+            Write-Error "CRITICAL: Target desktop executable does not exist at $exePath!"
+            exit 1
+          }
+          Write-Output "MSI artifact verified: $msiPath ($((Get-Item $msiPath).Length) bytes)"
+          Write-Output "Executable artifact verified: $exePath ($((Get-Item $exePath).Length) bytes)"
+
+      - name: Verify Embedded WebView2 Bootstrapper Integrity
+        shell: powershell
+        run: |
+          $code = @"
+          using System;
+          using System.IO;
+          using System.Runtime.InteropServices;
+          using System.Text.RegularExpressions;
+
+          public class HardenedMsiExtractor {
+              private const uint ERROR_SUCCESS = 0;
+              private const uint ERROR_NO_MORE_ITEMS = 259;
+
+              [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+              private static extern uint MsiOpenDatabaseW(string szDatabasePath, IntPtr szPersist, out uint phDatabase);
+
+              [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+              private static extern uint MsiDatabaseOpenViewW(uint hDatabase, string szQuery, out uint phView);
+
+              [DllImport("msi.dll", ExactSpelling = true)]
+              private static extern uint MsiViewExecute(uint hView, uint hRecord);
+
+              [DllImport("msi.dll", ExactSpelling = true)]
+              private static extern uint MsiViewFetch(uint hView, out uint phRecord);
+
+              [DllImport("msi.dll", ExactSpelling = true)]
+              private static extern uint MsiRecordDataSize(uint hRecord, uint iField);
+
+              [DllImport("msi.dll", ExactSpelling = true)]
+              private static extern uint MsiRecordReadStream(uint hRecord, uint iField, [Out] byte[] szDataBuf, ref uint pcbDataBuf);
+
+              [DllImport("msi.dll", ExactSpelling = true)]
+              private static extern uint MsiCloseHandle(uint hAny);
+
+              private static readonly Regex SafeBinaryNameRegex = new Regex(@"^[A-Za-z0-9_.-]{1,72}$", RegexOptions.Compiled);
+
+              public static bool ExtractBinary(string msiPath, string binaryName, string outputPath, out string errorMessage) {
+                  errorMessage = string.Empty;
+                  uint hDb = 0;
+                  uint hView = 0;
+                  uint hRec = 0;
+                  uint hDupRec = 0;
+                  bool success = false;
+
+                  if (string.IsNullOrWhiteSpace(binaryName)) {
+                      errorMessage = "Binary name cannot be null or empty.";
+                      return false;
+                  }
+
+                  if (!SafeBinaryNameRegex.IsMatch(binaryName)) {
+                      errorMessage = string.Format("Binary name '{0}' violates safe identifier syntax (must match ^[A-Za-z0-9_.-]{{1,72}}$).", binaryName);
+                      return false;
+                  }
+
+                  if (string.IsNullOrWhiteSpace(outputPath)) {
+                      errorMessage = "Output path cannot be null or empty.";
+                      return false;
+                  }
+
+                  string normalizedOutputPath;
+                  try {
+                      normalizedOutputPath = Path.GetFullPath(outputPath);
+                  } catch (Exception pathEx) {
+                      errorMessage = "Invalid output path: " + pathEx.Message;
+                      return false;
+                  }
+
+                  try {
+                      if (File.Exists(normalizedOutputPath)) {
+                          File.Delete(normalizedOutputPath);
+                      }
+                  } catch (Exception ex) {
+                      errorMessage = "Failed to remove pre-existing file at output path: " + ex.Message;
+                      return false;
+                  }
+
+                  try {
+                      uint res = MsiOpenDatabaseW(msiPath, IntPtr.Zero, out hDb);
+                      if (res != ERROR_SUCCESS || hDb == 0) {
+                          errorMessage = "Failed to open MSI database read-only. Win32 error code: " + res;
+                          return false;
+                      }
+
+                      string escapedBinaryName = binaryName.Replace("'", "''");
+                      string query = string.Format("SELECT Name, Data FROM Binary WHERE Name='{0}'", escapedBinaryName);
+                      res = MsiDatabaseOpenViewW(hDb, query, out hView);
+                      if (res != ERROR_SUCCESS || hView == 0) {
+                          errorMessage = "Failed to open view for query: " + query + ". Win32 error code: " + res;
+                          return false;
+                      }
+
+                      res = MsiViewExecute(hView, 0);
+                      if (res != ERROR_SUCCESS) {
+                          errorMessage = "Failed to execute MSI view. Win32 error code: " + res;
+                          return false;
+                      }
+
+                      res = MsiViewFetch(hView, out hRec);
+                      if (res != ERROR_SUCCESS || hRec == 0) {
+                          errorMessage = "No record found in Binary table matching Name='" + escapedBinaryName + "'. Win32 error code: " + res;
+                          return false;
+                      }
+
+                      uint dupRes = MsiViewFetch(hView, out hDupRec);
+                      if (dupRes == ERROR_SUCCESS) {
+                          errorMessage = "Duplicate records found in Binary table for Name='" + escapedBinaryName + "'";
+                          return false;
+                      }
+                      if (dupRes != ERROR_NO_MORE_ITEMS) {
+                          errorMessage = "Unexpected error verifying uniqueness in Binary table for Name='" + escapedBinaryName + "'. Win32 error code: " + dupRes;
+                          return false;
+                      }
+
+                      uint expectedSize = MsiRecordDataSize(hRec, 2);
+                      if (expectedSize == 0) {
+                          errorMessage = "Binary record stream reported 0 bytes size.";
+                          return false;
+                      }
+
+                      uint totalRead = 0;
+                      byte[] buffer = new byte[65536];
+
+                      using (FileStream fs = File.Create(normalizedOutputPath)) {
+                          while (true) {
+                              uint cb = (uint)buffer.Length;
+                              res = MsiRecordReadStream(hRec, 2, buffer, ref cb);
+                              if (res != ERROR_SUCCESS) {
+                                  errorMessage = "MsiRecordReadStream failed with Win32 error code: " + res;
+                                  return false;
+                              }
+
+                              if (cb > (uint)buffer.Length) {
+                                  errorMessage = string.Format("MsiRecordReadStream returned byte count ({0}) exceeding buffer capacity ({1}).", cb, buffer.Length);
+                                  return false;
+                              }
+
+                              if (cb == 0) {
+                                  break;
+                              }
+
+                              checked {
+                                  if (totalRead + cb > expectedSize) {
+                                      errorMessage = string.Format("Stream data exceeded expected size ({0} bytes).", expectedSize);
+                                      return false;
+                                  }
+                              }
+
+                              fs.Write(buffer, 0, (int)cb);
+
+                              checked {
+                                  totalRead += cb;
+                              }
+                          }
+                      }
+
+                      if (totalRead != expectedSize) {
+                          errorMessage = string.Format("Premature stream EOF: read {0} of {1} expected bytes.", totalRead, expectedSize);
+                          return false;
+                      }
+
+                      if (!File.Exists(normalizedOutputPath)) {
+                          errorMessage = "Extracted output file does not exist on disk after stream completion.";
+                          return false;
+                      }
+
+                      FileInfo fi = new FileInfo(normalizedOutputPath);
+                      if ((ulong)fi.Length != (ulong)expectedSize) {
+                          errorMessage = string.Format("Extracted file size mismatch on disk: expected {0} bytes, found {1} bytes.", expectedSize, fi.Length);
+                          return false;
+                      }
+
+                      success = true;
+                      return true;
+                  } catch (Exception ex) {
+                      errorMessage = "Exception during MSI binary extraction: " + ex.Message;
+                      return false;
+                  } finally {
+                      if (hDupRec != 0) {
+                          MsiCloseHandle(hDupRec);
+                          hDupRec = 0;
+                      }
+                      if (hRec != 0) {
+                          MsiCloseHandle(hRec);
+                          hRec = 0;
+                      }
+                      if (hView != 0) {
+                          MsiCloseHandle(hView);
+                          hView = 0;
+                      }
+                      if (hDb != 0) {
+                          MsiCloseHandle(hDb);
+                          hDb = 0;
+                      }
+
+                      if (!success) {
+                          try {
+                              if (File.Exists(normalizedOutputPath)) {
+                                  File.Delete(normalizedOutputPath);
+                              }
+                          } catch (Exception cleanupEx) {
+                              errorMessage += " (Cleanup failure: unable to delete incomplete output file: " + cleanupEx.Message + ")";
+                          }
+                      }
+                  }
+              }
+          }
+          "@
+
+          Add-Type -TypeDefinition $code
+
+          $msiPath = "${{ github.workspace }}/target/release/bundle/msi/deskpilot_0.1.1_x64_en-US.msi"
+          $extractedPath = "${{ runner.temp }}/MicrosoftEdgeWebview2Setup.exe"
+          $errMsg = ""
+
+          $ok = [HardenedMsiExtractor]::ExtractBinary($msiPath, "MicrosoftEdgeWebview2Setup.exe", $extractedPath, [ref]$errMsg)
+          if (-not $ok) {
+            Write-Error "CRITICAL: Failed to extract embedded WebView2 bootstrapper: $errMsg"
+            exit 1
+          }
+
+          if (-not (Test-Path $extractedPath)) {
+            Write-Error "CRITICAL: Extracted bootstrapper does not exist at $extractedPath!"
+            exit 1
+          }
+
+          $expectedSize = 1897688
+          $actualSize = (Get-Item $extractedPath).Length
+          if ($actualSize -ne $expectedSize) {
+            Write-Error "CRITICAL: Bootstrapper size mismatch! Expected $expectedSize bytes, got $actualSize"
+            exit 1
+          }
+
+          $expectedHash = "CF2F2445FEF0C5C14E372045F84998771EEB8BB01D59BE4AFD00692FA160082E"
+          $actualHash = (Get-FileHash -Path $extractedPath -Algorithm SHA256).Hash
+          if ($actualHash -ne $expectedHash) {
+            Write-Error "CRITICAL: Bootstrapper SHA-256 mismatch! Expected $expectedHash, got $actualHash"
+            exit 1
+          }
+
+          $sig = Get-AuthenticodeSignature -FilePath $extractedPath
+          if ($sig.Status -ne "Valid") {
+            Write-Error "CRITICAL: Bootstrapper signature is not valid! Status: $($sig.Status)"
+            exit 1
+          }
+          if ($sig.SignerCertificate.Subject -notlike "*CN=Microsoft Corporation*") {
+            Write-Error "CRITICAL: Bootstrapper signer is not Microsoft! Subject: $($sig.SignerCertificate.Subject)"
+            exit 1
+          }
+          $expectedThumbprint = "4028CAD637509D4744B17EC5B42AED8D7A31E6AF"
+          if ($sig.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
+            Write-Error "CRITICAL: Bootstrapper thumbprint mismatch! Expected $expectedThumbprint, got $($sig.SignerCertificate.Thumbprint)"
+            exit 1
+          }
+
+          Write-Output "WebView2 Bootstrapper integrity verified: Valid Microsoft Authenticode signature and exact SHA-256 match ($actualHash)"
+
+      - name: Generate Checksums and Build Manifest
+        shell: powershell
+        run: |
+          $bundleDir = "${{ github.workspace }}/target/release/bundle/msi"
+          $msiPath = Join-Path $bundleDir "deskpilot_0.1.1_x64_en-US.msi"
+          $exePath = "${{ github.workspace }}/target/release/deskpilot.exe"
+
+          if (-not (Test-Path $msiPath)) {
+            Write-Error "CRITICAL: MSI file not found at $msiPath for checksum calculation!"
+            exit 1
+          }
+          if (-not (Test-Path $exePath)) {
+            Write-Error "CRITICAL: Executable file not found at $exePath for checksum calculation!"
+            exit 1
+          }
+
+          $msiHash = (Get-FileHash -Path $msiPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $exeHash = (Get-FileHash -Path $exePath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+          $checksumsContent = "$msiHash  deskpilot_0.1.1_x64_en-US.msi`n$exeHash  deskpilot.exe`n"
+          $checksumsPath = Join-Path $bundleDir "SHA256SUMS.txt"
+          [System.IO.File]::WriteAllText($checksumsPath, $checksumsContent, $utf8NoBom)
+
+          $gitCommitRaw = & git rev-parse HEAD
+          $gitCommitExit = $LASTEXITCODE
+          if ($gitCommitExit -ne 0) {
+            Write-Error "CRITICAL: git rev-parse HEAD failed with exit code $gitCommitExit!"
+            exit $gitCommitExit
+          }
+          $gitCommit = ($gitCommitRaw -join "`n").Trim()
+          if ($gitCommit -ne "22bb81cfe02418b39f444204411e430c61075a37") {
+            Write-Error "CRITICAL: Checked out source commit ($gitCommit) differs from expected baseline!"
+            exit 1
+          }
+
+          $gitTreeRaw = & git rev-parse 'HEAD^{tree}'
+          $gitTreeExit = $LASTEXITCODE
+          if ($gitTreeExit -ne 0) {
+            Write-Error "CRITICAL: git rev-parse 'HEAD^{tree}' failed with exit code $gitTreeExit!"
+            exit $gitTreeExit
+          }
+          $gitTree = ($gitTreeRaw -join "`n").Trim()
+          if ([string]::IsNullOrWhiteSpace($gitTree)) {
+            Write-Error "CRITICAL: git rev-parse 'HEAD^{tree}' produced empty output!"
+            exit 1
+          }
+
+          $tauriCliRaw = & npm.cmd exec -- tauri --version 2>&1
+          $tauriCliExit = $LASTEXITCODE
+          if ($tauriCliExit -ne 0) {
+            Write-Error "CRITICAL: npm.cmd exec -- tauri --version failed with exit code $tauriCliExit!"
+            exit $tauriCliExit
+          }
+          $tauriCliVer = ($tauriCliRaw -join "`n").Trim()
+
+          $manifest = [ordered]@{
+            manifest_schema = "1.0"
+            disclaimer = "This build manifest records build-time environment metadata for diagnostic and reproducibility auditing. It does not constitute a cryptographic attestation or hardware-backed signing statement."
+            application = @{
+              name = "DeskPilot"
+              version = "0.1.1"
+              source_commit = $gitCommit
+              source_tree = $gitTree
+              target_triple = "x86_64-pc-windows-msvc"
+            }
+            artifacts = @(
+              @{
+                filename = "deskpilot_0.1.1_x64_en-US.msi"
+                sha256 = $msiHash
+                size_bytes = (Get-Item $msiPath).Length
+              },
+              @{
+                filename = "deskpilot.exe"
+                sha256 = $exeHash
+                size_bytes = (Get-Item $exePath).Length
+              }
+            )
+            embedded_webview2 = @{
+              source = "Binary table MicrosoftEdgeWebview2Setup.exe"
+              sha256 = "cf2f2445fef0c5c14e372045f84998771eeb8bb01d59be4afd00692fa160082e"
+              size_bytes = 1897688
+              signer = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+              thumbprint = "4028CAD637509D4744B17EC5B42AED8D7A31E6AF"
+              status = "Valid"
+            }
+            environment = @{
+              runner_os = "$([System.Environment]::OSVersion.VersionString)"
+              rustc_version = "$env:DESKPILOT_RUSTC_VERSION"
+              cargo_version = "$env:DESKPILOT_CARGO_VERSION"
+              node_version = "$env:DESKPILOT_NODE_VERSION"
+              npm_version = "$env:DESKPILOT_NPM_VERSION"
+              tauri_cli_version = $tauriCliVer
+              wix_candle_path = "$env:DESKPILOT_WIX_CANDLE_PATH"
+              wix_candle_version = "$env:DESKPILOT_WIX_CANDLE_VERSION"
+              wix_light_path = "$env:DESKPILOT_WIX_LIGHT_PATH"
+              wix_light_version = "$env:DESKPILOT_WIX_LIGHT_VERSION"
+              msvc_cl_path = "$env:DESKPILOT_MSVC_CL_PATH"
+              msvc_cl_file_version = "$env:DESKPILOT_MSVC_CL_FILE_VERSION"
+              msvc_cl_product_version = "$env:DESKPILOT_MSVC_CL_PRODUCT_VERSION"
+              msvc_link_path = "$env:DESKPILOT_MSVC_LINK_PATH"
+              msvc_link_product_version = "$env:DESKPILOT_MSVC_LINK_PRODUCT_VERSION"
+              windows_rc_path = "$env:DESKPILOT_WINDOWS_RC_PATH"
+              windows_rc_version = "$env:DESKPILOT_WINDOWS_RC_VERSION"
+              windows_sdk_version = "$env:DESKPILOT_WINDOWS_SDK_VERSION"
+            }
+          }
+
+          $manifestJson = ($manifest | ConvertTo-Json -Depth 5) + "`n"
+          $manifestPath = Join-Path $bundleDir "build-manifest.json"
+          [System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
+
+          Write-Output "BOM-free UTF-8 checksums and build manifest generated successfully in $bundleDir"
+
+      - name: Verify All Artifact Paths Before Upload
+        shell: powershell
+        run: |
+          $paths = @(
+            "${{ github.workspace }}/target/release/bundle/msi/deskpilot_0.1.1_x64_en-US.msi",
+            "${{ github.workspace }}/target/release/deskpilot.exe",
+            "${{ github.workspace }}/target/release/bundle/msi/SHA256SUMS.txt",
+            "${{ github.workspace }}/target/release/bundle/msi/build-manifest.json"
+          )
+          foreach ($p in $paths) {
+            if (-not (Test-Path $p)) {
+              Write-Error "CRITICAL: Upload artifact path does not exist: $p"
+              exit 1
+            }
+            $item = Get-Item $p
+            Write-Output "Pre-upload verified: $p ($($item.Length) bytes)"
+          }
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: deskpilot-v0.1.1-windows-msi
+          path: |
+            ${{ github.workspace }}/target/release/bundle/msi/deskpilot_0.1.1_x64_en-US.msi
+            ${{ github.workspace }}/target/release/deskpilot.exe
+            ${{ github.workspace }}/target/release/bundle/msi/SHA256SUMS.txt
+            ${{ github.workspace }}/target/release/bundle/msi/build-manifest.json
+          retention-days: 30
+          if-no-files-found: error
