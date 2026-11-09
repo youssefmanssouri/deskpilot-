@@ -9,6 +9,7 @@ import {
   filterProcesses,
   sortProcesses,
   getStatusBadge,
+  applyQuickFilter,
 } from '../ProcessMonitor';
 import * as tauriCore from '@tauri-apps/api/core';
 import type { ProcessDto, ProcessListResultDto } from '../../lib/ipc';
@@ -440,6 +441,242 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
 
       // Unmounting while request is in-flight must cleanly unmount without throwing
       expect(() => unmount()).not.toThrow();
+    });
+  });
+
+  describe('Pure Quick Filter Helper', () => {
+    it('applyQuickFilter filters strictly according to category definitions', () => {
+      // 'all'
+      expect(applyQuickFilter(sampleProcesses, 'all')).toEqual(sampleProcesses);
+
+      // 'highMemory' strictly > 100 MiB (104,857,600 bytes) and excludes nulls
+      const highMem = applyQuickFilter(sampleProcesses, 'highMemory');
+      expect(highMem.map((p) => p.name)).toEqual(['code.exe', 'browser.exe']);
+
+      // 100 MiB boundary check: exactly 100 MiB (104,857,600 bytes) does not qualify
+      const boundaryProcess: ProcessDto = {
+        ...sampleProcesses[0],
+        id: 'boundary',
+        workingSetBytes: 104857600, // exactly 100 MiB
+      };
+      expect(applyQuickFilter([boundaryProcess], 'highMemory')).toHaveLength(0);
+
+      // 100 MiB + 1 byte (104,857,601 bytes) qualifies
+      const aboveBoundaryProcess: ProcessDto = {
+        ...sampleProcesses[0],
+        id: 'above',
+        workingSetBytes: 104857601, // 100 MiB + 1 byte
+      };
+      expect(applyQuickFilter([aboveBoundaryProcess], 'highMemory')).toHaveLength(1);
+
+      // null and undefined memory values do not qualify
+      const nullMemProcess: ProcessDto = {
+        ...sampleProcesses[0],
+        id: 'null-mem',
+        workingSetBytes: null,
+      };
+      const undefinedMemProcess: ProcessDto = {
+        ...sampleProcesses[0],
+        id: 'undef-mem',
+        workingSetBytes: undefined as unknown as null,
+      };
+      expect(applyQuickFilter([nullMemProcess], 'highMemory')).toHaveLength(0);
+      expect(applyQuickFilter([undefinedMemProcess], 'highMemory')).toHaveLength(0);
+
+      // 'restricted'
+      const restricted = applyQuickFilter(sampleProcesses, 'restricted');
+      expect(restricted.map((p) => p.name)).toEqual(['System Idle Process']);
+    });
+  });
+
+  describe('Master-Detail Selection, Quick Filters & Keyboard Interaction', () => {
+    it('filters rows when clicking quick filter chips and composes with search', async () => {
+      render(<ProcessMonitor initialData={sampleResult} autoFetch={false} />);
+
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.getByText('browser.exe')).toBeDefined();
+      expect(screen.getByText('System Idle Process')).toBeDefined();
+      expect(screen.getByText('transient.exe')).toBeDefined();
+
+      // Click "High Memory (> 100 MiB)" chip with exact visible label
+      const highMemChip = screen.getByRole('button', { name: /high memory \(> 100 mib\)/i });
+      fireEvent.click(highMemChip);
+
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.getByText('browser.exe')).toBeDefined();
+      expect(screen.queryByText('System Idle Process')).toBeNull();
+      expect(screen.queryByText('transient.exe')).toBeNull();
+
+      // Compose with search query "browser"
+      const searchInput = screen.getByRole('searchbox', { name: /filter processes/i });
+      fireEvent.change(searchInput, { target: { value: 'browser' } });
+
+      expect(screen.getByText('browser.exe')).toBeDefined();
+      expect(screen.queryByText('code.exe')).toBeNull();
+
+      // Clear search
+      fireEvent.change(searchInput, { target: { value: '' } });
+
+      // Click "Restricted Handles" chip
+      const restrictedChip = screen.getByRole('button', { name: /restricted handles/i });
+      fireEvent.click(restrictedChip);
+
+      expect(screen.getByText('System Idle Process')).toBeDefined();
+      expect(screen.queryByText('code.exe')).toBeNull();
+      expect(screen.queryByText('browser.exe')).toBeNull();
+
+      // Click "All Processes" to restore
+      const allChip = screen.getByRole('button', { name: /all processes/i });
+      fireEvent.click(allChip);
+
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.getByText('browser.exe')).toBeDefined();
+      expect(screen.getByText('System Idle Process')).toBeDefined();
+    });
+
+    it('synchronizes row selection with the ProcessInspector and fires onSelectProcess', async () => {
+      const handleSelect = vi.fn();
+      render(
+        <ProcessMonitor
+          initialData={sampleResult}
+          autoFetch={false}
+          onSelectProcess={handleSelect}
+        />
+      );
+
+      // Initially, inspector shows empty selection state
+      expect(screen.getByTestId('process-inspector-empty')).toBeDefined();
+
+      // Click on code.exe row
+      const codeRow = screen.getByTestId('process-row-v1:1000:01db2d5843a0e120');
+      fireEvent.click(codeRow);
+
+      expect(codeRow.getAttribute('aria-selected')).toBe('true');
+      expect(codeRow.className).toContain('process-row-selected');
+      expect(handleSelect).toHaveBeenCalledWith(sampleProcesses[0]);
+
+      // Inspector now reflects code.exe telemetry
+      expect(screen.getByTestId('process-inspector')).toBeDefined();
+      expect(screen.getByTestId('inspector-memory-formatted').textContent).toBe('200.0 MB');
+      expect(screen.getByTestId('inspector-cpu-formatted').textContent).toBe('15.0 s');
+    });
+
+    it('supports ArrowDown and ArrowUp keyboard navigation across visible rows', async () => {
+      const handleSelect = vi.fn();
+      render(
+        <ProcessMonitor
+          initialData={sampleResult}
+          autoFetch={false}
+          onSelectProcess={handleSelect}
+        />
+      );
+
+      // Press ArrowDown to select first visible row
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+
+      // Sorted by name asc by default: browser.exe is first
+      expect(handleSelect).toHaveBeenLastCalledWith(
+        expect.objectContaining({ name: 'browser.exe' })
+      );
+
+      // Press ArrowDown again to advance to code.exe
+      fireEvent.keyDown(window, { key: 'ArrowDown' });
+      expect(handleSelect).toHaveBeenLastCalledWith(
+        expect.objectContaining({ name: 'code.exe' })
+      );
+
+      // Press ArrowUp to step back to browser.exe
+      fireEvent.keyDown(window, { key: 'ArrowUp' });
+      expect(handleSelect).toHaveBeenLastCalledWith(
+        expect.objectContaining({ name: 'browser.exe' })
+      );
+    });
+
+    it('does not hijack ArrowDown / ArrowUp when user is typing in the search input', async () => {
+      const handleSelect = vi.fn();
+      render(
+        <ProcessMonitor
+          initialData={sampleResult}
+          autoFetch={false}
+          onSelectProcess={handleSelect}
+        />
+      );
+
+      const searchInput = screen.getByRole('searchbox', { name: /filter processes/i });
+      searchInput.focus();
+
+      // Trigger arrow keys on the focused input
+      fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+      fireEvent.keyDown(searchInput, { key: 'ArrowUp' });
+
+      // Selection must not have changed
+      expect(handleSelect).not.toHaveBeenCalled();
+    });
+
+    it('retains sort and filter settings after manual refresh', async () => {
+      render(<ProcessMonitor initialData={sampleResult} autoFetch={false} />);
+
+      const searchInput = screen.getByRole('searchbox', { name: /filter processes/i });
+      fireEvent.change(searchInput, { target: { value: 'code' } });
+
+      const pidHeader = screen.getByRole('columnheader', { name: /pid/i });
+      fireEvent.click(pidHeader); // Sort by PID asc
+
+      // Mock refresh result
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce(sampleResult);
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh process list/i });
+      fireEvent.click(refreshBtn);
+
+      await waitFor(() => {
+        expect(refreshBtn.textContent).toBe('Refresh Processes');
+      });
+
+      // Filter and sort must be retained
+      expect((searchInput as HTMLInputElement).value).toBe('code');
+      expect(pidHeader.getAttribute('aria-sort')).toBe('ascending');
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.queryByText('browser.exe')).toBeNull();
+    });
+
+    it('preserves existing snapshot when manual refresh encounters an IPC failure', async () => {
+      render(<ProcessMonitor initialData={sampleResult} autoFetch={false} />);
+
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.getByText('browser.exe')).toBeDefined();
+
+      // Mock failure with structured IPC error
+      vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+        code: 'DEVICE_BUSY',
+        message: 'Device busy',
+      });
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh process list/i });
+      fireEvent.click(refreshBtn);
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeDefined();
+        expect(screen.getByText(/Device busy/)).toBeDefined();
+      });
+
+      // Existing snapshot is still present in table!
+      expect(screen.getByText('code.exe')).toBeDefined();
+      expect(screen.getByText('browser.exe')).toBeDefined();
+    });
+
+    it('enforces strict read-only guarantee with zero process control or termination elements', () => {
+      const { container } = render(<ProcessMonitor initialData={sampleResult} autoFetch={false} />);
+
+      const interactiveElements = container.querySelectorAll('button, input, select, textarea, a');
+      for (const el of interactiveElements) {
+        const text = el.textContent?.toLowerCase() || '';
+        const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+        const title = el.getAttribute('title')?.toLowerCase() || '';
+
+        expect(text).not.toMatch(/kill|terminate|end task|suspend|priority/i);
+        expect(ariaLabel).not.toMatch(/kill|terminate|end task|suspend|priority/i);
+        expect(title).not.toMatch(/kill|terminate|end task|suspend|priority/i);
+      }
     });
   });
 });

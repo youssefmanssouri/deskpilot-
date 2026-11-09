@@ -3,6 +3,8 @@ import { LaunchButton, type LaunchStatus } from './LaunchButton';
 
 export interface ApplicationCardProps {
   application: ApplicationDto;
+  isSelected?: boolean;
+  onClick?: () => void;
   onLaunchSuccess?: (applicationId: string, processId: number) => void;
   onLaunchError?: (applicationId: string, error: IpcError) => void;
   disabled?: boolean;
@@ -15,6 +17,7 @@ export interface ApplicationCardProps {
   launchedPid?: number | null;
   launchErrorMessage?: string | null;
   onLaunchRequest?: () => void;
+  showLaunchButton?: boolean;
 }
 
 /**
@@ -41,6 +44,8 @@ export function getAvailabilityBadgeClass(availability: ApplicationDto['availabi
  */
 export function ApplicationCard({
   application,
+  isSelected = false,
+  onClick,
   onLaunchSuccess,
   onLaunchError,
   disabled = false,
@@ -53,6 +58,7 @@ export function ApplicationCard({
   launchedPid,
   launchErrorMessage,
   onLaunchRequest,
+  showLaunchButton = true,
 }: ApplicationCardProps) {
   const isLaunchDisabled = disabled || application.availability === 'MissingTarget';
   const badgeClass = getAvailabilityBadgeClass(application.availability);
@@ -60,8 +66,9 @@ export function ApplicationCard({
 
   const handleKeyDown: React.KeyboardEventHandler<HTMLElement> = (e) => {
     if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-      if (!isLaunchDisabled) {
-        e.preventDefault();
+      e.preventDefault();
+      onClick?.();
+      if (showLaunchButton && !isLaunchDisabled) {
         const btn = e.currentTarget.querySelector('button.launch-button') as HTMLButtonElement | null;
         btn?.click();
       }
@@ -73,9 +80,11 @@ export function ApplicationCard({
     <article
       ref={cardRef}
       tabIndex={tabIndex ?? 0}
-      className={`app-card ${className}`.trim()}
+      className={`app-card ${isSelected ? 'selected' : ''} ${className}`.trim()}
       aria-labelledby={cardTitleId}
+      aria-selected={isSelected}
       data-testid={`app-card-${application.id}`}
+      onClick={onClick}
       onKeyDown={handleKeyDown}
     >
       <div className="app-card-header">
@@ -110,19 +119,21 @@ export function ApplicationCard({
         </div>
       )}
 
-      <div className="app-card-actions">
-        <LaunchButton
-          applicationId={application.id}
-          disabled={isLaunchDisabled}
-          autoResetDelayMs={autoResetDelayMs}
-          status={launchStatus}
-          launchedPid={launchedPid}
-          errorMessage={launchErrorMessage}
-          onLaunch={onLaunchRequest}
-          onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
-          onError={(err) => onLaunchError?.(application.id, err)}
-        />
-      </div>
+      {showLaunchButton && (
+        <div className="app-card-actions">
+          <LaunchButton
+            applicationId={application.id}
+            disabled={isLaunchDisabled}
+            autoResetDelayMs={autoResetDelayMs}
+            status={launchStatus}
+            launchedPid={launchedPid}
+            errorMessage={launchErrorMessage}
+            onLaunch={onLaunchRequest}
+            onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
+            onError={(err) => onLaunchError?.(application.id, err)}
+          />
+        </div>
+      )}
     </article>
   );
 }

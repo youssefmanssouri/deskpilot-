@@ -4,6 +4,8 @@ import {
   ApplicationCatalog,
   filterApplications,
   computeAvailabilityCounts,
+  matchesSourceFilter,
+  SOURCE_FILTERS,
 } from '../ApplicationCatalog';
 import type { ApplicationDto } from '../../lib/ipc';
 
@@ -140,6 +142,103 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
     });
   });
 
+  describe('matchesSourceFilter Pure Function', () => {
+    it('returns true for any application when filter is "all"', () => {
+      for (const app of sampleApps) {
+        expect(matchesSourceFilter(app, 'all')).toBe(true);
+      }
+    });
+
+    it('matches HKLM 64-bit applications accurately', () => {
+      expect(matchesSourceFilter(sampleApps[1], 'hklm-64')).toBe(true);
+      expect(matchesSourceFilter(sampleApps[0], 'hklm-64')).toBe(false);
+    });
+
+    it('matches HKLM 32-bit applications accurately', () => {
+      expect(matchesSourceFilter(sampleApps[3], 'hklm-32')).toBe(true);
+      expect(matchesSourceFilter(sampleApps[0], 'hklm-32')).toBe(false);
+    });
+
+    it('matches HKCU User applications accurately', () => {
+      expect(matchesSourceFilter(sampleApps[0], 'hkcu')).toBe(true);
+      expect(matchesSourceFilter(sampleApps[1], 'hkcu')).toBe(false);
+    });
+
+    it('matches Start Menu applications (Common and User)', () => {
+      expect(matchesSourceFilter(sampleApps[1], 'start-menu')).toBe(true);
+      expect(matchesSourceFilter(sampleApps[2], 'start-menu')).toBe(true);
+      expect(matchesSourceFilter(sampleApps[0], 'start-menu')).toBe(false);
+    });
+
+    it('returns false when sources list is empty or undefined', () => {
+      const appNoSources: ApplicationDto = {
+        id: 'app_no_src',
+        displayName: 'Ghost App',
+        sources: [],
+        availability: 'Unverified',
+        isInstalled: false,
+      };
+      expect(matchesSourceFilter(appNoSources, 'hklm-64')).toBe(false);
+      expect(matchesSourceFilter(appNoSources, 'all')).toBe(true);
+    });
+
+    it('preserves 4-tier ranking precedence within source-filtered application subset', () => {
+      const mixedApps: ApplicationDto[] = [
+        {
+          id: 'app_pub',
+          displayName: 'Terminal Tool',
+          publisher: 'Code Corporation',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_sub',
+          displayName: 'Visual Studio Code',
+          publisher: 'Microsoft',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_pref',
+          displayName: 'Code Lite',
+          publisher: 'Independent',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_exact',
+          displayName: 'Code',
+          publisher: 'Editor',
+          sources: ['Registry (HKLM 64-bit)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+        {
+          id: 'app_other_source',
+          displayName: 'Code Extra',
+          publisher: 'Editor',
+          sources: ['Registry (HKCU User)'],
+          availability: 'Available',
+          isInstalled: true,
+        },
+      ];
+
+      // Filter by HKLM 64-bit first, then rank with search query "code"
+      const sourceFiltered = mixedApps.filter((app) => matchesSourceFilter(app, 'hklm-64'));
+      expect(sourceFiltered).toHaveLength(4);
+
+      const ranked = filterApplications(sourceFiltered, 'code');
+      expect(ranked).toHaveLength(4);
+      expect(ranked[0].id).toBe('app_exact');
+      expect(ranked[1].id).toBe('app_pref');
+      expect(ranked[2].id).toBe('app_sub');
+      expect(ranked[3].id).toBe('app_pub');
+    });
+  });
+
   describe('computeAvailabilityCounts Helper', () => {
     it('accurately computes aggregate availability counts', () => {
       const counts = computeAvailabilityCounts(sampleApps);
@@ -247,7 +346,7 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       expect(html).not.toContain('env');
     });
 
-    it('renders all three view switcher tabs including System Intelligence', () => {
+    it('renders clean workspace routing without redundant internal view switcher tabs', () => {
       const html = ReactDOMServer.renderToString(
         <ApplicationCatalog
           initialApplications={sampleApps}
@@ -255,13 +354,69 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
         />
       );
 
-      expect(html).toContain('id="tab-applications"');
-      expect(html).toContain('id="tab-processes"');
-      expect(html).toContain('id="tab-system"');
-      expect(html).toContain('System Intelligence');
+      // Duplicate internal switcher removed (F-01) - sidebar navigation in App.tsx is authoritative
+      expect(html).not.toContain('catalog-view-switcher');
+      expect(html).not.toContain('id="tab-applications"');
+      expect(html).not.toContain('id="tab-processes"');
+      expect(html).not.toContain('id="tab-system"');
+      expect(html).toContain('id="panel-applications"');
     });
 
-    it('renders System Intelligence tabpanel when defaultView is system', () => {
+    it('streamlines application cards by removing redundant embedded launch buttons', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Primary launch button is rendered strictly in ApplicationInspector, not duplicated on cards
+      const launchButtonMatches = html.match(/class="[^"]*launch-button[^"]*"/g) || [];
+      expect(launchButtonMatches.length).toBe(1);
+    });
+
+    it('renders master-detail split layout with inspector pane', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      expect(html).toContain('catalog-master-detail');
+      expect(html).toContain('catalog-master-pane');
+      expect(html).toContain('catalog-inspector-pane');
+      expect(html).toContain('app-inspector');
+    });
+
+    it('renders source filter pills with accessible attributes', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      expect(html).toContain('aria-label="Source filters"');
+      for (const filter of SOURCE_FILTERS) {
+        expect(html).toContain(filter.label);
+      }
+      expect(html).toContain('aria-pressed="true"');
+    });
+
+    it('renders dynamic count indicator in catalog', () => {
+      const html = ReactDOMServer.renderToString(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      expect(html).toContain('catalog-count-indicator');
+      expect(html).toContain('Showing 4 applications');
+    });
+
+    it('renders System Intelligence panel when defaultView is system', () => {
       const html = ReactDOMServer.renderToString(
         <ApplicationCatalog
           initialApplications={sampleApps}
@@ -271,7 +426,7 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       );
 
       expect(html).toContain('id="panel-system"');
-      expect(html).toContain('aria-labelledby="tab-system"');
+      expect(html).toContain('aria-label="System Intelligence"');
       expect(html).toContain('system-monitor-container');
     });
   });

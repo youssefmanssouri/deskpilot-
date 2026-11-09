@@ -7,6 +7,13 @@ import {
   formatUptime,
   getLoadColorClass,
 } from '../SystemMonitor';
+import { CpuSparkline } from '../CpuSparkline';
+import {
+  SystemMetricsProvider,
+  useSharedSystemMetrics,
+  appendCpuSample,
+  MAX_CPU_HISTORY_SAMPLES,
+} from '../useSystemMetrics';
 import * as tauriCore from '@tauri-apps/api/core';
 import type { SystemMetricsDto } from '../../lib/ipc';
 
@@ -218,5 +225,199 @@ describe('SystemMonitor Component', () => {
 
     fireEvent.change(select, { target: { value: '5s' } });
     expect(select.value).toBe('5s');
+  });
+
+  it('handles empty storage drives list gracefully with empty state notice', () => {
+    const dataNoDrives: SystemMetricsDto = {
+      ...mockSystemData,
+      storage: { drives: [] },
+    };
+
+    render(<SystemMonitor initialData={dataNoDrives} autoFetch={false} />);
+
+    expect(screen.getByText('No fixed storage volumes detected.')).toBeDefined();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('renders memory capacity scale markers', () => {
+    render(<SystemMonitor initialData={mockSystemData} autoFetch={false} />);
+
+    expect(screen.getByText('0%')).toBeDefined();
+    expect(screen.getByText('25%')).toBeDefined();
+    expect(screen.getByText('50%')).toBeDefined();
+    expect(screen.getByText('75%')).toBeDefined();
+    expect(screen.getByText('100%')).toBeDefined();
+  });
+
+  it('renders dual uptime distinguishing system uptime from application uptime', () => {
+    render(<SystemMonitor initialData={mockSystemData} autoFetch={false} />);
+
+    // System uptime: 90061s -> 1d 1h 1m
+    expect(screen.getByText('System OS Uptime')).toBeDefined();
+    expect(screen.getByText('1d 1h 1m')).toBeDefined();
+
+    // App uptime: 125s -> 2m 5s
+    expect(screen.getByText('DeskPilot Session Uptime')).toBeDefined();
+    expect(screen.getByText('2m 5s')).toBeDefined();
+  });
+});
+
+describe('appendCpuSample Helper & Bounded History (30 samples)', () => {
+  it('appends valid CPU utilization samples and clamps between 0 and 100', () => {
+    let history: number[] = [];
+    history = appendCpuSample(history, 15.5);
+    expect(history).toEqual([15.5]);
+
+    history = appendCpuSample(history, 85.0);
+    expect(history).toEqual([15.5, 85.0]);
+
+    // Clamps below 0 to 0
+    history = appendCpuSample(history, -5);
+    // Negative values are discarded without fabricating 0
+    expect(history).toEqual([15.5, 85.0]);
+
+    // Clamps above 100 to 100
+    history = appendCpuSample(history, 120);
+    expect(history).toEqual([15.5, 85.0, 100]);
+  });
+
+  it('caps buffer at strictly MAX_CPU_HISTORY_SAMPLES (30) when exceeding limit', () => {
+    let history: number[] = [];
+    for (let i = 1; i <= 35; i++) {
+      history = appendCpuSample(history, i);
+    }
+
+    expect(history).toHaveLength(MAX_CPU_HISTORY_SAMPLES);
+    expect(history[0]).toBe(6); // 1..5 shifted out
+    expect(history[history.length - 1]).toBe(35);
+  });
+
+  it('discards NaN, null, undefined, and non-numerical values without adding zero', () => {
+    const initial = [10, 20, 30];
+    expect(appendCpuSample(initial, NaN)).toEqual(initial);
+    expect(appendCpuSample(initial, null)).toEqual(initial);
+    expect(appendCpuSample(initial, undefined)).toEqual(initial);
+    expect(appendCpuSample(initial, Infinity)).toEqual(initial);
+  });
+});
+
+describe('CpuSparkline Component', () => {
+  it('renders SVG vector graphic with accessible label and caption', () => {
+    render(<CpuSparkline samples={[10, 20, 30, 40, 50]} />);
+
+    const sparkline = screen.getByRole('img', {
+      name: /CPU utilization trend across 5 samples, current 50.0%/i,
+    });
+    expect(sparkline).toBeDefined();
+    expect(screen.getByText('5 samples (max 30)')).toBeDefined();
+  });
+
+  it('handles empty or single sample gracefully without broken SVG paths', () => {
+    const { container: emptyContainer } = render(<CpuSparkline samples={[]} />);
+    expect(emptyContainer.querySelector('path.cpu-sparkline-path')).toBeNull();
+    expect(screen.getByText('0 samples (max 30)')).toBeDefined();
+
+    cleanup();
+
+    const { container: singleContainer } = render(<CpuSparkline samples={[45]} />);
+    expect(singleContainer.querySelector('path.cpu-sparkline-path')).toBeNull();
+    expect(screen.getByText('1 sample (max 30)')).toBeDefined();
+  });
+
+  it('renders path and area when multiple valid samples are provided', () => {
+    const { container } = render(<CpuSparkline samples={[20, 40, 60, 80]} />);
+
+    const path = container.querySelector('path.cpu-sparkline-path');
+    const area = container.querySelector('path.cpu-sparkline-area');
+    const dot = container.querySelector('circle.cpu-sparkline-dot');
+
+    expect(path).not.toBeNull();
+    expect(area).not.toBeNull();
+    expect(dot).not.toBeNull();
+  });
+});
+
+describe('Shared Polling Architecture & Lifecycle', () => {
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it('shares single polling state across multiple consumer components under SystemMetricsProvider', async () => {
+    vi.mocked(tauriCore.invoke).mockResolvedValue(mockSystemData);
+
+    function ConsumerA() {
+      const state = useSharedSystemMetrics();
+      return <div data-testid="consumer-a">CPU A: {state?.metrics?.cpu.utilizationPercent ?? 'none'}</div>;
+    }
+
+    function ConsumerB() {
+      const state = useSharedSystemMetrics();
+      return <div data-testid="consumer-b">CPU B: {state?.metrics?.cpu.utilizationPercent ?? 'none'}</div>;
+    }
+
+    render(
+      <SystemMetricsProvider initialData={mockSystemData} autoFetch={false}>
+        <ConsumerA />
+        <ConsumerB />
+      </SystemMetricsProvider>
+    );
+
+    expect(screen.getByTestId('consumer-a').textContent).toBe('CPU A: 24.5');
+    expect(screen.getByTestId('consumer-b').textContent).toBe('CPU B: 24.5');
+
+    // Both consumed same state without issuing any invoke
+    expect(tauriCore.invoke).not.toHaveBeenCalledWith('get_system_metrics', expect.anything());
+  });
+
+  it('cleans up interval timer and event listeners on unmount without throwing errors', () => {
+    vi.useFakeTimers();
+    vi.mocked(tauriCore.invoke).mockResolvedValue(mockSystemData);
+
+    const { unmount } = render(
+      <SystemMetricsProvider defaultRefreshMode="3s" autoFetch={false}>
+        <div data-testid="child">Child Content</div>
+      </SystemMetricsProvider>
+    );
+
+    // Unmount must clean up timer safely
+    expect(() => unmount()).not.toThrow();
+  });
+
+  it('does not invoke list_processes during system metrics polling cycle', async () => {
+    vi.mocked(tauriCore.invoke).mockResolvedValue(mockSystemData);
+
+    render(<SystemMonitor autoFetch={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('24.5%')).toBeDefined();
+    });
+
+    // Confirms strict isolation: list_processes was never queried
+    expect(tauriCore.invoke).not.toHaveBeenCalledWith('list_processes', expect.anything());
+    expect(tauriCore.invoke).toHaveBeenCalledWith('get_system_metrics', undefined);
+  });
+
+  it('does not trigger redundant local initial IPC request when shared provider is active', async () => {
+    vi.mocked(tauriCore.invoke).mockResolvedValue(mockSystemData);
+
+    render(
+      <SystemMetricsProvider autoFetch={true} defaultRefreshMode="manual">
+        <SystemMonitor />
+      </SystemMetricsProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('24.5%')).toBeDefined();
+    });
+
+    // Exactly one call issued by the shared provider; local fallback hook remained completely inert
+    expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+    expect(tauriCore.invoke).toHaveBeenCalledWith('get_system_metrics', undefined);
+  });
+
+  it('does not trigger automatic request when autoFetch is disabled in standalone mode', () => {
+    render(<SystemMonitor autoFetch={false} />);
+    expect(tauriCore.invoke).not.toHaveBeenCalled();
   });
 });

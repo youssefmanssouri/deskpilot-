@@ -1,43 +1,5 @@
 /* Application Catalog & Card Styles */
 
-/* View Switcher Tabs */
-.catalog-view-switcher {
-  display: flex;
-  gap: 0.5rem;
-  border-bottom: 1px solid #30363d;
-  padding-bottom: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-
-.view-tab-button {
-  background: none;
-  border: 1px solid transparent;
-  color: #8b949e;
-  padding: 0.45rem 1rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.view-tab-button:hover {
-  color: #c9d1d9;
-  background-color: #161b22;
-}
-
-.view-tab-button.active {
-  color: #ffffff;
-  background-color: #21262d;
-  border-color: #30363d;
-  font-weight: 600;
-}
-
-.view-tab-button:focus-visible {
-  outline: 2px solid #58a6ff;
-  outline-offset: -1px;
-}
-
 .catalog-tab-content {
   display: flex;
   flex-direction: column;
@@ -128,6 +90,12 @@
   border-color: #58a6ff;
   box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.4);
   transform: translateY(-1px);
+}
+
+.app-card.selected {
+  border-color: var(--dp-accent-primary, #0969da);
+  background-color: var(--dp-surface-selected, rgba(9, 105, 218, 0.05));
+  box-shadow: 0 0 0 1px var(--dp-accent-primary, #0969da);
 }
 
 .app-card-header {
@@ -283,5 +251,92 @@
   font-size: 0.85rem;
   margin: 0;
   color: #8b949e;
+}
+
+/* Master-Detail Split Pane */
+.catalog-master-detail {
+  display: flex;
+  gap: var(--dp-space-4, 16px);
+  align-items: flex-start;
+  width: 100%;
+}
+
+.catalog-master-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-3, 12px);
+}
+
+.catalog-inspector-pane {
+  width: 340px;
+  flex-shrink: 0;
+  position: sticky;
+  top: var(--dp-space-3, 12px);
+}
+
+/* Source Filter Pills */
+.catalog-source-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.source-filter-pill {
+  padding: 4px 12px;
+  font-size: var(--dp-font-size-xs, 12px);
+  font-weight: var(--dp-font-weight-medium, 500);
+  border-radius: var(--dp-radius-pill, 9999px);
+  background-color: var(--dp-surface-subtle, #f6f8fa);
+  color: var(--dp-text-secondary, #57606a);
+  border: 1px solid var(--dp-border-subtle, #d0d7de);
+  cursor: pointer;
+  transition: all var(--dp-transition-fast, 0.15s ease);
+}
+
+.source-filter-pill:hover {
+  background-color: var(--dp-surface-hover, #f3f4f6);
+  color: var(--dp-text-primary, #24292f);
+  border-color: var(--dp-border-default, #afb8c1);
+}
+
+.source-filter-pill.active {
+  background-color: var(--dp-accent-primary, #0969da);
+  color: var(--dp-text-on-accent, #ffffff);
+  border-color: var(--dp-accent-primary, #0969da);
+  font-weight: var(--dp-font-weight-semibold, 600);
+}
+
+.source-filter-pill:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dp-accent-primary, #0969da);
+}
+
+/* Dynamic count row */
+.catalog-count-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--dp-font-size-xs, 12px);
+  color: var(--dp-text-muted, #6e7781);
+  padding: 2px 4px;
+}
+
+.catalog-count-indicator {
+  font-weight: var(--dp-font-weight-medium, 500);
+}
+
+/* Responsive Master-Detail Behavior */
+@media (max-width: 959px) {
+  .catalog-master-detail {
+    flex-direction: column;
+  }
+
+  .catalog-inspector-pane {
+    width: 100%;
+    position: static;
+  }
 }
 

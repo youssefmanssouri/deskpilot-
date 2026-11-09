@@ -6,6 +6,7 @@ import {
   IpcError,
 } from '../lib/ipc';
 import { ApplicationCard } from './ApplicationCard';
+import { ApplicationInspector } from './ApplicationInspector';
 import { ProcessMonitor } from './ProcessMonitor';
 import { SystemMonitor } from './SystemMonitor';
 import { useApplicationLauncher } from './useApplicationLauncher';
@@ -13,12 +14,29 @@ import './ApplicationCatalog.css';
 
 export type CatalogView = 'applications' | 'processes' | 'system';
 
+export type SourceFilterId = 'all' | 'hklm-64' | 'hklm-32' | 'hkcu' | 'start-menu';
+
+export interface SourceFilterDef {
+  id: SourceFilterId;
+  label: string;
+}
+
+export const SOURCE_FILTERS: SourceFilterDef[] = [
+  { id: 'all', label: 'All' },
+  { id: 'hklm-64', label: 'HKLM 64-bit' },
+  { id: 'hklm-32', label: 'HKLM 32-bit' },
+  { id: 'hkcu', label: 'HKCU User' },
+  { id: 'start-menu', label: 'Start Menu' },
+];
+
 export interface ApplicationCatalogProps {
   initialApplications?: ApplicationDto[];
   initialScannedSources?: string[];
   initialPartialFailures?: string[];
   autoDiscover?: boolean;
   defaultView?: CatalogView;
+  activeView?: CatalogView;
+  onViewChange?: (view: CatalogView) => void;
   onLaunchSuccess?: (applicationId: string, processId: number) => void;
   onLaunchError?: (applicationId: string, error: IpcError) => void;
   className?: string;
@@ -30,6 +48,30 @@ export interface AvailabilityCounts {
   unverified: number;
   incomplete: number;
   missing: number;
+}
+
+/**
+ * Pure, deterministic source-filter predicate.
+ * Matches application discovery sources against selected filter pill.
+ */
+export function matchesSourceFilter(app: ApplicationDto, filter: SourceFilterId): boolean {
+  if (filter === 'all') return true;
+  if (!app.sources || app.sources.length === 0) return false;
+  return app.sources.some((src) => {
+    const s = src.toLowerCase();
+    switch (filter) {
+      case 'hklm-64':
+        return s.includes('hklm 64') || (s.includes('hklm') && s.includes('64'));
+      case 'hklm-32':
+        return s.includes('hklm 32') || (s.includes('hklm') && s.includes('32'));
+      case 'hkcu':
+        return s.includes('hkcu');
+      case 'start-menu':
+        return s.includes('start menu');
+      default:
+        return true;
+    }
+  });
 }
 
 /**
@@ -120,13 +162,14 @@ export function computeAvailabilityCounts(applications: ApplicationDto[]): Avail
 
 /**
  * ApplicationCatalog coordinates application discovery, search filtering,
- * aggregate metrics, and application card rendering.
+ * aggregate metrics, master-detail list selection, and ApplicationInspector rendering.
  *
  * Guarantees:
  * - Employs existing discover_applications Tauri IPC command.
  * - Manages explicit visual states: Loading, Empty, Error with Retry, Loaded.
- * - Search is completely client-side with zero backend queries.
- * - Passes only safe identity metadata down to child cards.
+ * - Preserves deterministic 4-tier ranking across source filters.
+ * - Synchronizes master selection with inspector metadata ledger and primary launch action.
+ * - Passes only safe identity metadata down to child cards and inspector.
  */
 export function ApplicationCatalog({
   initialApplications,
@@ -134,11 +177,13 @@ export function ApplicationCatalog({
   initialPartialFailures = [],
   autoDiscover = true,
   defaultView = 'applications',
+  activeView: controlledActiveView,
+  onViewChange: _onViewChange,
   onLaunchSuccess,
   onLaunchError,
   className = '',
 }: ApplicationCatalogProps) {
-  const [activeView, setActiveView] = useState<CatalogView>(defaultView);
+  const activeView = controlledActiveView ?? defaultView;
   const [applications, setApplications] = useState<ApplicationDto[]>(
     initialApplications ?? []
   );
@@ -149,6 +194,10 @@ export function ApplicationCatalog({
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState<string>('');
+  const [activeSourceFilter, setActiveSourceFilter] = useState<SourceFilterId>('all');
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(() => {
+    return initialApplications && initialApplications.length > 0 ? initialApplications[0].id : null;
+  });
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(initialApplications !== undefined);
   const discoveryRequestIdRef = useRef<number>(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -197,9 +246,30 @@ export function ApplicationCatalog({
     }
   }, [hasDiscovered, isLoading]);
 
+  // Step 1: Filter applications by active source pill
+  const sourceFilteredApps = useMemo(() => {
+    if (activeSourceFilter === 'all') return applications;
+    return applications.filter((app) => matchesSourceFilter(app, activeSourceFilter));
+  }, [applications, activeSourceFilter]);
+
+  // Step 2: Apply 4-tier search ranking over source-filtered applications
   const filteredApps = useMemo(() => {
-    return filterApplications(applications, searchFilter);
-  }, [applications, searchFilter]);
+    return filterApplications(sourceFilteredApps, searchFilter);
+  }, [sourceFilteredApps, searchFilter]);
+
+  // Selection reconciliation: ensure valid selection whenever filtered list changes
+  useEffect(() => {
+    if (filteredApps.length === 0) {
+      setSelectedAppId(null);
+    } else if (!selectedAppId || !filteredApps.some((a) => a.id === selectedAppId)) {
+      setSelectedAppId(filteredApps[0].id);
+    }
+  }, [filteredApps, selectedAppId]);
+
+  const selectedApp = useMemo(() => {
+    if (!selectedAppId) return null;
+    return filteredApps.find((a) => a.id === selectedAppId) ?? null;
+  }, [filteredApps, selectedAppId]);
 
   const counts = useMemo(() => {
     return computeAvailabilityCounts(applications);
@@ -213,14 +283,17 @@ export function ApplicationCatalog({
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      // Launch the first available application in filtered results
-      const firstAvailable = filteredApps.find((app) => app.availability === 'Available');
-      if (firstAvailable) {
-        void launch(firstAvailable.id);
+      // Launch the selected application if available, or first available application in filtered results
+      const target = selectedApp && selectedApp.availability === 'Available'
+        ? selectedApp
+        : filteredApps.find((app) => app.availability === 'Available');
+      if (target) {
+        void launch(target.id);
       }
     } else if (e.key === 'ArrowDown') {
       if (filteredApps.length > 0) {
         e.preventDefault();
+        setSelectedAppId(filteredApps[0].id);
         cardRefs.current[0]?.focus();
       }
     }
@@ -230,75 +303,56 @@ export function ApplicationCatalog({
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
       e.preventDefault();
       if (index + 1 < filteredApps.length) {
+        const nextApp = filteredApps[index + 1];
+        setSelectedAppId(nextApp.id);
         cardRefs.current[index + 1]?.focus();
       }
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
       e.preventDefault();
       if (index > 0) {
+        const prevApp = filteredApps[index - 1];
+        setSelectedAppId(prevApp.id);
         cardRefs.current[index - 1]?.focus();
       } else {
         searchInputRef.current?.focus();
       }
     } else if (e.key === 'Home') {
       e.preventDefault();
-      cardRefs.current[0]?.focus();
+      if (filteredApps.length > 0) {
+        setSelectedAppId(filteredApps[0].id);
+        cardRefs.current[0]?.focus();
+      }
     } else if (e.key === 'End') {
       e.preventDefault();
-      cardRefs.current[filteredApps.length - 1]?.focus();
+      if (filteredApps.length > 0) {
+        setSelectedAppId(filteredApps[filteredApps.length - 1].id);
+        cardRefs.current[filteredApps.length - 1]?.focus();
+      }
     } else if (e.key === 'Escape') {
       e.preventDefault();
       searchInputRef.current?.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const app = filteredApps[index];
+      if (app && app.availability !== 'MissingTarget') {
+        setSelectedAppId(app.id);
+        void launch(app.id);
+      }
     }
   };
 
   return (
     <div className={`catalog-container ${className}`.trim()}>
-      <div className="catalog-view-switcher" role="tablist" aria-label="Catalog Navigation">
-        <button
-          type="button"
-          role="tab"
-          id="tab-applications"
-          aria-selected={activeView === 'applications'}
-          aria-controls="panel-applications"
-          className={`view-tab-button ${activeView === 'applications' ? 'active' : ''}`}
-          onClick={() => setActiveView('applications')}
-        >
-          Applications
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="tab-processes"
-          aria-selected={activeView === 'processes'}
-          aria-controls="panel-processes"
-          className={`view-tab-button ${activeView === 'processes' ? 'active' : ''}`}
-          onClick={() => setActiveView('processes')}
-        >
-          Active Processes
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="tab-system"
-          aria-selected={activeView === 'system'}
-          aria-controls="panel-system"
-          className={`view-tab-button ${activeView === 'system' ? 'active' : ''}`}
-          onClick={() => setActiveView('system')}
-        >
-          System Intelligence
-        </button>
-      </div>
-
       {activeView === 'system' ? (
-        <div id="panel-system" role="tabpanel" aria-labelledby="tab-system">
+        <div id="panel-system" role="region" aria-label="System Intelligence">
           <SystemMonitor />
         </div>
       ) : activeView === 'processes' ? (
-        <div id="panel-processes" role="tabpanel" aria-labelledby="tab-processes">
+        <div id="panel-processes" role="region" aria-label="Active Processes">
           <ProcessMonitor />
         </div>
       ) : (
-        <div id="panel-applications" role="tabpanel" aria-labelledby="tab-applications" className="catalog-tab-content">
+        <div id="panel-applications" role="region" aria-label="Applications" className="catalog-tab-content">
           <div className="catalog-toolbar">
             <div className="catalog-search-wrapper">
               <label htmlFor="catalog-search-input" className="catalog-search-label">
@@ -309,7 +363,11 @@ export function ApplicationCatalog({
                 id="catalog-search-input"
                 className="catalog-search-input"
                 type="search"
-                placeholder="Search applications by name or publisher..."
+                placeholder={
+                  applications.length > 0
+                    ? `Filter ${applications.length} discovered applications... (Ctrl+K)`
+                    : 'Search applications by name or publisher...'
+                }
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -327,6 +385,21 @@ export function ApplicationCatalog({
             >
               {isLoading ? 'Scanning...' : 'Refresh Catalog'}
             </button>
+          </div>
+
+          {/* Source Filter Pills */}
+          <div className="catalog-source-filters" role="group" aria-label="Source filters">
+            {SOURCE_FILTERS.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                className={`source-filter-pill ${activeSourceFilter === filter.id ? 'active' : ''}`}
+                onClick={() => setActiveSourceFilter(filter.id)}
+                aria-pressed={activeSourceFilter === filter.id}
+              >
+                {filter.label}
+              </button>
+            ))}
           </div>
 
           {errorMsg && (
@@ -391,6 +464,16 @@ export function ApplicationCatalog({
             </div>
           )}
 
+          {/* Dynamic count indicator */}
+          {hasDiscovered && !errorMsg && (
+            <div className="catalog-count-row">
+              <span className="catalog-count-indicator" aria-live="polite">
+                {`Showing ${filteredApps.length} ${filteredApps.length === 1 ? 'application' : 'applications'}`}
+                {applications.length !== filteredApps.length && ` (filtered from ${applications.length} total)`}
+              </span>
+            </div>
+          )}
+
           {isLoading && !hasDiscovered ? (
             <div className="loading-state" role="status">
               <p>Loading applications...</p>
@@ -400,32 +483,54 @@ export function ApplicationCatalog({
               <p className="empty-title">No applications found.</p>
               <p className="empty-subtitle">Try refreshing the application catalog.</p>
             </div>
-          ) : filteredApps.length === 0 && applications.length > 0 ? (
-            <div className="empty-state" role="status">
-              <p>No applications match your filter.</p>
-            </div>
           ) : (
-            <div className="catalog-grid" role="region" aria-label="Discovered applications list">
-              {filteredApps.map((app, index) => {
-                const isAppActive = activeLaunch?.applicationId === app.id;
-                return (
-                  <ApplicationCard
-                    key={app.id}
-                    cardRef={(el) => {
-                      cardRefs.current[index] = el;
-                    }}
-                    tabIndex={0}
-                    onKeyDown={handleCardKeyDown(index)}
-                    application={app}
-                    launchStatus={isAppActive ? activeLaunch.status : undefined}
-                    launchedPid={isAppActive ? activeLaunch.launchedPid : undefined}
-                    launchErrorMessage={isAppActive ? activeLaunch.errorMessage : undefined}
-                    onLaunchRequest={() => launch(app.id)}
-                    onLaunchSuccess={onLaunchSuccess}
-                    onLaunchError={onLaunchError}
-                  />
-                );
-              })}
+            <div className="catalog-master-detail">
+              <div className="catalog-master-pane">
+                {filteredApps.length === 0 ? (
+                  <div className="empty-state" role="status">
+                    <p>No applications match your filter.</p>
+                  </div>
+                ) : (
+                  <div className="catalog-grid" role="region" aria-label="Discovered applications list">
+                    {filteredApps.map((app, index) => {
+                      const isAppActive = activeLaunch?.applicationId === app.id;
+                      const isSelected = selectedAppId === app.id;
+                      return (
+                        <ApplicationCard
+                          key={app.id}
+                          cardRef={(el) => {
+                            cardRefs.current[index] = el;
+                          }}
+                          tabIndex={0}
+                          isSelected={isSelected}
+                          onClick={() => setSelectedAppId(app.id)}
+                          onKeyDown={handleCardKeyDown(index)}
+                          application={app}
+                          showLaunchButton={false}
+                          launchStatus={isAppActive ? activeLaunch.status : undefined}
+                          launchedPid={isAppActive ? activeLaunch.launchedPid : undefined}
+                          launchErrorMessage={isAppActive ? activeLaunch.errorMessage : undefined}
+                          onLaunchRequest={() => launch(app.id)}
+                          onLaunchSuccess={onLaunchSuccess}
+                          onLaunchError={onLaunchError}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="catalog-inspector-pane">
+                <ApplicationInspector
+                  application={selectedApp}
+                  launchStatus={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.status : undefined}
+                  launchedPid={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.launchedPid : undefined}
+                  launchErrorMessage={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.errorMessage : undefined}
+                  onLaunchRequest={() => selectedApp && launch(selectedApp.id)}
+                  onLaunchSuccess={onLaunchSuccess}
+                  onLaunchError={onLaunchError}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -433,4 +538,3 @@ export function ApplicationCatalog({
     </div>
   );
 }
-

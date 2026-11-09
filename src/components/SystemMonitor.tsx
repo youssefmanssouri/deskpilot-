@@ -1,18 +1,21 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React from 'react';
 import {
-  deskpilotApi,
   type SystemMetricsDto,
-  IpcError,
 } from '../lib/ipc';
+import { CpuSparkline } from './CpuSparkline';
+import {
+  useSystemMetrics,
+  useSharedSystemMetrics,
+  type RefreshMode,
+} from './useSystemMetrics';
 import './SystemMonitor.css';
 
 export interface SystemMonitorProps {
   initialData?: SystemMetricsDto;
   autoFetch?: boolean;
   className?: string;
+  defaultRefreshMode?: RefreshMode;
 }
-
-export type RefreshMode = 'manual' | '3s' | '5s';
 
 /**
  * Formats a byte quantity into human-readable units (B, KB, MB, GB, TB).
@@ -77,84 +80,40 @@ export function getLoadColorClass(percent: number): string {
   return 'load-normal';
 }
 
+/**
+ * SystemMonitor renders the System Intelligence & Resource Ledger dashboard.
+ *
+ * Guarantees:
+ * - Precision Command design: high information density, factual data, no fabricated metrics.
+ * - Single shared polling source across application shell with unmount and hidden-window guards.
+ * - Bounded 30-sample historical CPU sparkline visualization.
+ * - Clean fixed-disk storage tabular ledger and dual-uptime accounting.
+ */
 export const SystemMonitor: React.FC<SystemMonitorProps> = ({
   initialData,
   autoFetch = true,
+  defaultRefreshMode = 'manual',
   className = '',
 }) => {
-  const [metrics, setMetrics] = useState<SystemMetricsDto | null>(initialData ?? null);
-  const [isLoading, setIsLoading] = useState<boolean>(!initialData && autoFetch);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [refreshMode, setRefreshMode] = useState<RefreshMode>('manual');
-  const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(
-    initialData ? new Date(initialData.sampledAtMs) : null
-  );
+  const shared = useSharedSystemMetrics();
+  const local = useSystemMetrics({
+    initialData,
+    autoFetch: autoFetch && !shared && initialData === undefined,
+    defaultRefreshMode,
+  });
 
-  // Monotonic request counter to guard against race conditions and stale out-of-order updates
-  const requestSeqRef = useRef<number>(0);
-
-  const fetchMetrics = useCallback(async (isExplicitManual = false) => {
-    const seq = ++requestSeqRef.current;
-    if (isExplicitManual) {
-      setIsLoading(true);
-    }
-    setErrorMsg(null);
-
-    try {
-      const data = await deskpilotApi.getSystemMetrics();
-      // Drop response if a newer query was issued while this one was in flight
-      if (seq === requestSeqRef.current) {
-        setMetrics(data);
-        setLastUpdated(new Date(data.sampledAtMs));
-        setIsLoading(false);
-      }
-    } catch (err: unknown) {
-      if (seq === requestSeqRef.current) {
-        if (err instanceof IpcError) {
-          setErrorMsg(err.message);
-        } else if (err instanceof Error) {
-          setErrorMsg(err.message);
-        } else {
-          setErrorMsg('An unexpected error occurred while querying system metrics.');
-        }
-        setIsLoading(false);
-      }
-    }
-  }, []);
-
-  // Initial fetch on mount
-  useEffect(() => {
-    if (autoFetch && !initialData) {
-      fetchMetrics(true);
-    }
-  }, [autoFetch, initialData, fetchMetrics]);
-
-  // Pause polling when browser/desktop window is not visible to conserve battery and CPU
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      setIsPaused(document.visibilityState === 'hidden');
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  // Polling interval timer
-  useEffect(() => {
-    if (refreshMode === 'manual' || isPaused) {
-      return;
-    }
-    const intervalMs = refreshMode === '3s' ? 3000 : 5000;
-    const timer = setInterval(() => {
-      fetchMetrics(false);
-    }, intervalMs);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [refreshMode, isPaused, fetchMetrics]);
+  // Prefer shared polling instance when available in app tree, unless local initialData is explicitly passed
+  const {
+    metrics,
+    cpuHistory,
+    isLoading,
+    errorMsg,
+    refreshMode,
+    setRefreshMode,
+    isPaused,
+    lastUpdated,
+    refresh,
+  } = initialData !== undefined || !shared ? local : shared;
 
   return (
     <div
@@ -165,7 +124,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
       {/* Top Toolbar */}
       <div className="system-toolbar">
         <div className="system-toolbar-info">
-          <h2 className="system-title">System Intelligence</h2>
+          <h2 className="system-title">System Intelligence & Resource Ledger</h2>
           <div className="system-subtitle-row">
             {lastUpdated && (
               <span className="system-timestamp">
@@ -201,7 +160,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
           <button
             type="button"
             className="system-refresh-button"
-            onClick={() => fetchMetrics(true)}
+            onClick={() => refresh(true)}
             disabled={isLoading}
             aria-label="Refresh system metrics"
           >
@@ -245,7 +204,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
           <button
             type="button"
             className="system-retry-button"
-            onClick={() => fetchMetrics(true)}
+            onClick={() => refresh(true)}
             aria-label="Retry loading metrics"
           >
             Retry
@@ -253,7 +212,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
         </div>
       )}
 
-      {/* Main Metrics Cards */}
+      {/* Main Metrics Content */}
       {isLoading && !metrics ? (
         <div className="system-loading-state" role="status">
           <div className="system-loading-spinner" aria-hidden="true" />
@@ -261,22 +220,27 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
         </div>
       ) : metrics ? (
         <div className="system-content-wrapper">
-          <div className="system-metrics-grid">
+          {/* Top Row: CPU Utilization + Physical Memory (RAM) */}
+          <div className="system-ledger-primary-grid">
             {/* CPU Card */}
-            <div className="system-card" role="region" aria-label="Processor Metrics">
+            <section className="system-card" role="region" aria-label="Processor (CPU) Metrics">
               <div className="system-card-header">
                 <span className="system-card-title">Processor (CPU)</span>
                 <span className="system-badge arch-badge">{metrics.cpu.architecture}</span>
               </div>
               <div className="system-card-body">
-                <div className="system-metric-value-row">
-                  <span className="system-metric-hero">
-                    {metrics.cpu.utilizationPercent.toFixed(1)}%
-                  </span>
-                  <span className="system-metric-sub">
-                    {metrics.cpu.logicalCores} Logical Cores
-                  </span>
+                <div className="system-card-hero-row">
+                  <div className="system-metric-hero-block">
+                    <span className="system-metric-hero">
+                      {metrics.cpu.utilizationPercent.toFixed(1)}%
+                    </span>
+                    <span className="system-metric-sub">
+                      {metrics.cpu.logicalCores} Logical Cores
+                    </span>
+                  </div>
+                  <CpuSparkline samples={cpuHistory} />
                 </div>
+
                 <div
                   className="system-progress-track"
                   role="progressbar"
@@ -289,17 +253,20 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                     className={`system-progress-fill ${getLoadColorClass(
                       metrics.cpu.utilizationPercent
                     )}`}
-                    style={{ width: `${Math.min(100, Math.max(0, metrics.cpu.utilizationPercent))}%` }}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, metrics.cpu.utilizationPercent))}%`,
+                    }}
                   />
                 </div>
+
                 <p className="system-hardware-desc" title={metrics.cpu.brandName}>
                   {metrics.cpu.brandName}
                 </p>
               </div>
-            </div>
+            </section>
 
-            {/* Memory Card */}
-            <div className="system-card" role="region" aria-label="Physical RAM Metrics">
+            {/* RAM Card */}
+            <section className="system-card" role="region" aria-label="Physical RAM Metrics">
               <div className="system-card-header">
                 <span className="system-card-title">Memory (RAM)</span>
                 <span className="system-badge mem-badge">
@@ -307,14 +274,16 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                 </span>
               </div>
               <div className="system-card-body">
-                <div className="system-metric-value-row">
+                <div className="system-metric-hero-block">
                   <span className="system-metric-hero">
-                    {formatBytes(metrics.memory.usedBytes)}
+                    {formatBytes(metrics.memory.usedBytes)} Active
                   </span>
                   <span className="system-metric-sub">
-                    / {formatBytes(metrics.memory.totalBytes)}
+                    / {formatBytes(metrics.memory.availableBytes)} Available (
+                    {formatBytes(metrics.memory.totalBytes)} Total)
                   </span>
                 </div>
+
                 <div
                   className="system-progress-track"
                   role="progressbar"
@@ -327,24 +296,46 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                     className={`system-progress-fill ${getLoadColorClass(
                       metrics.memory.usedPercent
                     )}`}
-                    style={{ width: `${Math.min(100, Math.max(0, metrics.memory.usedPercent))}%` }}
+                    style={{
+                      width: `${Math.min(100, Math.max(0, metrics.memory.usedPercent))}%`,
+                    }}
                   />
                 </div>
+
+                <div className="system-capacity-scale" aria-hidden="true">
+                  <span>0%</span>
+                  <span>25%</span>
+                  <span>50%</span>
+                  <span>75%</span>
+                  <span>100%</span>
+                </div>
+
                 <p className="system-hardware-desc">
                   {formatBytes(metrics.memory.availableBytes)} available for processes
                 </p>
               </div>
-            </div>
+            </section>
+          </div>
 
-            {/* Storage Summary Card */}
-            <div className="system-card" role="region" aria-label="Storage Summary">
-              <div className="system-card-header">
-                <span className="system-card-title">Local Storage</span>
+          {/* Fixed Disk Storage Ledger Table */}
+          <section
+            className="system-storage-ledger-section"
+            role="region"
+            aria-label="Fixed Disk Storage Ledger"
+          >
+            <div className="system-section-header">
+              <div className="system-section-title-group">
+                <h3 className="system-section-heading">Fixed Disk Storage</h3>
                 <span className="system-badge storage-badge">
-                  {metrics.storage.drives.length} Volume{metrics.storage.drives.length === 1 ? '' : 's'}
+                  <span>Local Storage</span>
+                  <span> • </span>
+                  <span>
+                    {metrics.storage.drives.length} Volume
+                    {metrics.storage.drives.length === 1 ? '' : 's'}
+                  </span>
                 </span>
               </div>
-              <div className="system-card-body">
+              <span className="system-section-sub">
                 {(() => {
                   const totalCapacity = metrics.storage.drives.reduce(
                     (acc, d) => acc + d.totalBytes,
@@ -354,127 +345,133 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                     (acc, d) => acc + d.usedBytes,
                     0
                   );
-                  const overallPercent =
-                    totalCapacity > 0 ? (totalUsed / totalCapacity) * 100 : 0;
-                  return (
-                    <>
-                      <div className="system-metric-value-row">
-                        <span className="system-metric-hero">
-                          {formatBytes(totalUsed)}
-                        </span>
-                        <span className="system-metric-sub">
-                          / {formatBytes(totalCapacity)}
-                        </span>
-                      </div>
-                      <div
-                        className="system-progress-track"
-                        role="progressbar"
-                        aria-valuenow={overallPercent}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label="Overall storage used percentage"
-                      >
-                        <div
-                          className={`system-progress-fill ${getLoadColorClass(overallPercent)}`}
-                          style={{ width: `${Math.min(100, Math.max(0, overallPercent))}%` }}
-                        />
-                      </div>
-                      <p className="system-hardware-desc">
-                        {formatBytes(totalCapacity - totalUsed)} free across all fixed drives
-                      </p>
-                    </>
-                  );
+                  return `${formatBytes(totalUsed)} used across all volumes (${formatBytes(
+                    totalCapacity
+                  )} total)`;
                 })()}
-              </div>
+              </span>
             </div>
 
-            {/* System & Uptime Card */}
-            <div className="system-card" role="region" aria-label="System Runtime & Uptime">
+            {metrics.storage.drives.length === 0 ? (
+              <div className="system-storage-empty" role="status">
+                <p>No fixed storage volumes detected.</p>
+              </div>
+            ) : (
+              <div className="system-table-responsive-wrapper">
+                <table className="system-storage-table" aria-label="Drive Volumes Detail">
+                  <thead>
+                    <tr>
+                      <th scope="col">Drive</th>
+                      <th scope="col">Format</th>
+                      <th scope="col">Used</th>
+                      <th scope="col">Capacity</th>
+                      <th scope="col">Available</th>
+                      <th scope="col">% Used</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.storage.drives.map((drive) => {
+                      const isLowSpace = drive.usedPercent >= 90;
+                      return (
+                        <tr
+                          key={drive.rootPath}
+                          className={isLowSpace ? 'drive-row-warning' : ''}
+                        >
+                          <td className="drive-cell-name">
+                            <span className="drive-root">{drive.rootPath}</span>
+                            <span className="drive-name">({drive.volumeName})</span>
+                            {isLowSpace && (
+                              <span className="system-badge low-space-badge">Low Space</span>
+                            )}
+                          </td>
+                          <td className="drive-cell-fs">
+                            <span className="system-badge fs-badge">{drive.fileSystem}</span>
+                          </td>
+                          <td className="drive-cell-used">{formatBytes(drive.usedBytes)}</td>
+                          <td className="drive-cell-total">{formatBytes(drive.totalBytes)}</td>
+                          <td className="drive-cell-avail">{formatBytes(drive.availableBytes)}</td>
+                          <td className="drive-cell-percent">
+                            <div className="drive-percent-wrapper">
+                              <div
+                                className="system-progress-track drive-mini-track"
+                                role="progressbar"
+                                aria-valuenow={drive.usedPercent}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label={`Drive ${drive.rootPath} capacity`}
+                              >
+                                <div
+                                  className={`system-progress-fill ${getLoadColorClass(
+                                    drive.usedPercent
+                                  )}`}
+                                  style={{
+                                    width: `${Math.min(
+                                      100,
+                                      Math.max(0, drive.usedPercent)
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="drive-percent-val">
+                                {drive.usedPercent.toFixed(1)}%
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* System Runtime & Telemetry Ledger */}
+          <section
+            className="system-runtime-ledger-section"
+            role="region"
+            aria-label="System Runtime Ledger"
+          >
+            <div className="system-card">
               <div className="system-card-header">
                 <span className="system-card-title">System Uptime</span>
                 <span className="system-badge os-badge">{metrics.system.osName}</span>
               </div>
               <div className="system-card-body">
-                <div className="system-metric-value-row">
-                  <span className="system-metric-hero">
-                    {formatUptime(metrics.system.uptimeSeconds)}
-                  </span>
-                </div>
-                <div className="system-uptime-details">
-                  <div className="system-uptime-line">
-                    <span className="uptime-label">App Session:</span>
-                    <strong className="uptime-val">
+                <div className="system-runtime-grid">
+                  <div className="runtime-metric-tile">
+                    <span className="runtime-label">System OS Uptime</span>
+                    <strong className="runtime-hero">
+                      {formatUptime(metrics.system.uptimeSeconds)}
+                    </strong>
+                    <span className="runtime-caption">Operating system elapsed time</span>
+                  </div>
+
+                  <div className="runtime-metric-tile">
+                    <span className="runtime-label">DeskPilot Session Uptime</span>
+                    <strong className="runtime-hero">
                       {formatUptime(metrics.system.appUptimeSeconds)}
                     </strong>
+                    <span className="runtime-caption">Current desktop process lifetime</span>
                   </div>
-                  <div className="system-uptime-line">
-                    <span className="uptime-label">Architecture:</span>
-                    <strong className="uptime-val">{metrics.system.architecture}</strong>
+
+                  <div className="runtime-metric-tile">
+                    <span className="runtime-label">Architecture</span>
+                    <strong className="runtime-val">{metrics.system.architecture}</strong>
+                    <span className="runtime-caption">Windows target instruction set</span>
+                  </div>
+
+                  <div className="runtime-metric-tile">
+                    <span className="runtime-label">Telemetry Timestamp</span>
+                    <strong className="runtime-val">
+                      {new Date(metrics.sampledAtMs).toLocaleTimeString()}
+                    </strong>
+                    <span className="runtime-caption">Epoch sample time</span>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Individual Fixed Storage Drives Section */}
-          <div className="system-drives-section" role="region" aria-label="Drive Volumes Detail">
-            <h3 className="system-section-heading">Fixed Volume Details</h3>
-            <div className="system-drives-grid">
-              {metrics.storage.drives.map((drive) => {
-                const isLowSpace = drive.usedPercent >= 90;
-                return (
-                  <div
-                    key={drive.rootPath}
-                    className={`system-drive-card ${isLowSpace ? 'drive-warning' : ''}`}
-                    tabIndex={0}
-                    role="article"
-                    aria-label={`Drive ${drive.rootPath} ${drive.volumeName}`}
-                  >
-                    <div className="system-drive-header">
-                      <div className="drive-title-group">
-                        <span className="drive-root">{drive.rootPath}</span>
-                        <span className="drive-name">({drive.volumeName})</span>
-                      </div>
-                      <div className="drive-badges">
-                        <span className="system-badge fs-badge">{drive.fileSystem}</span>
-                        {isLowSpace && (
-                          <span className="system-badge low-space-badge">Low Space</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="system-drive-body">
-                      <div className="drive-capacity-row">
-                        <span className="drive-used">{formatBytes(drive.usedBytes)} used</span>
-                        <span className="drive-total">of {formatBytes(drive.totalBytes)}</span>
-                      </div>
-
-                      <div
-                        className="system-progress-track"
-                        role="progressbar"
-                        aria-valuenow={drive.usedPercent}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`Drive ${drive.rootPath} capacity load`}
-                      >
-                        <div
-                          className={`system-progress-fill ${getLoadColorClass(drive.usedPercent)}`}
-                          style={{ width: `${Math.min(100, Math.max(0, drive.usedPercent))}%` }}
-                        />
-                      </div>
-
-                      <div className="drive-footer-row">
-                        <span className="drive-free">
-                          {formatBytes(drive.availableBytes)} free
-                        </span>
-                        <span className="drive-percent">{drive.usedPercent.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          </section>
         </div>
       ) : null}
     </div>

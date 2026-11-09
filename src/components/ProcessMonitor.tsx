@@ -1,14 +1,29 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { deskpilotApi, type ProcessDto, type ProcessListResultDto, type ProcessQueryStatusDto, IpcError } from '../lib/ipc';
+import {
+  deskpilotApi,
+  type ProcessDto,
+  type ProcessListResultDto,
+  type ProcessQueryStatusDto,
+  IpcError,
+} from '../lib/ipc';
+import { ProcessInspector } from './ProcessInspector';
 import './ProcessMonitor.css';
 
 export type SortField = 'name' | 'pid' | 'memory' | 'cpu' | 'status';
 export type SortDirection = 'asc' | 'desc';
+export type QuickFilter = 'all' | 'highMemory' | 'restricted';
 
 export interface ProcessMonitorProps {
+  /** Optional initial process list payload (e.g. for testing or SSR). */
   initialData?: ProcessListResultDto;
+  /** Whether to automatically fetch processes on mount. Defaults to true. */
   autoFetch?: boolean;
+  /** Optional additional CSS class names. */
   className?: string;
+  /** Optional callback fired when a process row is selected. */
+  onSelectProcess?: (process: ProcessDto) => void;
+  /** Optional polling interval in ms. Defaults to 0 (manual refresh only). */
+  pollingIntervalMs?: number;
 }
 
 /**
@@ -67,6 +82,28 @@ export function formatCreatedAt(iso: string | null | undefined): string {
     return '—';
   }
   return iso.replace('T', ' ').replace('.000Z', ' UTC').replace('Z', ' UTC');
+}
+
+/**
+ * Filters processes by quick-filter category.
+ * - 'all': Retains all processes.
+ * - 'highMemory': Strictly greater than 100 MiB (104,857,600 bytes). Nulls never qualify.
+ * - 'restricted': Status is 'handleUnavailable'.
+ */
+export function applyQuickFilter(processes: ProcessDto[], filter: QuickFilter): ProcessDto[] {
+  if (filter === 'all') {
+    return processes;
+  }
+  if (filter === 'highMemory') {
+    const threshold100Mib = 100 * 1024 * 1024; // 104,857,600 bytes
+    return processes.filter(
+      (p) => p.workingSetBytes !== null && p.workingSetBytes !== undefined && p.workingSetBytes > threshold100Mib
+    );
+  }
+  if (filter === 'restricted') {
+    return processes.filter((p) => p.status === 'handleUnavailable');
+  }
+  return processes;
 }
 
 /**
@@ -149,19 +186,25 @@ export function getStatusBadge(status: ProcessQueryStatusDto): { label: string; 
       return { label: 'Handle Unavailable', className: 'status-badge status-badge-unavailable' };
     case 'exited':
       return { label: 'Exited', className: 'status-badge status-badge-exited' };
+    default:
+      return { label: status, className: 'status-badge' };
   }
 }
 
 /**
- * Read-Only Windows Process Monitor Component.
+ * Read-Only Windows Process Monitor Component (Precision Command).
  *
- * Exposes running process intelligence through the `list_processes` Tauri IPC command.
- * Strictly read-only: does not support process termination, suspension, or execution.
+ * Implements a Master-Detail inspection workspace:
+ * - Master Process Ledger with search, sorting, and quick filters.
+ * - Detail Process Inspector displaying detailed telemetry.
+ * - Strictly read-only: does not support process termination, suspension, or execution.
  */
 export function ProcessMonitor({
   initialData,
   autoFetch = true,
   className = '',
+  onSelectProcess,
+  pollingIntervalMs = 0,
 }: ProcessMonitorProps) {
   const [processes, setProcesses] = useState<ProcessDto[]>(initialData?.processes ?? []);
   const [totalProcesses, setTotalProcesses] = useState<number>(initialData?.totalProcesses ?? 0);
@@ -171,10 +214,13 @@ export function ProcessMonitor({
   const [isLoading, setIsLoading] = useState<boolean>(autoFetch && initialData === undefined);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [hasLoaded, setHasLoaded] = useState<boolean>(initialData !== undefined);
 
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
 
   const requestIdRef = useRef<number>(0);
   const isMountedRef = useRef<boolean>(true);
@@ -219,6 +265,15 @@ export function ProcessMonitor({
     }
   }, [autoFetch, initialData, fetchProcesses]);
 
+  // Optional recurring polling interval if configured
+  useEffect(() => {
+    if (pollingIntervalMs <= 0) return;
+    const timer = setInterval(() => {
+      fetchProcesses();
+    }, pollingIntervalMs);
+    return () => clearInterval(timer);
+  }, [pollingIntervalMs, fetchProcesses]);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -237,13 +292,86 @@ export function ProcessMonitor({
     }
   };
 
-  const filtered = useMemo(() => {
-    return filterProcesses(processes, searchQuery);
-  }, [processes, searchQuery]);
+  const handleSelectProcess = useCallback(
+    (proc: ProcessDto) => {
+      setSelectedProcessId(proc.id);
+      onSelectProcess?.(proc);
+    },
+    [onSelectProcess]
+  );
+
+  // Quick filter counts for badges
+  const quickFilterCounts = useMemo(() => {
+    const highMemCount = applyQuickFilter(processes, 'highMemory').length;
+    const restrictedCount = applyQuickFilter(processes, 'restricted').length;
+    return {
+      all: processes.length,
+      highMemory: highMemCount,
+      restricted: restrictedCount,
+    };
+  }, [processes]);
+
+  // Composition: quickFilter -> searchQuery -> sort
+  const quickFiltered = useMemo(() => {
+    return applyQuickFilter(processes, quickFilter);
+  }, [processes, quickFilter]);
+
+  const searchFiltered = useMemo(() => {
+    return filterProcesses(quickFiltered, searchQuery);
+  }, [quickFiltered, searchQuery]);
 
   const sortedProcesses = useMemo(() => {
-    return sortProcesses(filtered, sortField, sortDirection);
-  }, [filtered, sortField, sortDirection]);
+    return sortProcesses(searchFiltered, sortField, sortDirection);
+  }, [searchFiltered, sortField, sortDirection]);
+
+  // Synchronized selected process DTO
+  const selectedProcess = useMemo(() => {
+    if (!selectedProcessId) return null;
+    return processes.find((p) => p.id === selectedProcessId) ?? null;
+  }, [processes, selectedProcessId]);
+
+  // Keyboard navigation for process selection (ArrowUp / ArrowDown)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return; // Avoid hijacking keyboard events while the user is typing in inputs
+      }
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (sortedProcesses.length === 0) return;
+        e.preventDefault();
+
+        const currentIndex = sortedProcesses.findIndex((p) => p.id === selectedProcessId);
+
+        if (e.key === 'ArrowDown') {
+          let nextIndex = 0;
+          if (currentIndex !== -1) {
+            nextIndex = Math.min(currentIndex + 1, sortedProcesses.length - 1);
+          }
+          const nextProc = sortedProcesses[nextIndex];
+          setSelectedProcessId(nextProc.id);
+          onSelectProcess?.(nextProc);
+        } else if (e.key === 'ArrowUp') {
+          let prevIndex = sortedProcesses.length - 1;
+          if (currentIndex !== -1) {
+            prevIndex = Math.max(currentIndex - 1, 0);
+          }
+          const prevProc = sortedProcesses[prevIndex];
+          setSelectedProcessId(prevProc.id);
+          onSelectProcess?.(prevProc);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sortedProcesses, selectedProcessId, onSelectProcess]);
 
   const formattedCaptureTime = useMemo(() => {
     if (!capturedAtMs) return null;
@@ -252,63 +380,138 @@ export function ProcessMonitor({
 
   const getSortIndicator = (field: SortField) => {
     if (sortField !== field) return null;
-    return <span className="process-sort-indicator" aria-hidden="true">{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+    return (
+      <span className="process-sort-indicator" aria-hidden="true">
+        {sortDirection === 'asc' ? '▲' : '▼'}
+      </span>
+    );
   };
 
   return (
-    <div className={`process-monitor-container ${className}`.trim()} role="region" aria-label="Process Monitor">
+    <div
+      className={`process-monitor-container ${className}`.trim()}
+      role="region"
+      aria-label="Process Monitor"
+    >
+      {/* Top Toolbar */}
       <div className="process-toolbar">
         <div className="process-search-wrapper">
           <label htmlFor="process-search-input" className="process-search-label">
             Search Processes
           </label>
-          <input
-            ref={searchInputRef}
-            id="process-search-input"
-            className="process-search-input"
-            type="search"
-            placeholder="Filter by process name, PID, or executable path..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            disabled={isLoading && !hasLoaded}
-            aria-label="Filter processes"
-          />
+          <div className="process-search-input-box">
+            <svg
+              className="process-search-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              ref={searchInputRef}
+              id="process-search-input"
+              className="process-search-input"
+              type="search"
+              placeholder="Filter by process name, PID, or executable path..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              disabled={isLoading && !hasLoaded}
+              aria-label="Filter processes"
+            />
+          </div>
         </div>
 
+        <div className="process-toolbar-actions">
+          <button
+            type="button"
+            className="process-refresh-button"
+            onClick={fetchProcesses}
+            disabled={isLoading}
+            aria-label="Refresh process list"
+          >
+            <svg
+              className={`process-refresh-icon ${isLoading ? 'spinning' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+            </svg>
+            <span>{isLoading ? 'Scanning...' : 'Refresh Processes'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Filter Chips */}
+      <div className="process-quick-filters" role="group" aria-label="Process category quick filters">
         <button
           type="button"
-          className="process-refresh-button"
-          onClick={fetchProcesses}
-          disabled={isLoading}
-          aria-label="Refresh process list"
+          className={`process-filter-chip ${quickFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setQuickFilter('all')}
+          aria-pressed={quickFilter === 'all'}
         >
-          {isLoading ? 'Scanning...' : 'Refresh Processes'}
+          All Processes
+          <span className="process-filter-badge">{quickFilterCounts.all}</span>
+        </button>
+        <button
+          type="button"
+          className={`process-filter-chip ${quickFilter === 'highMemory' ? 'active' : ''}`}
+          onClick={() => setQuickFilter('highMemory')}
+          aria-pressed={quickFilter === 'highMemory'}
+          title="Processes using strictly greater than 100 MiB of working set memory"
+        >
+          High Memory (&gt; 100 MiB)
+          <span className="process-filter-badge">{quickFilterCounts.highMemory}</span>
+        </button>
+        <button
+          type="button"
+          className={`process-filter-chip ${quickFilter === 'restricted' ? 'active' : ''}`}
+          onClick={() => setQuickFilter('restricted')}
+          aria-pressed={quickFilter === 'restricted'}
+          title="Protected system services with handleUnavailable status"
+        >
+          Restricted Handles
+          <span className="process-filter-badge">{quickFilterCounts.restricted}</span>
         </button>
       </div>
 
+      {/* Error Banner */}
       {errorMsg && (
         <div className="process-error-banner" role="alert">
-          <strong>Process Query Error:</strong> {errorMsg}
-          <div>
-            <button
-              type="button"
-              className="process-retry-button"
-              onClick={fetchProcesses}
-              aria-label="Retry process enumeration"
-            >
-              Retry
-            </button>
+          <div className="process-error-content">
+            <strong>Process Query Error:</strong> {errorMsg}
           </div>
+          <button
+            type="button"
+            className="process-retry-button"
+            onClick={fetchProcesses}
+            aria-label="Retry process enumeration"
+          >
+            Retry
+          </button>
         </div>
       )}
 
+      {/* Truncation Notice */}
       {isTruncated && (
         <div className="process-truncation-banner" role="status">
-          <strong>Notice:</strong> Process list truncated at 2,000 entries (total active: {totalProcesses.toLocaleString()}). Retaining top candidates by name and PID.
+          <strong>Notice:</strong> Process list truncated at 2,000 entries (total active:{' '}
+          {totalProcesses.toLocaleString()}). Retaining top candidates by name and PID.
         </div>
       )}
 
+      {/* Telemetry Summary Bar */}
       {hasLoaded && !errorMsg && (
         <div className="process-summary-bar" role="region" aria-label="Process summary metrics">
           <div className="process-summary-item">
@@ -322,7 +525,7 @@ export function ProcessMonitor({
               Snapshot Captured: <strong>{formattedCaptureTime}</strong>
             </div>
           )}
-          {searchQuery.trim() && (
+          {(searchQuery.trim() || quickFilter !== 'all') && (
             <div className="process-summary-item">
               Filtered Matches: <strong>{sortedProcesses.length.toLocaleString()}</strong>
             </div>
@@ -330,106 +533,151 @@ export function ProcessMonitor({
         </div>
       )}
 
-      {isLoading && !hasLoaded ? (
-        <div className="process-loading-state" role="status">
-          <p>Scanning active processes...</p>
-        </div>
-      ) : processes.length === 0 && hasLoaded && !errorMsg ? (
-        <div className="process-empty-state" role="status">
-          <p className="process-empty-title">No processes discovered.</p>
-          <p>Try refreshing the process list.</p>
-        </div>
-      ) : sortedProcesses.length === 0 && processes.length > 0 ? (
-        <div className="process-empty-state" role="status">
-          <p className="process-empty-title">No processes match your filter.</p>
-          <p>Clear or adjust your search query.</p>
-        </div>
-      ) : (
-        <div className="process-table-container">
-          <table className="process-table" aria-label="Running processes table">
-            <thead>
-              <tr>
-                <th
-                  className="sortable"
-                  onClick={() => handleSort('name')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
-                  tabIndex={0}
-                  role="columnheader"
-                  aria-sort={sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  Process {getSortIndicator('name')}
-                </th>
-                <th
-                  className="sortable align-right"
-                  onClick={() => handleSort('pid')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('pid')}
-                  tabIndex={0}
-                  role="columnheader"
-                  aria-sort={sortField === 'pid' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  PID {getSortIndicator('pid')}
-                </th>
-                <th
-                  className="sortable"
-                  onClick={() => handleSort('status')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('status')}
-                  tabIndex={0}
-                  role="columnheader"
-                  aria-sort={sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  Status {getSortIndicator('status')}
-                </th>
-                <th
-                  className="sortable align-right"
-                  onClick={() => handleSort('memory')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('memory')}
-                  tabIndex={0}
-                  role="columnheader"
-                  aria-sort={sortField === 'memory' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  Memory {getSortIndicator('memory')}
-                </th>
-                <th
-                  className="sortable align-right"
-                  onClick={() => handleSort('cpu')}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSort('cpu')}
-                  tabIndex={0}
-                  role="columnheader"
-                  aria-sort={sortField === 'cpu' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                >
-                  CPU Time {getSortIndicator('cpu')}
-                </th>
-                <th role="columnheader">Created</th>
-                <th role="columnheader">Executable Path</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedProcesses.map((proc) => {
-                const statusBadge = getStatusBadge(proc.status);
-                return (
-                  <tr key={proc.id} data-testid={`process-row-${proc.id}`}>
-                    <td className="process-name-cell">{proc.name}</td>
-                    <td className="process-mono-cell align-right">{proc.pid}</td>
-                    <td>
-                      <span className={statusBadge.className}>{statusBadge.label}</span>
-                    </td>
-                    <td className="process-mono-cell align-right">{formatWorkingSet(proc.workingSetBytes)}</td>
-                    <td className="process-mono-cell align-right">{formatCpuTime(proc.cpuTimeMs)}</td>
-                    <td className="process-mono-cell">{formatCreatedAt(proc.createdAt)}</td>
-                    <td
-                      className="process-path-cell"
-                      title={proc.executablePath ?? 'Path unavailable or restricted by operating system'}
+      {/* Main Master-Detail Workspace */}
+      <div className="process-master-detail-workspace">
+        {/* Master Ledger Column */}
+        <div className="process-ledger-column">
+          {isLoading && !hasLoaded ? (
+            <div className="process-loading-state" role="status">
+              <div className="process-spinner" aria-hidden="true" />
+              <p>Scanning active processes...</p>
+            </div>
+          ) : processes.length === 0 && hasLoaded && !errorMsg ? (
+            <div className="process-empty-state" role="status">
+              <p className="process-empty-title">No processes discovered.</p>
+              <p>Try refreshing the process list.</p>
+            </div>
+          ) : sortedProcesses.length === 0 && processes.length > 0 ? (
+            <div className="process-empty-state" role="status">
+              <p className="process-empty-title">No processes match your filter.</p>
+              <p>Clear or adjust your search query or quick filter.</p>
+            </div>
+          ) : (
+            <div className="process-table-container">
+              <table className="process-table" aria-label="Running processes table">
+                <thead>
+                  <tr>
+                    <th
+                      className="sortable"
+                      onClick={() => handleSort('name')}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort('name')}
+                      tabIndex={0}
+                      role="columnheader"
+                      aria-sort={
+                        sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+                      }
                     >
-                      {proc.executablePath ?? '—'}
-                    </td>
+                      Process {getSortIndicator('name')}
+                    </th>
+                    <th
+                      className="sortable align-right"
+                      onClick={() => handleSort('pid')}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort('pid')}
+                      tabIndex={0}
+                      role="columnheader"
+                      aria-sort={
+                        sortField === 'pid' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+                      }
+                    >
+                      PID {getSortIndicator('pid')}
+                    </th>
+                    <th
+                      className="sortable"
+                      onClick={() => handleSort('status')}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort('status')}
+                      tabIndex={0}
+                      role="columnheader"
+                      aria-sort={
+                        sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+                      }
+                    >
+                      Status {getSortIndicator('status')}
+                    </th>
+                    <th
+                      className="sortable align-right"
+                      onClick={() => handleSort('memory')}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort('memory')}
+                      tabIndex={0}
+                      role="columnheader"
+                      aria-sort={
+                        sortField === 'memory' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+                      }
+                    >
+                      Memory {getSortIndicator('memory')}
+                    </th>
+                    <th
+                      className="sortable align-right"
+                      onClick={() => handleSort('cpu')}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSort('cpu')}
+                      tabIndex={0}
+                      role="columnheader"
+                      aria-sort={
+                        sortField === 'cpu' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+                      }
+                    >
+                      CPU Time {getSortIndicator('cpu')}
+                    </th>
+                    <th role="columnheader">Created</th>
+                    <th role="columnheader">Executable Path</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {sortedProcesses.map((proc) => {
+                    const statusBadge = getStatusBadge(proc.status);
+                    const isSelected = proc.id === selectedProcessId;
+
+                    return (
+                      <tr
+                        key={proc.id}
+                        data-testid={`process-row-${proc.id}`}
+                        className={`process-row ${isSelected ? 'process-row-selected' : ''}`}
+                        aria-selected={isSelected}
+                        tabIndex={0}
+                        onClick={() => handleSelectProcess(proc)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleSelectProcess(proc);
+                          }
+                        }}
+                      >
+                        <td className="process-name-cell">
+                          <span className="process-name-text">{proc.name}</span>
+                        </td>
+                        <td className="process-mono-cell align-right">{proc.pid}</td>
+                        <td>
+                          <span className={statusBadge.className}>{statusBadge.label}</span>
+                        </td>
+                        <td className="process-mono-cell align-right">
+                          {formatWorkingSet(proc.workingSetBytes)}
+                        </td>
+                        <td className="process-mono-cell align-right">
+                          {formatCpuTime(proc.cpuTimeMs)}
+                        </td>
+                        <td className="process-mono-cell">{formatCreatedAt(proc.createdAt)}</td>
+                        <td
+                          className="process-path-cell"
+                          title={proc.executablePath ?? 'Path unavailable or restricted by operating system'}
+                        >
+                          {proc.executablePath ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Detail Inspector Column */}
+        <div className="process-inspector-column">
+          <ProcessInspector
+            process={selectedProcess}
+            onClose={() => setSelectedProcessId(null)}
+          />
+        </div>
+      </div>
     </div>
   );
 }
-

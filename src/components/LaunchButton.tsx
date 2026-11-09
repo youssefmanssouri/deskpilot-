@@ -17,6 +17,7 @@ export interface LaunchButtonProps {
   onError?: (error: IpcError) => void;
   className?: string;
   autoResetDelayMs?: number;
+  ariaLabel?: string;
 }
 
 export interface ExecuteLaunchOptions {
@@ -76,6 +77,7 @@ export function LaunchButton({
   onError,
   className = '',
   autoResetDelayMs = DEFAULT_LAUNCH_RESET_DELAY_MS,
+  ariaLabel,
 }: LaunchButtonProps) {
   const [internalStatus, setInternalStatus] = useState<LaunchStatus>('idle');
   const [internalLaunchedPid, setInternalLaunchedPid] = useState<number | null>(null);
@@ -186,7 +188,7 @@ export function LaunchButton({
       className={statusClass}
       onClick={handleClick}
       disabled={disabled || isLaunching}
-      aria-label={`Launch application ${applicationId}`}
+      aria-label={ariaLabel ?? `Launch application ${applicationId}`}
       aria-busy={isLaunching}
       title={displayError ? `Error: ${displayError}` : undefined}
     >

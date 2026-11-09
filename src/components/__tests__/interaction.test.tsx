@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { ApplicationCatalog } from '../ApplicationCatalog';
+import { ApplicationCard } from '../ApplicationCard';
 import { LaunchButton } from '../LaunchButton';
 import App from '../../App';
 import * as tauriCore from '@tauri-apps/api/core';
@@ -66,7 +67,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       // Initially all 3 applications are in the DOM
-      expect(screen.getByText('Visual Studio Code')).toBeDefined();
+      expect(screen.getAllByText('Visual Studio Code').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Google Chrome')).toBeDefined();
       expect(screen.getByText('Broken Tool')).toBeDefined();
 
@@ -76,7 +77,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.change(searchInput, { target: { value: 'chrome' } });
 
       // Only Google Chrome is rendered; other cards are filtered out
-      expect(screen.getByText('Google Chrome')).toBeDefined();
+      expect(screen.getAllByText('Google Chrome').length).toBeGreaterThanOrEqual(1);
       expect(screen.queryByText('Visual Studio Code')).toBeNull();
       expect(screen.queryByText('Broken Tool')).toBeNull();
 
@@ -84,8 +85,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.change(searchInput, { target: { value: '' } });
 
       // All cards return
-      expect(screen.getByText('Visual Studio Code')).toBeDefined();
-      expect(screen.getByText('Google Chrome')).toBeDefined();
+      expect(screen.getAllByText('Visual Studio Code').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Google Chrome').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Broken Tool')).toBeDefined();
     });
 
@@ -235,10 +236,10 @@ describe('Frontend Component Interaction & Root Integration', () => {
       vi.mocked(tauriCore.invoke).mockReturnValueOnce(pendingApp1);
 
       render(
-        <ApplicationCatalog
-          initialApplications={sampleApps.slice(0, 2)}
-          autoDiscover={false}
-        />
+        <div>
+          <ApplicationCard application={sampleApps[0]} showLaunchButton={true} />
+          <ApplicationCard application={sampleApps[1]} showLaunchButton={true} />
+        </div>
       );
 
       const btn1 = screen.getByRole('button', {
@@ -293,8 +294,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       render(<App />);
 
-      // Verifies root header is present
-      expect(screen.getByRole('heading', { level: 1, name: /deskpilot application discovery/i })).toBeDefined();
+      // Verifies root header is present with dynamic view title
+      expect(screen.getByRole('heading', { level: 1, name: /application discovery/i })).toBeDefined();
 
       // Verifies AppStatus header subtitle loads
       await waitFor(() => {
@@ -307,8 +308,164 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getByText('Google Chrome')).toBeDefined();
       });
 
-      // Verifies launch buttons are rendered
-      expect(screen.getAllByRole('button', { name: /launch application/i })).toHaveLength(3);
+      // Verifies primary launch button is rendered in inspector for selected application
+      expect(screen.getByRole('button', { name: `Launch ${sampleApps[0].displayName}` })).toBeDefined();
+
+      // Verifies persistent sidebar navigation is present
+      const nav = screen.getByRole('navigation', { name: /views/i });
+      expect(nav).toBeDefined();
+
+      const appNavBtn = screen.getByRole('button', { name: 'Applications' });
+      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
+      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+
+      expect(appNavBtn.getAttribute('aria-current')).toBe('page');
+      expect(procNavBtn.getAttribute('aria-current')).toBeNull();
+      expect(sysNavBtn.getAttribute('aria-current')).toBeNull();
+
+      // Verifies brand and version in sidebar
+      expect(screen.getByText('DeskPilot')).toBeDefined();
+      expect(screen.getByText('v0.1.0')).toBeDefined();
+    });
+
+    it('switches views and updates aria-current when sidebar buttons are clicked', async () => {
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_app_status') {
+          return {
+            appName: 'DeskPilot',
+            version: '0.1.1',
+            status: 'ready',
+            uptimeSeconds: 120,
+            environment: 'development',
+          };
+        }
+        if (cmd === 'discover_applications') {
+          return {
+            applications: sampleApps,
+            scannedSources: ['Registry (HKLM 64-bit)'],
+            partialFailures: [],
+            totalDiscovered: 3,
+          };
+        }
+        if (cmd === 'list_processes') {
+          return {
+            processes: [],
+            totalProcesses: 0,
+            capturedAtMs: Date.now(),
+            isTruncated: false,
+          };
+        }
+        if (cmd === 'get_system_metrics') {
+          return {
+            cpu: { brandName: 'Intel', logicalCores: 8, architecture: 'x86_64', utilizationPercent: 10 },
+            memory: { totalBytes: 16000000000, availableBytes: 8000000000, usedBytes: 8000000000, usedPercent: 50 },
+            storage: { drives: [] },
+            system: { uptimeSeconds: 1000, appUptimeSeconds: 100, osName: 'Windows', architecture: 'x86_64' },
+            sampledAtMs: Date.now(),
+          };
+        }
+        throw new Error(`Unexpected command ${cmd}`);
+      });
+
+      render(<App />);
+
+      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
+      fireEvent.click(procNavBtn);
+
+      await waitFor(() => {
+        expect(procNavBtn.getAttribute('aria-current')).toBe('page');
+        expect(screen.getByRole('region', { name: /process monitor/i })).toBeDefined();
+        expect(screen.getByRole('heading', { level: 1, name: /process monitor/i })).toBeDefined();
+      });
+
+      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+      fireEvent.click(sysNavBtn);
+
+      await waitFor(() => {
+        expect(sysNavBtn.getAttribute('aria-current')).toBe('page');
+        expect(screen.getAllByRole('region', { name: /system intelligence/i }).length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByRole('heading', { level: 1, name: /system intelligence/i })).toBeDefined();
+      });
+    });
+
+    it('focuses the search input when global Ctrl+K shortcut is triggered', async () => {
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_app_status') {
+          return {
+            appName: 'DeskPilot',
+            version: '0.1.1',
+            status: 'ready',
+            uptimeSeconds: 120,
+            environment: 'development',
+          };
+        }
+        if (cmd === 'discover_applications') {
+          return {
+            applications: sampleApps,
+            scannedSources: ['Registry (HKLM 64-bit)'],
+            partialFailures: [],
+            totalDiscovered: 3,
+          };
+        }
+        throw new Error(`Unexpected command ${cmd}`);
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Visual Studio Code')).toBeDefined();
+      });
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i }) as HTMLInputElement;
+
+      // Blur input first
+      searchInput.blur();
+      expect(document.activeElement).not.toBe(searchInput);
+
+      // Trigger Ctrl+K
+      act(() => {
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+      });
+
+      expect(document.activeElement).toBe(searchInput);
+    });
+
+    it('focuses search input when global search trigger button in header is clicked', async () => {
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_app_status') {
+          return {
+            appName: 'DeskPilot',
+            version: '0.1.1',
+            status: 'ready',
+            uptimeSeconds: 120,
+            environment: 'development',
+          };
+        }
+        if (cmd === 'discover_applications') {
+          return {
+            applications: sampleApps,
+            scannedSources: ['Registry (HKLM 64-bit)'],
+            partialFailures: [],
+            totalDiscovered: 3,
+          };
+        }
+        throw new Error(`Unexpected command ${cmd}`);
+      });
+
+      render(<App />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Visual Studio Code')).toBeDefined();
+      });
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i }) as HTMLInputElement;
+      searchInput.blur();
+      expect(document.activeElement).not.toBe(searchInput);
+
+      const searchTrigger = screen.getByRole('button', { name: /search applications \(ctrl\+k\)/i });
+      fireEvent.click(searchTrigger);
+
+      expect(document.activeElement).toBe(searchInput);
     });
   });
 
@@ -459,7 +616,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.keyDown(searchInput, { key: 'Enter' });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[1].id}`,
+        name: `Launch ${sampleApps[1].displayName}`,
       });
 
       await waitFor(() => {
@@ -497,7 +654,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[1].id}`,
+        name: `Launch ${sampleApps[1].displayName}`,
       });
 
       expect(chromeBtn.textContent).toBe('Launched (PID 5555)');
@@ -530,7 +687,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.keyDown(searchInput, { key: 'Enter' });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[1].id}`,
+        name: `Launch ${sampleApps[1].displayName}`,
       });
 
       await waitFor(() => {
@@ -540,7 +697,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(chromeBtn.getAttribute('title')).toContain('Executable spawn failed in test environment');
     });
 
-    it('clicking a card LaunchButton shares the consolidated launcher state', async () => {
+    it('clicking the inspector LaunchButton shares the consolidated launcher state', async () => {
       vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
         applicationId: sampleApps[0].id,
         processId: 3333,
@@ -554,7 +711,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       const vscodeBtn = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[0].id}`,
+        name: `Launch ${sampleApps[0].displayName}`,
       });
 
       fireEvent.click(vscodeBtn);
@@ -701,9 +858,167 @@ describe('Frontend Component Interaction & Root Integration', () => {
     });
   });
 
-  describe('Catalog & Process Monitor View Switching', () => {
-    it('switches between Applications and Active Processes views cleanly', async () => {
+  describe('Master-Detail Interaction & Source Filtering', () => {
+    it('clicking an application card selects it and updates ApplicationInspector', async () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Initially first app (Visual Studio Code) is selected in Inspector
+      const inspector = screen.getByTestId('application-inspector');
+      expect(inspector).toBeDefined();
+      expect(inspector.textContent).toContain('Visual Studio Code');
+
+      // Click on Google Chrome card
+      const cards = screen.getAllByRole('article');
+      fireEvent.click(cards[1]);
+
+      // Google Chrome is now selected
+      expect(cards[1].classList.contains('selected')).toBe(true);
+      expect(inspector.textContent).toContain('Google Chrome');
+      expect(inspector.textContent).toContain('Google LLC');
+      expect(inspector.textContent).toContain('v130.0.0.0');
+    });
+
+    it('clicking a source filter pill filters the application list and updates counts', async () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Initially 3 applications
+      expect(screen.getByText('Showing 3 applications')).toBeDefined();
+
+      // Click "HKLM 64-bit" pill
+      const hklmPill = screen.getByRole('button', { name: 'HKLM 64-bit' });
+      fireEvent.click(hklmPill);
+
+      // Only Google Chrome has HKLM 64-bit in sampleApps
+      expect(screen.getByText(/filtered from 3 total/i)).toBeDefined();
+      const cards = screen.getAllByRole('article');
+      expect(cards).toHaveLength(1);
+      expect(cards[0].textContent).toContain('Google Chrome');
+
+      // Return to All
+      const allPill = screen.getByRole('button', { name: 'All' });
+      fireEvent.click(allPill);
+      expect(screen.getAllByRole('article')).toHaveLength(3);
+    });
+
+    it('arrow key navigation updates selection and ApplicationInspector synchronization', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const cards = screen.getAllByRole('article');
+      const inspector = screen.getByTestId('application-inspector');
+
+      // Card 0 is selected initially
+      expect(inspector.textContent).toContain('Visual Studio Code');
+
+      // Press ArrowDown on Card 0
+      fireEvent.keyDown(cards[0], { key: 'ArrowDown' });
+
+      // Selection moves to Card 1 (Google Chrome)
+      expect(inspector.textContent).toContain('Google Chrome');
+
+      // Press ArrowUp on Card 1
+      fireEvent.keyDown(cards[1], { key: 'ArrowUp' });
+
+      // Selection moves back to Card 0
+      expect(inspector.textContent).toContain('Visual Studio Code');
+    });
+
+    it('reconciles selection when active filter excludes currently selected application', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const inspector = screen.getByTestId('application-inspector');
+      // Visual Studio Code is initially selected
+      expect(inspector.textContent).toContain('Visual Studio Code');
+
+      // Click "HKLM 64-bit" which excludes Visual Studio Code (HKCU only)
+      const hklmPill = screen.getByRole('button', { name: 'HKLM 64-bit' });
+      fireEvent.click(hklmPill);
+
+      // Reconciles to Google Chrome (the only matching app)
+      expect(inspector.textContent).toContain('Google Chrome');
+    });
+
+    it('launches selected application from the ApplicationInspector primary launch button', async () => {
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce({
+        applicationId: sampleApps[1].id,
+        processId: 8899,
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Select Google Chrome
+      const cards = screen.getAllByRole('article');
+      fireEvent.click(cards[1]);
+
+      // Launch from inspector button
+      const inspectorLaunchBtn = screen.getByRole('button', { name: 'Launch Google Chrome' });
+      fireEvent.click(inspectorLaunchBtn);
+
+      await waitFor(() => {
+        expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
+          applicationId: sampleApps[1].id,
+        });
+      });
+    });
+  });
+
+  describe('Workspace View Routing & Context-Aware Search (F-01, F-02, F-03)', () => {
+    it('renders clean catalog interface without redundant internal view switcher tabs', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      // Verify no obsolete internal tab switcher exists in ApplicationCatalog (F-01)
+      expect(screen.queryByRole('tablist')).toBeNull();
+      expect(screen.queryByRole('tab')).toBeNull();
+    });
+
+    it('manages context-aware search input focus across views and protects against form input hijacking', async () => {
       vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_app_status') {
+          return {
+            appName: 'DeskPilot',
+            version: '0.1.1',
+            status: 'ready',
+            uptimeSeconds: 120,
+            environment: 'development',
+          };
+        }
+        if (cmd === 'discover_applications') {
+          return {
+            applications: sampleApps,
+            scannedSources: ['Registry (HKLM 64-bit)'],
+            partialFailures: [],
+            totalDiscovered: 3,
+          };
+        }
         if (cmd === 'list_processes') {
           return {
             processes: [
@@ -725,55 +1040,73 @@ describe('Frontend Component Interaction & Root Integration', () => {
             isTruncated: false,
           };
         }
-        if (cmd === 'discover_applications') {
+        if (cmd === 'get_system_metrics') {
           return {
-            applications: sampleApps,
-            scannedSources: ['Registry (HKLM 64-bit)'],
-            partialFailures: [],
-            totalDiscovered: 3,
+            cpu: { brandName: 'Intel', logicalCores: 8, architecture: 'x86_64', utilizationPercent: 10 },
+            memory: { totalBytes: 16000000000, availableBytes: 8000000000, usedBytes: 8000000000, usedPercent: 50 },
+            storage: { drives: [] },
+            system: { uptimeSeconds: 1000, appUptimeSeconds: 100, osName: 'Windows', architecture: 'x86_64' },
+            sampledAtMs: Date.now(),
           };
         }
         throw new Error(`Unexpected command: ${cmd}`);
       });
 
-      render(
-        <ApplicationCatalog
-          initialApplications={sampleApps}
-          autoDiscover={false}
-        />
-      );
+      render(<App />);
 
-      // Initially on Applications view
-      const appTab = screen.getByRole('tab', { name: 'Applications' });
-      const procTab = screen.getByRole('tab', { name: 'Active Processes' });
-
-      expect(appTab.getAttribute('aria-selected')).toBe('true');
-      expect(procTab.getAttribute('aria-selected')).toBe('false');
-      expect(screen.getByText('Visual Studio Code')).toBeDefined();
-      expect(screen.queryByText('deskpilot.exe')).toBeNull();
-
-      // Click "Active Processes" tab
-      fireEvent.click(procTab);
-
-      expect(appTab.getAttribute('aria-selected')).toBe('false');
-      expect(procTab.getAttribute('aria-selected')).toBe('true');
-
-      // Process Monitor is rendered and fetches processes
+      // 1. In Applications view: Ctrl+K focuses #catalog-search-input
       await waitFor(() => {
-        expect(screen.getByText('deskpilot.exe')).toBeDefined();
+        expect(screen.getByText('Visual Studio Code')).toBeDefined();
       });
-      expect(screen.getByRole('columnheader', { name: /process/i })).toBeDefined();
+      const catalogSearch = screen.getByRole('searchbox', { name: /search applications/i });
+      catalogSearch.blur();
+      expect(document.activeElement).not.toBe(catalogSearch);
 
-      // Application cards are not in DOM while on Processes tab
-      expect(screen.queryByText('Visual Studio Code')).toBeNull();
+      act(() => {
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+      });
+      expect(document.activeElement).toBe(catalogSearch);
 
-      // Click "Applications" tab to return
-      fireEvent.click(appTab);
+      // 2. In Processes view: Ctrl+K focuses #process-search-input
+      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
+      fireEvent.click(procNavBtn);
 
-      expect(appTab.getAttribute('aria-selected')).toBe('true');
-      expect(procTab.getAttribute('aria-selected')).toBe('false');
-      expect(screen.getByText('Visual Studio Code')).toBeDefined();
-      expect(screen.queryByText('deskpilot.exe')).toBeNull();
+      await waitFor(() => {
+        expect(screen.getByRole('searchbox', { name: /filter processes/i })).toBeDefined();
+      });
+      const procSearch = screen.getByRole('searchbox', { name: /filter processes/i });
+      procSearch.blur();
+      expect(document.activeElement).not.toBe(procSearch);
+
+      act(() => {
+        fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+      });
+      expect(document.activeElement).toBe(procSearch);
+
+      // 3. In System view: search trigger button is disabled and Ctrl+K does nothing
+      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+      fireEvent.click(sysNavBtn);
+
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { level: 1, name: /system intelligence/i })).toBeDefined();
+      });
+      const headerSearchBtn = document.querySelector('button.global-search-trigger') as HTMLButtonElement;
+      expect(headerSearchBtn).toBeDefined();
+      expect(headerSearchBtn.disabled).toBe(true);
+
+      // 4. Input-focus guard: typing Ctrl+K inside an arbitrary input element does not hijack focus or prevent default
+      const arbitraryInput = document.createElement('input');
+      arbitraryInput.id = 'arbitrary-field';
+      document.body.appendChild(arbitraryInput);
+      arbitraryInput.focus();
+      expect(document.activeElement).toBe(arbitraryInput);
+
+      // Keystroke while focused in an arbitrary form field
+      const defaultPrevented = fireEvent.keyDown(arbitraryInput, { key: 'k', ctrlKey: true });
+      // Guard returns early: default is NOT prevented (fireEvent returns true) and focus is preserved
+      expect(defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(arbitraryInput);
+      document.body.removeChild(arbitraryInput);
     });
   });
 });
