@@ -1,8 +1,8 @@
-# DeskPilot (Not Done Yet...)
+# DeskPilot (v0.1.1 Developer Preview)
 
 <div align="center">
 
-![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows%2011%20(x64)%20Tested%20%7C%20Win%2010%20Pending-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Tauri](https://img.shields.io/badge/Tauri-v2.0-FFC131?style=for-the-badge&logo=tauri&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-1.80%2B-DEA584?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
@@ -21,9 +21,12 @@
 
 ## Overview
 
-**DeskPilot** is an open-source, technically disciplined command center and launcher engineered natively for Windows. It provides lightning-fast application indexing, sub-millisecond search, safe Win32 execution, and system monitoring with no implemented outbound network client, analytics, telemetry, or cloud dependencies (see [PRIVACY.md](PRIVACY.md)).
+**DeskPilot** is an open-source, technically disciplined command center and launcher engineered natively for Windows. It provides local application indexing, keyboard-first real-time search, native Win32 execution, read-only process monitoring, and system intelligence telemetry. DeskPilot application code contains no implemented outbound network client, analytics, telemetry, or cloud dependencies (see [PRIVACY.md](PRIVACY.md)).
 
 Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 performance with modern UI ergonomics while enforcing defense-in-depth isolation boundaries between the web presentation layer and host operating system privileges.
+
+> [!NOTE]
+> **Controlled Developer Preview:** DeskPilot v0.1.1 is an early preview release intended for testing and technical evaluation on Windows 11. Binaries are currently unsigned, and Windows 10 runtime testing is pending. For comprehensive release and operational details, see [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -35,7 +38,7 @@ Discovers applications across Windows Registry hives and Start Menu hierarchies 
 ![DeskPilot Application Catalog](docs/screenshots/deskpilot_overview.png)
 
 ### Real-Time Deterministic Search & Ranking
-Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, prefix match, substring match, and publisher metadata) with keyboard-first navigation.
+Real-time query filtering utilizing a four-tier ranking hierarchy (exact match, prefix match, substring match, and publisher metadata) with keyboard-first navigation, query matching, Escape-key clearing, and empty-state rendering.
 
 ![DeskPilot Real-Time Search](docs/screenshots/deskpilot_search.png)
 
@@ -57,7 +60,8 @@ Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, 
 
 ### ⚡ Secure Win32 Native Launcher
 - **Direct Win32 API Invocation:** Spawns processes directly via Windows `CreateProcessW` without intermediate shell interpreters (`cmd.exe` or `powershell.exe`), eliminating command injection vulnerabilities.
-- **Safe Working Directory Binding:** Resolves working directories to target executable parent directories or system roots, preventing DLL hijacking in shared folders.
+- **Scoped Working Directory Binding:** Resolves working directories directly to target executable parent directories or system roots, scoping the execution context and avoiding reliance on ambient working directories.
+- **Target Validation & Established Launch Flow:** Validates application identifiers and launch targets through backend security guards before invocation.
 - **Process Isolation:** Detaches launched applications into independent process trees without inheriting privileged handles.
 
 ### 📊 Native Win32 System Intelligence Monitoring
@@ -116,7 +120,8 @@ Sub-millisecond filtering utilizing a four-tier ranking hierarchy (exact match, 
 └───────────────────────────┬────────────────────────────┘
                             │ Direct Win32 APIs
 ┌───────────────────────────▼────────────────────────────┐
-│                 Windows 10 / 11 Native                 │
+│                 Windows Native Platform                │
+│            (Win 11 Tested / Win 10 Pending)            │
 │  • Advapi32 (Registry)       • Shell32 (Shortcuts)     │
 │  • Kernel32 (CreateProcessW) • User32 (Tray & Window)  │
 └────────────────────────────────────────────────────────┘
@@ -131,7 +136,47 @@ DeskPilot is designed around strict defense-in-depth principles:
 1. **Least-Privilege Web View:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, and Node.js primitives are completely disabled.
 2. **Path Traversal Guard:** Any filesystem access strictly sanitizes relative segments (`..`, `.\`, `%TEMP%`) and normalizes paths before verification.
 3. **No Shell Intermediate:** Launch commands are never formatted as string shell scripts. Process creation bypasses shell parsing entirely.
-4. **Local Data Sovereignty:** The audited application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. (Note: Windows, WebView2, the installer, and applications launched by the user may independently perform network activity; see [`PRIVACY.md`](PRIVACY.md)).
+4. **Local Data Sovereignty:** The audited DeskPilot application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. (Note: The embedded Microsoft WebView2 runtime, host Windows components, installers, and applications launched by the user operate under their own system runtime policies; see [`PRIVACY.md`](PRIVACY.md)).
+
+> [!NOTE]
+> **Scope of Security & Networking Observations:**  
+> DeskPilot's security model represents defense-in-depth architectural design, input validation guards, and short-duration interactive testing; it has **not undergone third-party penetration testing or binary exploit analysis**. Furthermore, while empirical testing observed zero active TCP/UDP sockets during short-duration sessions, this does not establish that network activity from external runtime components (such as WebView2 background services) is impossible across all host configurations.
+
+---
+
+## Windows Security, Code Signing & SmartScreen Disclosures
+
+DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeSignature` reports `NotSigned`):
+
+- **Unsigned Publisher Status:** An Authenticode certificate is not strictly necessary to run or evaluate an open-source preview, but unsigned binaries encounter Windows security prompts and Smart App Control enforcement.
+- **Microsoft Defender SmartScreen:** When downloading or launching the unsigned installer or standalone executable, Windows Defender SmartScreen may display an *"Unknown Publisher"* warning (*"Windows protected your PC"*). SmartScreen calculates reputation algorithmically based on download telemetry; even when an Authenticode certificate is attached, warning-free execution is not guaranteed immediately until reputation accrues over time.
+- **Microsoft Smart App Control (SAC):** On Windows 11 systems where Smart App Control is active in *Enforcement Mode*, execution and enforcement depend on Microsoft's cloud-based security evaluation and policy. Binaries that are unsigned or lack sufficient cloud reputation may be blocked from running. Smart App Control policy enforcement is distinct from the SmartScreen informational prompt. Code signing can establish eligibility for SAC evaluation, but signing alone does not guarantee SAC clearance if the binary has not been vetted by Microsoft cloud intelligence.
+- **Benefits of Authenticode Signing:** Authenticode digital signing provides cryptographic tamper resistance, verifies publisher identity, and serves as an anchor for building reputation across releases.
+- **Security Guidance:** Never disable Microsoft Defender SmartScreen or Smart App Control to bypass security warnings. If your security policies require digitally signed binaries, please defer evaluating DeskPilot until officially signed releases become available.
+
+---
+
+## Installer Lifecycle, Downgrade Limitation & Retained Data
+
+- **Windows Installer Package:** The provided MSI installer (`deskpilot_0.1.1_x64_en-US.msi`) was evaluated across specific Windows Installer lifecycle transitions in clean sandbox testing:
+  - *Verified Successful Transitions:* Silent fresh installation (`msiexec /i`), major upgrade from v0.1.0 to v0.1.1 (clean binary replacement, single ARP registration, and user data survival), maintenance repair (`msiexec /fa`), and clean uninstallation (`msiexec /x`).
+  - *Known Limitation (Legacy Downgrade Ingress):* While DeskPilot v0.1.1 contains internal downgrade detection guards (`WIX_DOWNGRADE_DETECTED`), the legacy v0.1.0 installer predates commit `9169fcf` and lacks downgrade detection guards. When tested, executing the legacy v0.1.0 MSI over an existing v0.1.1 installation resulted in an unguarded downgrade back to v0.1.0. **Do not run the older v0.1.0 MSI over an existing v0.1.1 installation.** (Note: Only these specific lifecycle transitions were evaluated; not every theoretical upgrade or downgrade permutation has been tested).
+- **Uninstallation & Retained Profile Data:** The uninstallation test (`msiexec /x`) demonstrated clean removal of application binaries (`C:\Program Files\deskpilot`), Start Menu and Desktop shortcuts, and the Add/Remove Programs registry entry. However, the test also demonstrated that user profile and runtime data created by the embedded WebView2 runtime remained on disk under:
+  ```text
+  %LOCALAPPDATA%\com.deskpilot.app\EBWebView
+  ```
+  In the tested sandbox environment, this retained directory contained 192 files totaling approximately 7.93 MB; these values are test-environment measurements and will vary based on user activity. The installer package does not automatically purge this directory during uninstallation; complete removal requires manually deleting it.
+
+---
+
+## Release Checksums (v0.1.1)
+
+Verify release binaries against their official SHA-256 cryptographic digests:
+
+| Artifact | File Name | Format | SHA-256 Cryptographic Checksum |
+| :--- | :--- | :---: | :--- |
+| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `d6b919a499b1901bb6e2706b92205ddbba0335db8aaa504c7383c415201764b1` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `8f1beec208cf460bfc74a4b1d907c182ae6b5b5ee114ee722ea9835c93c03493` |
 
 ---
 
@@ -141,7 +186,7 @@ DeskPilot is designed around strict defense-in-depth principles:
 
 | Component | Minimum Version | Recommended |
 |---|---|---|
-| **OS** | Windows 10 (64-bit) | Windows 11 Build 22631+ |
+| **OS** | Windows 11 x64 (Runtime-Tested) | Windows 10 x64 (Pending Runtime Verification) |
 | **Node.js** | Node.js v20+ | Node.js v22+ LTS |
 | **Rust** | Rust 1.80+ | Rust MSVC Toolchain (`x86_64-pc-windows-msvc`) |
 | **C++ Build Tools** | Visual Studio Build Tools 2022 | MSVC v143 / Windows 10/11 SDK |
@@ -176,7 +221,13 @@ npm.cmd run tauri dev
 DeskPilot maintains a total of **293 automated test definitions identified** across both frontend presentation and native backend layers:
 
 - **Frontend Execution Evidence:** **113 tests passed** at the audited baseline (`npm test -- --run`), executed across 11 Vitest suites.
-- **Rust Backend Structural Inventory:** **180 test definitions identified** in source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
+- **Rust Backend Structural Inventory:** **180 test definitions identified** in source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution of these backend test definitions was not verified on the local host baseline because Windows Smart App Control (SAC) blocked unsigned debug build-scripts.
+- **Consolidated Release Verification Matrix (Phase 10.10):** Across exhaustive QA testing, 27 distinct criteria were evaluated with **100% evidence coverage** (meaning every criterion was empirically investigated, not that every criterion passed). The evaluation resulted in:
+  - **24 criteria passed** (100% of executable functional, UI, and installer lifecycle tests in disposable Windows 11 Sandbox sessions ranging from 4 to 11 minutes).
+  - **1 documented known limitation** (legacy v0.1.0 downgrade ingress).
+  - **1 blocked criterion** (runtime verification on genuine Windows 10, pending a dedicated test harness; not an unconditional blocker for the Windows 11 preview).
+  - **1 unsatisfied gate** (Authenticode digital signing for unrestricted general distribution).
+  - This establishes verified operational behavior under test loads; it does not constitute long-term continuous reliability testing or third-party security certification.
 
 ### Frontend Test Breakdown (Vitest — 113 Passing)
 - `ProcessMonitor.test.tsx` (16 tests): Read-only process list rendering, column sorting, CPU/memory formatting, truncation banner, stale response protection, and error recovery.
@@ -217,6 +268,7 @@ DeskPilot maintains a total of **293 automated test definitions identified** acr
 
 ## Documentation & Privacy
 
+- **Release Notes & Preview Disclosures:** Comprehensive preview details, security notices, checksums, and installer guidance are documented in [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 - **Privacy Architecture:** Technical details regarding local data sovereignty, in-memory state, and host platform boundaries are documented in [`PRIVACY.md`](PRIVACY.md).
 
 ---
