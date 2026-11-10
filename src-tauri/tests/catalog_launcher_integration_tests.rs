@@ -1,6 +1,6 @@
-use deskpilot_lib::core::{ApplicationLauncherService, DiscoveryResult};
+use deskpilot_lib::core::{ApplicationLauncherService, DiscoveryResult, StatusService};
 use deskpilot_lib::error::DomainError;
-use deskpilot_lib::models::ApplicationDto;
+use deskpilot_lib::models::{AppStatusDto, ApplicationDto};
 use deskpilot_lib::models::application::{
     AvailabilityState, DiscoveredApplication, DiscoverySource,
 };
@@ -547,4 +547,26 @@ fn test_live_host_discovery_and_catalog_stability() {
         2,
         "Catalog generation must increment to 2 after second live discovery"
     );
+}
+
+#[test]
+fn test_app_state_and_status_service_version_synchronization() {
+    // 1. AppState receives the Cargo package version
+    let state = AppState::new("DeskPilot", env!("CARGO_PKG_VERSION"));
+    assert_eq!(state.app_name(), "DeskPilot");
+    assert_eq!(state.version(), env!("CARGO_PKG_VERSION"));
+    assert_eq!(state.version(), "0.1.1");
+
+    // 2. StatusService query returns 0.1.1
+    let status = StatusService::get_status(&state)
+        .expect("StatusService::get_status must succeed");
+    assert_eq!(status.version, "0.1.1");
+    assert_eq!(status.version, env!("CARGO_PKG_VERSION"));
+
+    // 3. Application status DTO reports 0.1.1
+    let dto: AppStatusDto = status.into();
+    assert_eq!(dto.version, "0.1.1");
+    assert_eq!(dto.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(dto.app_name, "DeskPilot");
+    assert_eq!(dto.status, "ready");
 }

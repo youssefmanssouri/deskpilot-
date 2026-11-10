@@ -273,7 +273,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
     it('renders the root App component with ApplicationCatalog and header', async () => {
       const mockStatus: AppStatusDto = {
         appName: 'DeskPilot',
-        version: '0.1.0',
+        version: '0.1.1',
         status: 'ready',
         uptimeSeconds: 60,
         environment: 'development',
@@ -297,9 +297,9 @@ describe('Frontend Component Interaction & Root Integration', () => {
       // Verifies root header is present with dynamic view title
       expect(screen.getByRole('heading', { level: 1, name: /application discovery/i })).toBeDefined();
 
-      // Verifies AppStatus header subtitle loads
+      // Verifies AppStatus header subtitle loads with synchronized v0.1.1
       await waitFor(() => {
-        expect(screen.getByText(/Core v0.1.0/)).toBeDefined();
+        expect(screen.getByText(/Core v0.1.1/)).toBeDefined();
       });
 
       // Verifies ApplicationCatalog is rendered under App
@@ -325,7 +325,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // Verifies brand and version in sidebar
       expect(screen.getByText('DeskPilot')).toBeDefined();
-      expect(screen.getByText('v0.1.0')).toBeDefined();
+      expect(screen.getByText('v0.1.1')).toBeDefined();
     });
 
     it('switches views and updates aria-current when sidebar buttons are clicked', async () => {

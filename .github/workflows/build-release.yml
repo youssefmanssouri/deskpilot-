@@ -17,13 +17,30 @@ jobs:
       - name: Checkout Source Revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: 22bb81cfe02418b39f444204411e430c61075a37
+          ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Verify Pinned Commit and Source Tree
+      - name: Verify Dispatch Commit and Source Tree
         shell: powershell
         run: |
-          $expectedCommit = "22bb81cfe02418b39f444204411e430c61075a37"
+          $expectedRef = "refs/heads/main"
+          $actualRef = "$env:GITHUB_REF"
+          if ($actualRef -ne $expectedRef) {
+            Write-Error "CRITICAL: Workflow was dispatched from ref '$actualRef', but release builds are restricted to '$expectedRef'!"
+            exit 1
+          }
+          Write-Output "Branch ref verified: $actualRef"
+
+          $expectedCommit = "$env:GITHUB_SHA"
+          if ([string]::IsNullOrWhiteSpace($expectedCommit)) {
+            Write-Error "CRITICAL: GITHUB_SHA environment variable is not defined or empty!"
+            exit 1
+          }
+          if ($expectedCommit -notmatch '^[0-9a-f]{40}$') {
+            Write-Error "CRITICAL: GITHUB_SHA ($expectedCommit) is not a valid 40-character SHA-1 hex string!"
+            exit 1
+          }
+
           $commitRaw = & git rev-parse HEAD
           $commitExit = $LASTEXITCODE
           if ($commitExit -ne 0) {
@@ -32,7 +49,7 @@ jobs:
           }
           $actualCommit = ($commitRaw -join "`n").Trim()
           if ($actualCommit -ne $expectedCommit) {
-            Write-Error "CRITICAL: Checked out commit ($actualCommit) does not match expected commit ($expectedCommit)!"
+            Write-Error "CRITICAL: Checked out commit ($actualCommit) does not match expected dispatch commit ($expectedCommit)!"
             exit 1
           }
           Write-Output "Source commit verified: $actualCommit"
@@ -403,6 +420,36 @@ jobs:
           }
           Write-Output "Frontend dependencies installed and lockfile verified unchanged."
 
+      - name: Execute Pre-Build Test Gates
+        shell: powershell
+        run: |
+          Write-Output "=== Step 1/3: Running Frontend Vitest Suite ==="
+          & npm.cmd test -- --run
+          $npmTestExit = $LASTEXITCODE
+          if ($npmTestExit -ne 0) {
+            Write-Error "CRITICAL: Frontend test suite failed with exit code $npmTestExit!"
+            exit $npmTestExit
+          }
+          Write-Output "Frontend test suite completed successfully."
+
+          Write-Output "=== Step 2/3: Running Frontend TypeScript Validation ==="
+          & npx.cmd tsc --noEmit
+          $tscExit = $LASTEXITCODE
+          if ($tscExit -ne 0) {
+            Write-Error "CRITICAL: Frontend TypeScript compilation failed with exit code $tscExit!"
+            exit $tscExit
+          }
+          Write-Output "Frontend TypeScript validation completed successfully."
+
+          Write-Output "=== Step 3/3: Running Backend Rust Test Suite ==="
+          & cargo test --locked --manifest-path src-tauri/Cargo.toml
+          $cargoTestExit = $LASTEXITCODE
+          if ($cargoTestExit -ne 0) {
+            Write-Error "CRITICAL: Backend Rust test suite failed with exit code $cargoTestExit!"
+            exit $cargoTestExit
+          }
+          Write-Output "Backend Rust test suite completed successfully."
+
       - name: Build Desktop Application and MSI Installer
         shell: powershell
         run: |
@@ -726,8 +773,8 @@ jobs:
             exit $gitCommitExit
           }
           $gitCommit = ($gitCommitRaw -join "`n").Trim()
-          if ($gitCommit -ne "22bb81cfe02418b39f444204411e430c61075a37") {
-            Write-Error "CRITICAL: Checked out source commit ($gitCommit) differs from expected baseline!"
+          if ($gitCommit -ne "$env:GITHUB_SHA") {
+            Write-Error "CRITICAL: Checked out source commit ($gitCommit) differs from GITHUB_SHA ($env:GITHUB_SHA)!"
             exit 1
           }
 

@@ -47,17 +47,29 @@ mod tests {
 
     #[test]
     fn test_get_status_healthy() {
-        let state = AppState::new("DeskPilot", "0.1.0");
+        let state = AppState::new("DeskPilot", env!("CARGO_PKG_VERSION"));
         let status = StatusService::get_status(&state).expect("Failed to get status");
         assert_eq!(status.app_name, "DeskPilot");
-        assert_eq!(status.version, "0.1.0");
+        assert_eq!(status.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(status.version, "0.1.1");
         assert_eq!(status.status, "ready");
         assert_eq!(status.environment, "desktop");
     }
 
     #[test]
+    fn test_get_status_reports_cargo_package_version_dto() {
+        let state = AppState::new("DeskPilot", env!("CARGO_PKG_VERSION"));
+        let status = StatusService::get_status(&state).expect("Failed to get status");
+        let dto: crate::models::AppStatusDto = status.into();
+        assert_eq!(dto.version, "0.1.1");
+        assert_eq!(dto.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(dto.app_name, "DeskPilot");
+        assert_eq!(dto.status, "ready");
+    }
+
+    #[test]
     fn test_get_status_degraded() {
-        let state = AppState::new("DeskPilot", "0.1.0");
+        let state = AppState::new("DeskPilot", env!("CARGO_PKG_VERSION"));
         state.set_healthy(false);
         let status = StatusService::get_status(&state).expect("Failed to get status");
         assert_eq!(status.status, "degraded");

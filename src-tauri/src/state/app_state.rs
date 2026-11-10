@@ -447,9 +447,10 @@ mod tests {
 
     #[test]
     fn test_app_state_initialization() {
-        let state = AppState::new("DeskPilot", "0.1.0");
+        let state = AppState::new("DeskPilot", env!("CARGO_PKG_VERSION"));
         assert_eq!(state.app_name(), "DeskPilot");
-        assert_eq!(state.version(), "0.1.0");
+        assert_eq!(state.version(), env!("CARGO_PKG_VERSION"));
+        assert_eq!(state.version(), "0.1.1");
         assert!(state.is_healthy());
         assert!(!state.is_quitting());
         assert!(!state.is_tray_available());
