@@ -40,7 +40,8 @@
         "silent": true
       },
       "wix": {
-        "upgradeCode": "0592097C-9336-5C8B-8969-1384F1336E2F"
+        "upgradeCode": "0592097C-9336-5C8B-8969-1384F1336E2F",
+        "template": "wix/main.wxs"
       }
     }
   }
