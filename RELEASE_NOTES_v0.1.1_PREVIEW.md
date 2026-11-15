@@ -13,7 +13,7 @@ DeskPilot v0.1.1 is an open-source, local-first Windows command center engineere
 
 > [!IMPORTANT]
 > **Controlled Preview Status:**  
-> This release is a **controlled developer and early-adopter preview**, intended for technical evaluation and feedback. It is **not an unrestricted general consumer release**. Binaries are currently unsigned, and runtime verification has been performed exclusively on Windows 11. Please review the [Windows Security & Code Signing](#6-windows-security-code-signing--smartscreen-disclosures) and [Known Limitations](#7-known-limitations--operational-advisories) sections before installation.
+> This release is a **controlled developer and early-adopter preview**, intended for technical evaluation and feedback. It is **not an unrestricted general consumer release**. Binaries are currently unsigned. On the tested Windows 11 machine, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime verification on Windows 10 remains pending. Automated test suites pass 100% (378 passing tests). Please review the [Windows Security & Code Signing](#6-windows-security-code-signing--smartscreen-disclosures) and [Known Limitations](#7-known-limitations--operational-advisories) sections before installation.
 
 DeskPilot is and will remain **100% free and open-source software**. There are no paid tiers, no commercial subscriptions, no feature gates, and no account requirements.
 
@@ -63,31 +63,31 @@ DeskPilot provides five core native capabilities built on least-privilege archit
 
 | Operating System | Architecture | Verification Status | Operational Notes |
 | :--- | :---: | :---: | :--- |
-| **Windows 11 (22H2 / 23H2 / 24H2)** | x64 | **Runtime-Tested** | Supported scope for this preview. Validated in clean Windows 11 Enterprise (Build 26100) and Pro (Build 26200) environments. |
-| **Windows 10 (21H2 / 22H2)** | x64 | **Architecture Compatible / Runtime Verification Pending** | Win32 APIs and evergreen WebView2 are structurally compatible, but genuine Windows 10 runtime testing is pending. This is not an unconditional blocker for preview users on Windows 11. |
+| **Windows 11 (22H2 / 23H2 / 24H2)** | x64 | **Architecture Compatible / Native Runtime Blocked** | Structurally compatible. Passed automated suites and disposable Sandbox evaluation. However, on host machines enforcing Windows Application Control, native execution of the unsigned binary is currently blocked (Win32 Error 4551). |
+| **Windows 10 (21H2 / 22H2)** | x64 | **Architecture Compatible / Runtime Verification Pending** | Win32 APIs and Evergreen WebView2 are structurally compatible. Windows 10 lacks Smart App Control, but genuine Windows 10 empirical runtime testing on physical or virtual hardware is still pending. |
 | **Windows on ARM (ARM64)** | ARM64 | **Outside Tested Scope** | Compiles natively for `x86_64-pc-windows-msvc`; native ARM64 binaries are not built, and x64 emulation is unverified. |
 | **Legacy Windows (7 / 8 / 8.1)** | Any | **Outside Target Scope** | DeskPilot relies on Windows 10+ Win32 APIs and the Evergreen WebView2 runtime. |
 
 > [!NOTE]
 > **Platform Scope for Preview:**  
-> The verified platform scope for this developer preview is **Windows 11 (x64)**. While underlying Win32 APIs and WebView2 are standard across Windows 10 and 11, compatibility on Windows 10 has not yet been verified through runtime execution on physical or virtual Windows 10 hardware.
+> While underlying Win32 APIs and WebView2 are standard across Windows 10 and 11, compatibility on Windows 10 has not yet been verified through empirical runtime execution on physical or virtual Windows 10 hardware. On Windows 11, native process execution is subject to active Windows Application Control policies.
 
 ---
 
 ## 4. Cryptographic Checksums & Artifact Integrity
 
-Every release binary is identified by its exact SHA-256 cryptographic digest. Verify your download before execution:
+Every release binary is identified by its exact SHA-256 cryptographic digest. These checksums reflect the official build produced by GitHub Actions CI run `43657647459` from source commit `b642d38687cf5820efc88ef95cd06e4f1ed88b55`:
 
 | Artifact | File Name | Format | SHA-256 Digest |
 | :--- | :--- | :---: | :--- |
-| **Windows Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `d6b919a499b1901bb6e2706b92205ddbba0335db8aaa504c7383c415201764b1` |
-| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `8f1beec208cf460bfc74a4b1d907c182ae6b5b5ee114ee722ea9835c93c03493` |
+| **Windows Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `73916656e59fc5d63fad9c9fe33cc3783699e17ab7f2996c0c54c78928c5cf5e` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `745a2c254ae3c4a9e8e9c5856465417cb7c13650e9b3314e1009f192ebef4513` |
 
 ### PowerShell Verification Command
 ```powershell
 Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 # Expected output must match:
-# D6B919A499B1901BB6E2706B92205DDBBA0335DB8AAA504C7383C415201764B1
+# 73916656E59FC5D63FAD9C9FE33CC3783699E17AB7F2996C0C54C78928C5CF5E
 ```
 
 ---
@@ -100,7 +100,11 @@ Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
    ```cmd
    msiexec /i deskpilot_0.1.1_x64_en-US.msi
    ```
-3. The installer installs the application to `C:\Program Files\deskpilot`, places shortcuts in the Start Menu and Desktop, and registers a single entry in Windows Installed Apps (Add/Remove Programs).
+3. The installer installs the application to `C:\Program Files\DeskPilot`, places shortcuts in the Start Menu and Desktop, and registers a single entry in Windows Installed Apps (Add/Remove Programs).
+
+> [!NOTE]
+> **WebView2 Runtime Requirement:**  
+> The installer embeds the official Microsoft Edge WebView2 bootstrapper (`MicrosoftEdgeWebview2Setup.exe`). If the Evergreen WebView2 Runtime is already installed on the target machine (standard on Windows 11 and modern updated Windows 10), installation completes fully offline. Active internet access is required during installation only if the target system lacks the WebView2 runtime.
 
 ### Tested Lifecycle Transitions & Downgrade Distinction
 Sandbox testing in Phase 10.9C evaluated specific installer transitions:
@@ -131,13 +135,13 @@ Sandbox testing in Phase 10.9C evaluated specific installer transitions:
 
 ---
 
-## 6. Windows Security, Code Signing & SmartScreen Disclosures
+## 6. Windows Security, Code Signing & Application Control Disclosures
 
 DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeSignature` reports `NotSigned`):
 
 ### 1. Unsigned Publisher Status
-- An Authenticode code signing certificate is not strictly necessary to publish, download, or evaluate an open-source preview release.
-- However, unsigned binaries lack cryptographic publisher attribution and will encounter standard Windows operating system defense prompts and Smart App Control scrutiny.
+- An Authenticode code signing certificate is not strictly necessary to publish, download, or evaluate an open-source preview release in an unconstrained environment.
+- However, unsigned binaries lack cryptographic publisher attribution and encounter standard Windows operating system defense prompts and Application Control policies.
 
 ### 2. Microsoft Defender SmartScreen Reputation & Warnings
 - When downloading and running the unsigned MSI or standalone executable, Windows Defender SmartScreen may display an alert:
@@ -145,17 +149,17 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 - SmartScreen assesses applications algorithmically based on download volume, telemetry, and established publisher reputation.
 - Even if an Authenticode certificate (standard OV or hardware-token EV) is applied, warning-free execution is not guaranteed immediately. Reputation must accrue over time across multiple downloads before SmartScreen warnings subside.
 
-### 3. Microsoft Smart App Control (SAC) Enforcement
-- On Windows 11 systems where **Smart App Control** is enabled in *Enforcement Mode*, execution and enforcement depend on Microsoft's cloud-based security evaluation and policy. Binaries that are unsigned or lack sufficient cloud reputation may be blocked by policy.
-- **Smart App Control is distinct from SmartScreen:** SmartScreen presents an informational prompt with an override option, whereas Smart App Control enforces security decisions based on cloud evaluation without an inline user override.
-- Code signing with an approved certificate establishes eligibility for SAC evaluation, but signing alone does not guarantee SAC clearance if Microsoft's cloud intelligence has not yet vetted the binary.
+### 3. Windows Application Control & Error 4551 Disclosures
+- **Windows Application Control Execution Interception:** Windows Application Control blocked execution of the unsigned application on the tested Windows 11 machine (Win32 Error `4551` / `0x11C7`, Code Integrity Operational Events `3033` and `3077` under Policy ID `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`).
+- **Policy-Dependent Behavior:** Execution behavior depends entirely on the active security policy of the host machine (such as Smart App Control or App Control for Business / WDAC). When an application control policy enforces strict code integrity, unsigned binaries are blocked at the kernel loader without an inline user override prompt.
+- **Code Signing Expectations:** Code signing with a trusted Authenticode certificate establishes verifiable publisher identity and allows eligibility for reputation evaluation. However, digital signing alone does not guarantee that every Application Control restriction will be automatically bypassed if the active policy mandates specific enterprise roots or whitelisted signers.
 
 ### 4. Benefits of Authenticode Signing
 - Digital signing provides cryptographic verification that binaries have not been tampered with in transit, confirms publisher identity, and enables reputation accumulation across releases.
 
 > [!CAUTION]
 > **Security Advice:**  
-> Never disable Microsoft Defender SmartScreen or Smart App Control to run untrusted software. If your organizational or personal security policy prohibits running unsigned software, please defer evaluating DeskPilot until officially signed releases become available.
+> Never disable Microsoft Defender SmartScreen, Smart App Control, or Windows Application Control policies to run untrusted software. If your organizational or personal security policy prohibits running unsigned software, please defer evaluating DeskPilot until officially signed releases become available.
 
 ---
 
@@ -178,20 +182,24 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 - **Evaluation Evidence:** The security model has been validated through architectural code review, boundary input fuzzing, and short-duration interactive sessions (4 to 11 minutes of continuous operation in disposable sandbox environments).
 - **Proportional Claims:** DeskPilot has **not undergone third-party penetration testing or binary exploit analysis**, and has not been subjected to multi-week stress testing, system sleep/wake recovery cycles, or severe memory pressure validation.
 
-### 5. Smart App Control Impact on Developer Builds
-- On hosts with Smart App Control enabled, unsigned Cargo build-scripts (`build.rs`) generated during local `cargo test` execution may be blocked. Automated testing for this release was conducted via frontend Vitest suites (113 tests passed) and clean disposable Windows Sandbox environments.
+### 5. Windows Application Control Impact on Developer Builds
+- On hosts where Windows Application Control or Smart App Control is enforced, unsigned Cargo build-scripts (`build.rs`) generated during local `cargo test` execution may be blocked. Full backend test execution for this release was validated via the hosted CI pipeline (208 tests passed in CI run `43657647459`), and frontend tests were validated via Vitest (170 tests passed).
 
 ---
 
 ## 8. Development Verification Summary
 
-- **Frontend Test Suite:** **113 passing tests** across 11 Vitest suites (`ApplicationCatalog`, `ProcessMonitor`, `SystemMonitor`, `LaunchButton`, `interaction`, `discovery`, `processes`, `launcher`, `system`, `ipc`, `ApplicationCard`).
-- **Backend Structural Test Definitions:** **180 test definitions identified** in Rust source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution of these backend test definitions was not verified on the local host baseline because Windows Smart App Control (SAC) blocked unsigned debug build-scripts. Total test definitions identified: 293 (113 frontend passing + 180 backend identified).
-- **Consolidated Release Verification Matrix (Phase 10.10):** Across comprehensive empirical QA testing, 27 distinct criteria were evaluated with **100% evidence coverage** (every criterion was investigated with empirical evidence, not that every criterion passed):
-  - **24 criteria passed** (100% of executable functional, UI, and installer lifecycle tests in clean Windows 11 Sandbox environments).
-  - **1 documented known limitation** (legacy v0.1.0 downgrade ingress).
-  - **1 blocked criterion** (runtime verification on genuine Windows 10, pending a dedicated test harness; not an unconditional blocker for the Windows 11 preview).
-  - **1 unsatisfied gate** (Authenticode digital signing for unrestricted general distribution).
+- **Frontend Test Suite Execution Evidence:** **170 passing tests** across 13 Vitest suites (`ApplicationCatalog`, `ProcessMonitor`, `SystemMonitor`, `LaunchButton`, `interaction`, `discovery`, `processes`, `launcher`, `system`, `ipc`, `ApplicationCard`, `ApplicationInspector`, `ProcessInspector`).
+- **Backend Test Suite Execution Evidence:** **208 passing tests** in Rust source (144 unit tests in `src/lib.rs`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`) verified in hosted CI run `43657647459`. Total automated tests executed and passing: **378 passed** (0 failed).
+- **TypeScript Compilation:** Zero compilation errors (`tsc --noEmit`).
+- **Testing Boundary Distinction:** These automated test suites execute in headless environments (Node.js/JSDOM for Vitest; console test harness for Cargo). They empirically validate logical correctness, state transitions, binary parsing, and IPC contracts; they do **not** constitute native GUI surface verification, live WebView2 window rendering, or runtime acceptance by host security policies.
+- **Consolidated Release Verification Matrix (Phase 10.10 & 12.3.9):**
+  - **Automated Tests:** 378 passing tests (170 frontend + 208 backend).
+  - **Installer Architecture:** Per-machine WiX MSI packaging verified with 0 ICE errors in CI.
+  - **1 documented known limitation:** legacy v0.1.0 downgrade ingress.
+  - **1 blocked criterion:** native Windows 11 runtime execution (blocked by Windows Application Control with Error 4551 on enforced hosts).
+  - **1 pending verification:** empirical runtime verification on genuine Windows 10 hardware/VMs.
+  - **1 unsatisfied gate:** Authenticode digital signing for unrestricted general distribution.
 
 ---
 

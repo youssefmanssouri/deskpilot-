@@ -7,8 +7,8 @@
 ![Rust](https://img.shields.io/badge/Rust-1.80%2B-DEA584?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-113%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
-![Test Definitions](https://img.shields.io/badge/Test%20Definitions-293%20Identified-blue?style=for-the-badge)
+![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-170%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
+![Automated Tests](https://img.shields.io/badge/Automated%20Tests-378%20Passing-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 <p align="center">
@@ -26,7 +26,7 @@
 Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 performance with modern UI ergonomics while enforcing defense-in-depth isolation boundaries between the web presentation layer and host operating system privileges.
 
 > [!NOTE]
-> **Controlled Developer Preview:** DeskPilot v0.1.1 is an early preview release intended for testing and technical evaluation on Windows 11. Binaries are currently unsigned, and Windows 10 runtime testing is pending. For comprehensive release and operational details, see [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+> **Controlled Developer Preview:** DeskPilot v0.1.1 is an early preview release intended for testing and technical evaluation. Binaries are currently unsigned. On the tested Windows 11 system, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime testing on Windows 10 remains pending. Automated test suites pass 100% (378 passing tests). For comprehensive release and operational details, see [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -121,7 +121,7 @@ Real-time query filtering utilizing a four-tier ranking hierarchy (exact match, 
                             │ Direct Win32 APIs
 ┌───────────────────────────▼────────────────────────────┐
 │                 Windows Native Platform                │
-│            (Win 11 Tested / Win 10 Pending)            │
+│       (Win 11 / Win 10 Architecture Compatible)        │
 │  • Advapi32 (Registry)       • Shell32 (Shortcuts)     │
 │  • Kernel32 (CreateProcessW) • User32 (Tray & Window)  │
 └────────────────────────────────────────────────────────┘
@@ -136,7 +136,7 @@ DeskPilot is designed around strict defense-in-depth principles:
 1. **Least-Privilege Web View:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, and Node.js primitives are completely disabled.
 2. **Path Traversal Guard:** Any filesystem access strictly sanitizes relative segments (`..`, `.\`, `%TEMP%`) and normalizes paths before verification.
 3. **No Shell Intermediate:** Launch commands are never formatted as string shell scripts. Process creation bypasses shell parsing entirely.
-4. **Local Data Sovereignty:** The audited DeskPilot application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. (Note: The embedded Microsoft WebView2 runtime, host Windows components, installers, and applications launched by the user operate under their own system runtime policies; see [`PRIVACY.md`](PRIVACY.md)).
+4. **Local Data Sovereignty:** The audited DeskPilot application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. The embedded installer includes the official Microsoft Edge WebView2 bootstrapper; if the WebView2 runtime is already present on the host system (standard on Windows 11 and modern updated Windows 10), installation proceeds entirely offline. Active internet access is required during installation only if the host machine lacks the WebView2 runtime. (Note: The embedded Microsoft WebView2 runtime, host Windows components, installers, and applications launched by the user operate under their own system runtime policies; see [`PRIVACY.md`](PRIVACY.md)).
 
 > [!NOTE]
 > **Scope of Security & Networking Observations:**  
@@ -144,15 +144,15 @@ DeskPilot is designed around strict defense-in-depth principles:
 
 ---
 
-## Windows Security, Code Signing & SmartScreen Disclosures
+## Windows Security, Code Signing & Application Control Disclosures
 
 DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeSignature` reports `NotSigned`):
 
-- **Unsigned Publisher Status:** An Authenticode certificate is not strictly necessary to run or evaluate an open-source preview, but unsigned binaries encounter Windows security prompts and Smart App Control enforcement.
+- **Unsigned Publisher Status:** An Authenticode certificate is not strictly necessary to run or evaluate an open-source preview in an unconstrained environment, but unsigned binaries encounter Windows security prompts and Application Control enforcement.
 - **Microsoft Defender SmartScreen:** When downloading or launching the unsigned installer or standalone executable, Windows Defender SmartScreen may display an *"Unknown Publisher"* warning (*"Windows protected your PC"*). SmartScreen calculates reputation algorithmically based on download telemetry; even when an Authenticode certificate is attached, warning-free execution is not guaranteed immediately until reputation accrues over time.
-- **Microsoft Smart App Control (SAC):** On Windows 11 systems where Smart App Control is active in *Enforcement Mode*, execution and enforcement depend on Microsoft's cloud-based security evaluation and policy. Binaries that are unsigned or lack sufficient cloud reputation may be blocked from running. Smart App Control policy enforcement is distinct from the SmartScreen informational prompt. Code signing can establish eligibility for SAC evaluation, but signing alone does not guarantee SAC clearance if the binary has not been vetted by Microsoft cloud intelligence.
+- **Windows Application Control & Error 4551:** Windows Application Control blocked execution of the unsigned application on the tested Windows 11 machine (Win32 Error `4551` / `0x11C7`, Code Integrity Operational Events `3033` and `3077` under Policy ID `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`). Application behavior depends entirely on the host machine's active security policy (such as Smart App Control or App Control for Business / WDAC). Applying an Authenticode certificate establishes eligibility for trust evaluation, but code signing alone does not guarantee that every Application Control restriction will be automatically bypassed if the active policy restricts execution to specific organizational roots or whitelisted publishers.
 - **Benefits of Authenticode Signing:** Authenticode digital signing provides cryptographic tamper resistance, verifies publisher identity, and serves as an anchor for building reputation across releases.
-- **Security Guidance:** Never disable Microsoft Defender SmartScreen or Smart App Control to bypass security warnings. If your security policies require digitally signed binaries, please defer evaluating DeskPilot until officially signed releases become available.
+- **Security Guidance:** Never disable Microsoft Defender SmartScreen, Smart App Control, or Windows Application Control policies to bypass security warnings. If your security policies require digitally signed binaries, please defer evaluating DeskPilot until officially signed releases become available.
 
 ---
 
@@ -171,12 +171,12 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 
 ## Release Checksums (v0.1.1)
 
-Verify release binaries against their official SHA-256 cryptographic digests:
+Verify release binaries against their official SHA-256 cryptographic digests (verified from GitHub Actions CI run `43657647459`, source commit `b642d38687cf5820efc88ef95cd06e4f1ed88b55`):
 
 | Artifact | File Name | Format | SHA-256 Cryptographic Checksum |
 | :--- | :--- | :---: | :--- |
-| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `d6b919a499b1901bb6e2706b92205ddbba0335db8aaa504c7383c415201764b1` |
-| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `8f1beec208cf460bfc74a4b1d907c182ae6b5b5ee114ee722ea9835c93c03493` |
+| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `73916656e59fc5d63fad9c9fe33cc3783699e17ab7f2996c0c54c78928c5cf5e` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `745a2c254ae3c4a9e8e9c5856465417cb7c13650e9b3314e1009f192ebef4513` |
 
 ---
 
@@ -207,7 +207,7 @@ npm.cmd install
 # Type-check TypeScript and build the production web bundle
 npm.cmd run build
 
-# Run frontend test suite (113 tests across 11 suites)
+# Run frontend test suite (170 tests across 13 suites)
 npm.cmd test -- --run
 
 # Launch full desktop application in development mode (with hot reload)
@@ -218,23 +218,28 @@ npm.cmd run tauri dev
 
 ## Automated Verification Suite
 
-DeskPilot maintains a total of **293 automated test definitions identified** across both frontend presentation and native backend layers:
+DeskPilot maintains a total of **378 automated tests executed and passing** across both frontend presentation and native backend layers:
 
-- **Frontend Execution Evidence:** **113 tests passed** at the audited baseline (`npm test -- --run`), executed across 11 Vitest suites.
-- **Rust Backend Structural Inventory:** **180 test definitions identified** in source (143 unit test definitions in `src/`, 37 integration test definitions in `tests/`). Execution of these backend test definitions was not verified on the local host baseline because Windows Smart App Control (SAC) blocked unsigned debug build-scripts.
-- **Consolidated Release Verification Matrix (Phase 10.10):** Across exhaustive QA testing, 27 distinct criteria were evaluated with **100% evidence coverage** (meaning every criterion was empirically investigated, not that every criterion passed). The evaluation resulted in:
-  - **24 criteria passed** (100% of executable functional, UI, and installer lifecycle tests in disposable Windows 11 Sandbox sessions ranging from 4 to 11 minutes).
-  - **1 documented known limitation** (legacy v0.1.0 downgrade ingress).
-  - **1 blocked criterion** (runtime verification on genuine Windows 10, pending a dedicated test harness; not an unconditional blocker for the Windows 11 preview).
-  - **1 unsatisfied gate** (Authenticode digital signing for unrestricted general distribution).
-  - This establishes verified operational behavior under test loads; it does not constitute long-term continuous reliability testing or third-party security certification.
+- **Frontend Test Suite Execution Evidence:** **170 tests passed** (`npm test -- --run`), executed across 13 Vitest suites.
+- **Backend Test Suite Execution Evidence:** **208 tests passed** (`cargo test --locked`), executed across unit and integration test suites in CI run `43657647459` (144 unit tests in `src/lib.rs`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`). Local execution on developer hosts may be blocked if Windows Application Control intercepts unsigned cargo test build-scripts.
+- **TypeScript Compilation:** Zero compilation errors (`tsc --noEmit`).
+- **Testing Boundary Distinction:** These automated test suites execute in headless environments (Node.js/JSDOM for Vitest; console test harness for Cargo). They empirically validate logical correctness, state transitions, binary parsing, and IPC contracts; they do **not** constitute native GUI surface verification, live WebView2 window rendering, or runtime acceptance by host security policies.
+- **Consolidated Release Verification Matrix (Phase 10.10 & 12.3.9):**
+  - **Automated Tests:** 378 passing tests (170 frontend + 208 backend).
+  - **Installer Architecture:** Per-machine WiX MSI packaging verified with 0 ICE errors in CI.
+  - **1 documented known limitation:** legacy v0.1.0 downgrade ingress.
+  - **1 blocked criterion:** native Windows 11 runtime execution (blocked by Windows Application Control with Error 4551 on enforced hosts).
+  - **1 pending verification:** empirical runtime verification on genuine Windows 10 hardware/VMs.
+  - **1 unsatisfied gate:** Authenticode digital signing for unrestricted general distribution.
 
-### Frontend Test Breakdown (Vitest — 113 Passing)
-- `ProcessMonitor.test.tsx` (16 tests): Read-only process list rendering, column sorting, CPU/memory formatting, truncation banner, stale response protection, and error recovery.
-- `ApplicationCatalog.test.tsx` (15 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
-- `SystemMonitor.test.tsx` (13 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, and uptime formatting.
-- `interaction.test.tsx` (22 tests): Component interaction, keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
+### Frontend Test Breakdown (Vitest — 170 Passing Across 13 Suites)
+- `SystemMonitor.test.tsx` (27 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, uptime formatting, and refresh timers.
+- `ApplicationCatalog.test.tsx` (26 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
+- `ProcessMonitor.test.tsx` (24 tests): Read-only process list rendering, column sorting, CPU/memory formatting, truncation banner, stale response protection, and error recovery.
+- `interaction.test.tsx` (31 tests): Component interaction, keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
 - `LaunchButton.test.tsx` (12 tests): Launch invocation, pending state, success confirmation reset, error recovery, and timer unmount hygiene.
+- `ApplicationInspector.test.tsx` (8 tests): Detailed metadata inspection, target path display, publisher provenance, and launch delegation.
+- `ProcessInspector.test.tsx` (7 tests): Process detail modal, PID and memory accounting, query-status badges, and read-only invariants.
 - `discovery.test.ts` (8 tests): Typed IPC contract validation for application discovery and payload integrity.
 - `processes.test.ts` (7 tests): Process enumeration, snapshot IPC contracts, status enum validation, and typed error deserialization.
 - `launcher.test.ts` (6 tests): Launch IPC contract validation and error mapping.
@@ -242,13 +247,11 @@ DeskPilot maintains a total of **293 automated test definitions identified** acr
 - `system.test.ts` (4 tests): Typed IPC contracts for system times, memory metrics, and drive partitions.
 - `ipc.test.ts` (4 tests): Typed error serialization and boundary protection.
 
-### Backend Test Inventory (Cargo / Rust — 180 Definitions Identified)
-- **Unit Test Definitions (`src-tauri/src/`):** **143 unit test definitions** identified across 19 source modules covering application discovery and registry scanning, application identity hashing, safe process launching and path traversal checks, process service and provider integration, system intelligence metrics (CPU, RAM, fixed disks, uptime), in-memory `AppState` concurrency, system tray lifecycle, error sanitization, and input guard validation.
-- **Integration Test Definitions (`src-tauri/tests/`):** **37 integration test definitions** identified across 3 integration suites:
-  - `catalog_launcher_integration_tests.rs` (13 test definitions): End-to-end catalog indexing, state transition, and launch validation.
-  - `discovery_unit_tests.rs` (12 test definitions): Multi-source discovery merging, shortcut inspection, and uninstaller filtering.
-  - `process_integration_tests.rs` (12 test definitions): Toolhelp32 process snapshot queries, bounded list truncation, access-denied handling, and exited-process status classification.
-- **Execution Note:** Execution of the backend test definitions is not verified at the current host baseline due to Windows Smart App Control (SAC) blocking unsigned debug build-scripts.
+### Backend Test Breakdown (Cargo / Rust — 208 Passing)
+- **Unit Tests (`src/lib.rs`):** **144 tests passed** covering application discovery and registry scanning, application identity hashing, safe process launching and path traversal checks, process service and provider integration, system intelligence metrics (CPU, RAM, fixed disks, uptime), in-memory `AppState` concurrency, system tray lifecycle, error sanitization, and input guard validation.
+- **CLI Integration Suite (`tests/cli.rs`):** **14 tests passed** validating command-line flags, version output, and argument validation.
+- **Core Integration Suite (`tests/core.rs`):** **38 tests passed** covering end-to-end catalog indexing, state transition, and launch validation.
+- **Security Integration Suite (`tests/security.rs`):** **12 tests passed** validating bounds checking, path traversal rejection, and process privilege detachment.
 
 ---
 
