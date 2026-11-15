@@ -18,7 +18,6 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let _ = tray::show_main_window(app);
         }))
-        .plugin(tauri_plugin_opener::init())
         .manage(app_state)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

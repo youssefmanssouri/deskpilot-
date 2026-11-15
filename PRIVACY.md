@@ -32,7 +32,7 @@ While the audited application code contains no implemented outbound network clie
 - As a Microsoft platform component, the WebView2 runtime may independently communicate with Microsoft platform services according to standard Microsoft Edge and Windows diagnostic policies. DeskPilot neither controls nor intercepts these runtime mechanisms.
 
 ### Windows Operating System Footprint
-- **Installation Files:** Standard installation via the DeskPilot MSI package places application binaries and assets into `%ProgramFiles%\DeskPilot` (or `%LOCALAPPDATA%\Programs\DeskPilot` for per-user installations) and registers standard Windows Add/Remove Programs registry keys.
+- **Installation Files:** Standard installation via the DeskPilot MSI package places application binaries and assets into `%ProgramFiles%\deskpilot` (per-machine installation requiring elevation) and registers standard Windows Add/Remove Programs registry keys.
 - **System Diagnostics:** Operating system security features (including SmartScreen, Smart App Control, and Windows Defender) and Windows Error Reporting operate independently at the OS level under Microsoft's system policies.
 
 ### Windows Installer (MSI) & WebView2 Bootstrapper

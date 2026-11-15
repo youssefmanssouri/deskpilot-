@@ -432,6 +432,13 @@ impl ApplicationLauncherService {
     /// Maps child process spawn errors to sanitized domain error categories,
     /// ensuring no executable paths, usernames, or operating system command details leak.
     pub fn sanitize_spawn_error(err: std::io::Error) -> DomainError {
+        const ERROR_ELEVATION_REQUIRED: i32 = 740;
+        if err.raw_os_error() == Some(ERROR_ELEVATION_REQUIRED) {
+            return DomainError::PermissionDenied(
+                "This application requires administrator privileges (elevation). DeskPilot launches applications with standard user privileges.".to_string(),
+            );
+        }
+
         match err.kind() {
             std::io::ErrorKind::NotFound => DomainError::Unavailable(
                 "Executable target file does not exist on disk.".to_string(),
@@ -1241,6 +1248,15 @@ mod tests {
         let msg3 = format!("{}", other);
         assert!(!msg3.contains("arbitrary"));
         assert!(msg3.contains("Failed to spawn process"));
+
+        let elevation_err = ApplicationLauncherService::sanitize_spawn_error(
+            std::io::Error::from_raw_os_error(740),
+        );
+        let msg4 = format!("{}", elevation_err);
+        assert!(msg4.contains("requires administrator privileges"));
+        assert!(msg4.contains("standard user privileges"));
+        assert!(!msg4.contains("C:\\"));
+        assert!(!msg4.contains("Users"));
     }
 
     #[test]
