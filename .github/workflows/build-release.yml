@@ -83,7 +83,7 @@ jobs:
             exit 1
           }
 
-          $expectedCargoLockBlob = "8bba7e3f0927a83ad98b4aee6a03faf694ea475f"
+          $expectedCargoLockBlob = "18c9a169b3dcb466971b2b969c067a3cc3b9eb84"
           $cargoBlobRaw = & git rev-parse HEAD:src-tauri/Cargo.lock
           $cargoBlobExit = $LASTEXITCODE
           if ($cargoBlobExit -ne 0) {
