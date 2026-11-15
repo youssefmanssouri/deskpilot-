@@ -63,6 +63,7 @@ Real-time query filtering utilizing a four-tier ranking hierarchy (exact match, 
 - **Scoped Working Directory Binding:** Resolves working directories directly to target executable parent directories or system roots, scoping the execution context and avoiding reliance on ambient working directories.
 - **Target Validation & Established Launch Flow:** Validates application identifiers and launch targets through backend security guards before invocation.
 - **Process Isolation:** Detaches launched applications into independent process trees without inheriting privileged handles.
+- **Elevation Requirement Handling:** Gracefully handles applications requiring administrator privileges (Win32 Error 740, `ERROR_ELEVATION_REQUIRED`), mapping OS errors to structured permission-denied messages rather than leaking system details or crashing.
 
 ### 📊 Native Win32 System Intelligence Monitoring
 - **Hardware & CPU Utilization:** Periodic non-blocking retrieval of total processor utilization across system cores via Windows `GetSystemTimes`.
@@ -133,7 +134,7 @@ Real-time query filtering utilizing a four-tier ranking hierarchy (exact match, 
 
 DeskPilot is designed around strict defense-in-depth principles:
 
-1. **Least-Privilege Web View:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, and Node.js primitives are completely disabled.
+1. **Least-Privilege Web View & Hardened CSP:** WebView2 operates with restricted permissions. Direct filesystem APIs, shell execution, external URL opener plugins, and Node.js primitives are completely disabled. A strict Content Security Policy (`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self';`) prevents execution of unapproved scripts or loading of untrusted remote resources.
 2. **Path Traversal Guard:** Any filesystem access strictly sanitizes relative segments (`..`, `.\`, `%TEMP%`) and normalizes paths before verification.
 3. **No Shell Intermediate:** Launch commands are never formatted as string shell scripts. Process creation bypasses shell parsing entirely.
 4. **Local Data Sovereignty:** The audited DeskPilot application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, or automatic update mechanism. DeskPilot's core functionality does not require an active internet connection after installation. The embedded installer includes the official Microsoft Edge WebView2 bootstrapper; if the WebView2 runtime is already present on the host system (standard on Windows 11 and modern updated Windows 10), installation proceeds entirely offline. Active internet access is required during installation only if the host machine lacks the WebView2 runtime. (Note: The embedded Microsoft WebView2 runtime, host Windows components, installers, and applications launched by the user operate under their own system runtime policies; see [`PRIVACY.md`](PRIVACY.md)).
@@ -158,9 +159,9 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 
 ## Installer Lifecycle, Downgrade Limitation & Retained Data
 
-- **Windows Installer Package:** The provided MSI installer (`deskpilot_0.1.1_x64_en-US.msi`) was evaluated across specific Windows Installer lifecycle transitions in clean sandbox testing:
-  - *Verified Successful Transitions:* Silent fresh installation (`msiexec /i`), major upgrade from v0.1.0 to v0.1.1 (clean binary replacement, single ARP registration, and user data survival), maintenance repair (`msiexec /fa`), and clean uninstallation (`msiexec /x`).
-  - *Known Limitation (Legacy Downgrade Ingress):* While DeskPilot v0.1.1 contains internal downgrade detection guards (`WIX_DOWNGRADE_DETECTED`), the legacy v0.1.0 installer predates commit `9169fcf` and lacks downgrade detection guards. When tested, executing the legacy v0.1.0 MSI over an existing v0.1.1 installation resulted in an unguarded downgrade back to v0.1.0. **Do not run the older v0.1.0 MSI over an existing v0.1.1 installation.** (Note: Only these specific lifecycle transitions were evaluated; not every theoretical upgrade or downgrade permutation has been tested).
+- **Windows Installer Package:** The provided MSI installer (`deskpilot_0.1.1_x64_en-US.msi`) configures a per-machine installation target (`C:\Program Files\deskpilot`), requiring administrative elevation during installation. Shortcuts are cleanly registered in the Start Menu (`ApplicationProgramsFolder`), Desktop (`CommonDesktopFolder`), and an uninstallation shortcut is placed in the application's Start Menu program group.
+  - *Verified Successful Transitions (Sandbox):* Silent fresh installation (`msiexec /i`), major upgrade from v0.1.0 to v0.1.1 (clean binary replacement, single ARP registration, and user data survival), maintenance repair (`msiexec /fa`), and clean uninstallation (`msiexec /x`).
+  - *Known Limitation (Legacy Downgrade Ingress):* While DeskPilot v0.1.1 contains internal downgrade detection guards (`WIX_DOWNGRADE_DETECTED`), the legacy v0.1.0 installer predates commit `9169fcf` and lacks downgrade detection guards. When tested, executing the legacy v0.1.0 MSI over an existing v0.1.1 installation resulted in an unguarded downgrade back to v0.1.0. **Do not run the older v0.1.0 MSI over an existing v0.1.1 installation.** (Note: Only these specific lifecycle transitions were evaluated in isolated sandbox environments; clean-machine installation lifecycle validation on dedicated production systems remains pending).
 - **Uninstallation & Retained Profile Data:** The uninstallation test (`msiexec /x`) demonstrated clean removal of application binaries (`C:\Program Files\deskpilot`), Start Menu and Desktop shortcuts, and the Add/Remove Programs registry entry. However, the test also demonstrated that user profile and runtime data created by the embedded WebView2 runtime remained on disk under:
   ```text
   %LOCALAPPDATA%\com.deskpilot.app\EBWebView
@@ -171,12 +172,16 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 
 ## Release Checksums (v0.1.1)
 
-Verify release binaries against their official SHA-256 cryptographic digests (verified from GitHub Actions CI run `43657647459`, source commit `b642d38687cf5820efc88ef95cd06e4f1ed88b55`):
+Verify release binaries against their official SHA-256 cryptographic digests (verified from GitHub Actions CI run `43748999208`, source commit `3a597f07c57e2e88b3d0950a176626a096b3f2f0`):
 
-| Artifact | File Name | Format | SHA-256 Cryptographic Checksum |
-| :--- | :--- | :---: | :--- |
-| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | `73916656e59fc5d63fad9c9fe33cc3783699e17ab7f2996c0c54c78928c5cf5e` |
-| **Standalone Executable** | `deskpilot.exe` | Win32 PE | `745a2c254ae3c4a9e8e9c5856465417cb7c13650e9b3314e1009f192ebef4513` |
+| Artifact | File Name | Format | Size (Bytes) | SHA-256 Cryptographic Checksum |
+| :--- | :--- | :---: | :---: | :--- |
+| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | 4,149,248 | `6a7f998493239adb9a2cd0e945df536ec3adf15b6197ecfeefe4668897fc66c4` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | 4,613,632 | `cde1573adea1899a2f74f4334eaf7fc3a702a2bcff4b31db3a23434998d35541` |
+
+> [!NOTE]
+> **Controlled Artifact Availability:**
+> The release artifacts above were generated and validated in hosted GitHub Actions CI run `43748999208` from commit `3a597f0`. Git tag and GitHub draft release asset synchronization are governed by controlled development gates; the artifacts are not yet published for general public download.
 
 ---
 
@@ -221,16 +226,18 @@ npm.cmd run tauri dev
 DeskPilot maintains a total of **378 automated tests executed and passing** across both frontend presentation and native backend layers:
 
 - **Frontend Test Suite Execution Evidence:** **170 tests passed** (`npm test -- --run`), executed across 13 Vitest suites.
-- **Backend Test Suite Execution Evidence:** **208 tests passed** (`cargo test --locked`), executed across unit and integration test suites in CI run `43657647459` (144 unit tests in `src/lib.rs`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`). Local execution on developer hosts may be blocked if Windows Application Control intercepts unsigned cargo test build-scripts.
+- **Backend Test Suite Execution Evidence:** **208 tests passed** (`cargo test --locked`), executed across unit and integration test suites in hosted CI run `43748999208` (144 unit tests in `src/lib.rs` including elevation handling test `test_spawn_error_elevation_required`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`). Local execution on developer hosts may be blocked if Windows Application Control intercepts unsigned cargo test build-scripts.
 - **TypeScript Compilation:** Zero compilation errors (`tsc --noEmit`).
 - **Testing Boundary Distinction:** These automated test suites execute in headless environments (Node.js/JSDOM for Vitest; console test harness for Cargo). They empirically validate logical correctness, state transitions, binary parsing, and IPC contracts; they do **not** constitute native GUI surface verification, live WebView2 window rendering, or runtime acceptance by host security policies.
-- **Consolidated Release Verification Matrix (Phase 10.10 & 12.3.9):**
+- **Consolidated Release Verification Matrix (Phase 12.6.5):**
   - **Automated Tests:** 378 passing tests (170 frontend + 208 backend).
   - **Installer Architecture:** Per-machine WiX MSI packaging verified with 0 ICE errors in CI.
   - **1 documented known limitation:** legacy v0.1.0 downgrade ingress.
   - **1 blocked criterion:** native Windows 11 runtime execution (blocked by Windows Application Control with Error 4551 on enforced hosts).
   - **1 pending verification:** empirical runtime verification on genuine Windows 10 hardware/VMs.
+  - **1 pending verification:** clean-machine installation lifecycle validation on dedicated Windows 11 hardware.
   - **1 unsatisfied gate:** Authenticode digital signing for unrestricted general distribution.
+  - **Non-functional UI placeholders:** Settings, Terminal, and Window Layout controls in the navigation sidebar are non-functional UI placeholders in this preview.
 
 ### Frontend Test Breakdown (Vitest — 170 Passing Across 13 Suites)
 - `SystemMonitor.test.tsx` (27 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, uptime formatting, and refresh timers.
