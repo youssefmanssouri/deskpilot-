@@ -7,8 +7,8 @@
 ![Rust](https://img.shields.io/badge/Rust-1.80%2B-DEA584?style=for-the-badge&logo=rust&logoColor=white)
 ![React](https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-170%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
-![Automated Tests](https://img.shields.io/badge/Automated%20Tests-378%20Passing-blue?style=for-the-badge)
+![Frontend Tests](https://img.shields.io/badge/Frontend%20Tests-175%20Passing-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)
+![Automated Tests](https://img.shields.io/badge/Automated%20Tests-383%20Passing-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 <p align="center">
@@ -26,7 +26,7 @@
 Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 performance with modern UI ergonomics while enforcing defense-in-depth isolation boundaries between the web presentation layer and host operating system privileges.
 
 > [!NOTE]
-> **Controlled Developer Preview:** DeskPilot v0.1.1 is an early preview release intended for testing and technical evaluation. Binaries are currently unsigned. On the tested Windows 11 system, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime testing on Windows 10 remains pending. Automated test suites pass 100% (378 passing tests). For comprehensive release and operational details, see [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+> **Controlled Developer Preview:** DeskPilot v0.1.1 is an early preview release intended for testing and technical evaluation. Binaries are currently unsigned. On the tested Windows 11 system, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime testing on Windows 10 remains pending. Automated test suites pass 100% (383 passing tests: 175 frontend + 208 backend). For comprehensive release and operational details, see [`RELEASE_NOTES_v0.1.1_PREVIEW.md`](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -172,16 +172,18 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 
 ## Release Checksums (v0.1.1)
 
-Verify release binaries against their official SHA-256 cryptographic digests (verified from GitHub Actions CI run `43748999208`, source commit `3a597f07c57e2e88b3d0950a176626a096b3f2f0`):
+Verify release binaries against their official SHA-256 cryptographic digests (verified from GitHub Actions CI run `43790285367`, binary source commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`):
 
 | Artifact | File Name | Format | Size (Bytes) | SHA-256 Cryptographic Checksum |
 | :--- | :--- | :---: | :---: | :--- |
-| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | 4,149,248 | `6a7f998493239adb9a2cd0e945df536ec3adf15b6197ecfeefe4668897fc66c4` |
-| **Standalone Executable** | `deskpilot.exe` | Win32 PE | 4,613,632 | `cde1573adea1899a2f74f4334eaf7fc3a702a2bcff4b31db3a23434998d35541` |
+| **MSI Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | 4,149,248 | `8d05ed157bbc6660f97f48bf1b00f5c44d0c096f1aecffd7f085449df7e9578e` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | 4,613,632 | `12be660a18f48f1451531dd0723b31839e7b625ee5835bcfe77ad1a27a65e26f` |
+| **Build Manifest** | `build-manifest.json` | JSON | 3,391 | `df61b0863da6907441337e76924f96b2870bd64ed4b67a83c4bc3b7c04c8675a` |
+| **Checksum Manifest** | `SHA256SUMS.txt` | Text | 176 | `14d613dba2464523506ab43c13e020c14ceb6f330306be3f91d2d8611de93d82` |
 
 > [!NOTE]
 > **Controlled Artifact Availability:**
-> The release artifacts above were generated and validated in hosted GitHub Actions CI run `43748999208` from commit `3a597f0`. Git tag and GitHub draft release asset synchronization are governed by controlled development gates; the artifacts are not yet published for general public download.
+> The release artifacts above were generated and validated in hosted GitHub Actions CI run `43790285367` from commit `0772d46`. The preview tag `v0.1.1-preview` points to this binary source commit. The draft release assets remain in a private preview release and are not published for general public download.
 
 ---
 
@@ -212,7 +214,7 @@ npm.cmd install
 # Type-check TypeScript and build the production web bundle
 npm.cmd run build
 
-# Run frontend test suite (170 tests across 13 suites)
+# Run frontend test suite (175 tests across 13 suites)
 npm.cmd test -- --run
 
 # Launch full desktop application in development mode (with hot reload)
@@ -223,27 +225,27 @@ npm.cmd run tauri dev
 
 ## Automated Verification Suite
 
-DeskPilot maintains a total of **378 automated tests executed and passing** across both frontend presentation and native backend layers:
+DeskPilot maintains a total of **383 automated tests executed and passing** across both frontend presentation and native backend layers:
 
-- **Frontend Test Suite Execution Evidence:** **170 tests passed** (`npm test -- --run`), executed across 13 Vitest suites.
-- **Backend Test Suite Execution Evidence:** **208 tests passed** (`cargo test --locked`), executed across unit and integration test suites in hosted CI run `43748999208` (144 unit tests in `src/lib.rs` including elevation handling test `test_spawn_error_elevation_required`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`). Local execution on developer hosts may be blocked if Windows Application Control intercepts unsigned cargo test build-scripts.
+- **Frontend Test Suite Execution Evidence:** **175 tests passed** (`npm test -- --run`), executed across 13 Vitest suites.
+- **Backend Test Suite Execution Evidence:** **208 tests passed** (`cargo test --locked`), executed across unit and integration test suites in hosted CI run `43790285367` across six targets (144 unit tests in `src/lib.rs` including elevation handling test `test_spawn_error_elevation_required`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`). Local execution on developer hosts may be blocked if Windows Application Control intercepts unsigned cargo test build-scripts.
 - **TypeScript Compilation:** Zero compilation errors (`tsc --noEmit`).
 - **Testing Boundary Distinction:** These automated test suites execute in headless environments (Node.js/JSDOM for Vitest; console test harness for Cargo). They empirically validate logical correctness, state transitions, binary parsing, and IPC contracts; they do **not** constitute native GUI surface verification, live WebView2 window rendering, or runtime acceptance by host security policies.
-- **Consolidated Release Verification Matrix (Phase 12.6.5):**
-  - **Automated Tests:** 378 passing tests (170 frontend + 208 backend).
+- **Consolidated Release Verification Matrix (Phase 12.11):**
+  - **Automated Tests:** 383 passing tests (175 frontend + 208 backend).
   - **Installer Architecture:** Per-machine WiX MSI packaging verified with 0 ICE errors in CI.
   - **1 documented known limitation:** legacy v0.1.0 downgrade ingress.
   - **1 blocked criterion:** native Windows 11 runtime execution (blocked by Windows Application Control with Error 4551 on enforced hosts).
   - **1 pending verification:** empirical runtime verification on genuine Windows 10 hardware/VMs.
   - **1 pending verification:** clean-machine installation lifecycle validation on dedicated Windows 11 hardware.
   - **1 unsatisfied gate:** Authenticode digital signing for unrestricted general distribution.
-  - **Non-functional UI placeholders:** Settings, Terminal, and Window Layout controls in the navigation sidebar are non-functional UI placeholders in this preview.
+  - **Sidebar Functional Honesty:** Non-functional Settings, Terminal, and Window Layout controls were removed from the navigation sidebar in Phase 12.8, and explicit manual refresh action with loading feedback and concurrency protection was added for Application Discovery.
 
-### Frontend Test Breakdown (Vitest — 170 Passing Across 13 Suites)
+### Frontend Test Breakdown (Vitest — 175 Passing Across 13 Suites)
 - `SystemMonitor.test.tsx` (27 tests): CPU gauge rendering, memory pressure indicators, storage partition cards, uptime formatting, and refresh timers.
-- `ApplicationCatalog.test.tsx` (26 tests): Discovery loading, error states, keyboard navigation, empty state handling, and refresh lifecycles.
+- `ApplicationCatalog.test.tsx` (30 tests): Discovery loading, error states, keyboard navigation, empty state handling, manual refresh triggering, loading states, and refresh lifecycles.
 - `ProcessMonitor.test.tsx` (24 tests): Read-only process list rendering, column sorting, CPU/memory formatting, truncation banner, stale response protection, and error recovery.
-- `interaction.test.tsx` (31 tests): Component interaction, keyboard-first arrow navigation, quick-select, focus traps, and modal controls.
+- `interaction.test.tsx` (32 tests): Component interaction, keyboard-first arrow navigation, quick-select, manual catalog refresh triggering, focus traps, and modal controls.
 - `LaunchButton.test.tsx` (12 tests): Launch invocation, pending state, success confirmation reset, error recovery, and timer unmount hygiene.
 - `ApplicationInspector.test.tsx` (8 tests): Detailed metadata inspection, target path display, publisher provenance, and launch delegation.
 - `ProcessInspector.test.tsx` (7 tests): Process detail modal, PID and memory accounting, query-status badges, and read-only invariants.

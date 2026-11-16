@@ -13,7 +13,7 @@ DeskPilot v0.1.1 is an open-source, local-first Windows command center engineere
 
 > [!IMPORTANT]
 > **Controlled Preview Status:**  
-> This release is a **controlled developer and early-adopter preview**, intended for technical evaluation and feedback. It is **not an unrestricted general consumer release**. Binaries are currently unsigned. On the tested Windows 11 machine, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime verification on Windows 10 remains pending. Automated test suites pass 100% (378 passing tests). Please review the [Windows Security & Code Signing](#6-windows-security-code-signing--smartscreen-disclosures) and [Known Limitations](#7-known-limitations--operational-advisories) sections before installation.
+> This release is a **controlled developer and early-adopter preview**, intended for technical evaluation and feedback. It is **not an unrestricted general consumer release**. Binaries are currently unsigned. On the tested Windows 11 machine, native process execution was intercepted by Windows Application Control (Win32 Error 4551), and empirical runtime verification on Windows 10 remains pending. Automated test suites pass 100% (383 passing tests: 175 frontend + 208 backend). Please review the [Windows Security & Code Signing](#6-windows-security-code-signing--smartscreen-disclosures) and [Known Limitations](#7-known-limitations--operational-advisories) sections before installation.
 
 DeskPilot is and will remain **100% free and open-source software**. There are no paid tiers, no commercial subscriptions, no feature gates, and no account requirements.
 
@@ -29,6 +29,7 @@ DeskPilot provides five core native capabilities built on least-privilege archit
 - **Memory-Safe Shortcut Parsing:** Handcrafted binary parser complying with the Microsoft Shell Link (`[MS-SHLLINK]`) specification with bounded file reads (64 KB ceiling) and CLSID validation.
 - **128-bit Collision-Resistant Application Identity:** Generates deterministic `app_<32-hex>` identifiers from normalized metadata to prevent duplicate merge collisions.
 - **Availability State Tracking:** Continuously categorizes entries as `Available`, `Unverified`, `IncompleteMetadata`, or `MissingTarget`.
+- **Manual Catalog Refresh (Phase 12.8):** Dedicated manual refresh button with real-time spin animation, `aria-busy` accessibility attributes, and concurrency guards preventing overlapping discovery scans.
 
 ### ⚡ Keyboard-First Real-Time Search & Ranking
 - Four-tier ranking hierarchy prioritizing exact title matches, prefix matches, substring matches, and publisher metadata.
@@ -41,7 +42,8 @@ DeskPilot provides five core native capabilities built on least-privilege archit
 - Launches processes detached from parent handle inheritance.
 - Detects when an application requires administrative elevation (Win32 Error 740, `ERROR_ELEVATION_REQUIRED`) and provides a structured permission-denied notification, explaining that DeskPilot launches applications with standard user privileges.
 
-### 🔒 Security Hardening & Attack Surface Reduction
+### 🔒 Security Hardening & Sidebar Functional Honesty
+- **Elimination of Non-Functional Placeholders (Phase 12.8):** Removed decorative, non-operational sidebar controls (Settings, Terminal Workspace, Window Layout) to ensure complete functional honesty across the UI surface.
 - **Unused Dependency Removal:** Completely eliminated unused `tauri-plugin-opener` plugin and its capability permissions from backend crates, builder initialization, and capability definitions.
 - **Content Security Policy (CSP):** Enforced strict Content Security Policy (`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self';`) restricting script execution, style loading, and media sources to trusted origins.
 - **Clean Installer Hierarchy:** WiX package configuration explicitly maps the uninstall shortcut to `ApplicationProgramsFolder` (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\deskpilot\`).
@@ -83,22 +85,24 @@ DeskPilot provides five core native capabilities built on least-privilege archit
 
 ## 4. Cryptographic Checksums & Artifact Integrity
 
-Every release binary is identified by its exact SHA-256 cryptographic digest. These checksums reflect the official build produced by GitHub Actions CI run `43748999208` from source commit `3a597f07c57e2e88b3d0950a176626a096b3f2f0`:
+Every release binary is identified by its exact SHA-256 cryptographic digest. These checksums reflect the official build produced by GitHub Actions CI run `43790285367` from binary source commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`:
 
 | Artifact | File Name | Format | Size (Bytes) | SHA-256 Digest |
 | :--- | :--- | :---: | :---: | :--- |
-| **Windows Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | 4,149,248 | `6a7f998493239adb9a2cd0e945df536ec3adf15b6197ecfeefe4668897fc66c4` |
-| **Standalone Executable** | `deskpilot.exe` | Win32 PE | 4,613,632 | `cde1573adea1899a2f74f4334eaf7fc3a702a2bcff4b31db3a23434998d35541` |
+| **Windows Installer** | `deskpilot_0.1.1_x64_en-US.msi` | WiX MSI | 4,149,248 | `8d05ed157bbc6660f97f48bf1b00f5c44d0c096f1aecffd7f085449df7e9578e` |
+| **Standalone Executable** | `deskpilot.exe` | Win32 PE | 4,613,632 | `12be660a18f48f1451531dd0723b31839e7b625ee5835bcfe77ad1a27a65e26f` |
+| **Build Manifest** | `build-manifest.json` | JSON | 3,391 | `df61b0863da6907441337e76924f96b2870bd64ed4b67a83c4bc3b7c04c8675a` |
+| **Checksum Manifest** | `SHA256SUMS.txt` | Text | 176 | `14d613dba2464523506ab43c13e020c14ceb6f330306be3f91d2d8611de93d82` |
 
 > [!NOTE]
 > **Controlled Artifact Availability:**
-> These binaries were compiled and verified within hosted GitHub Actions CI run `43748999208`. Git tag and GitHub draft release asset synchronization are governed by controlled development gates; the artifacts are not yet published for general consumer download.
+> These binaries were compiled and verified within hosted GitHub Actions CI run `43790285367`. The preview tag `v0.1.1-preview` points to binary source commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`. These artifacts are part of a private, controlled Developer Preview and are not published for general consumer download.
 
 ### PowerShell Verification Command
 ```powershell
 Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 # Expected output must match:
-# 6A7F998493239ADB9A2CD0E945DF536EC3ADF15B6197ECFEEFE4668897FC66C4
+# 8D05ED157BBC6660F97F48BF1B00F5C44D0C096F1AECFFD7F085449DF7E9578E
 ```
 
 ---
@@ -195,34 +199,31 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 - **Proportional Claims:** DeskPilot has **not undergone third-party penetration testing or binary exploit analysis**, and has not been subjected to multi-week stress testing, system sleep/wake recovery cycles, or severe memory pressure validation.
 
 ### 5. Windows Application Control Impact on Developer Builds
-- On hosts where Windows Application Control or Smart App Control is enforced, unsigned Cargo build-scripts (`build.rs`) generated during local `cargo test` execution may be blocked. Full backend test execution for this release was validated via the hosted CI pipeline (208 tests passed in hosted CI run `43748999208`), and frontend tests were validated via Vitest (170 tests passed).
+- On hosts where Windows Application Control or Smart App Control is enforced, unsigned Cargo build-scripts (`build.rs`) generated during local `cargo test` execution may be blocked. Full backend test execution for this release was validated via the hosted CI pipeline (208 tests passed in hosted CI run `43790285367`), and frontend tests were validated via Vitest (175 tests passed).
 
-### 6. Non-Functional UI Placeholders
-- In the navigation sidebar, the **Settings**, **Terminal**, and **Window Layout** buttons are currently decorative UI placeholders. They do not trigger active configuration dialogs, shell sessions, or layout management in this preview release.
-
-### 7. Clean-Machine Installation Lifecycle Pending
+### 6. Clean-Machine Installation Lifecycle Pending
 - While installer lifecycle transitions (install, repair, upgrade, uninstall) were evaluated in isolated sandbox environments, empirical validation on a clean, production-configured Windows 11 machine without developer tooling remains pending.
 
-### 8. Release Artifact Publication Status
-- The binaries, installer, and checksums documented in these release notes were generated and validated by hosted GitHub Actions CI run `43748999208` from commit `3a597f07c57e2e88b3d0950a176626a096b3f2f0`. The GitHub Draft Release `438757492` and preview tag `v0.1.1-preview` synchronization are pending completion of the release pipeline gates; these artifacts are not currently published for public download.
+### 7. Release Artifact Publication Status
+- The binaries, installer, and checksums documented in these release notes were generated and validated by hosted GitHub Actions CI run `43790285367` from commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`. The GitHub Draft Release `438757492` and preview tag `v0.1.1-preview` are synchronized with this commit; these artifacts remain in a private draft release and are not published for general public download.
 
 ---
 
 ## 8. Development Verification Summary
 
-- **Frontend Test Suite Execution Evidence:** **170 passing tests** across 13 Vitest suites (`ApplicationCatalog`, `ProcessMonitor`, `SystemMonitor`, `LaunchButton`, `interaction`, `discovery`, `processes`, `launcher`, `system`, `ipc`, `ApplicationCard`, `ApplicationInspector`, `ProcessInspector`).
-- **Backend Test Suite Execution Evidence:** **208 passing tests** in Rust source (144 unit tests in `src/lib.rs` including elevation handling test `test_spawn_error_elevation_required`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`) verified in hosted CI run `43748999208` from source commit `3a597f07c57e2e88b3d0950a176626a096b3f2f0`. Total automated tests executed and passing: **378 passed** (0 failed).
+- **Frontend Test Suite Execution Evidence:** **175 passing tests** across 13 Vitest suites (`ApplicationCatalog` [30], `ProcessMonitor` [24], `SystemMonitor` [27], `LaunchButton` [12], `interaction` [32], `discovery` [8], `processes` [7], `launcher` [6], `system` [4], `ipc` [4], `ApplicationCard` [6], `ApplicationInspector` [8], `ProcessInspector` [7]).
+- **Backend Test Suite Execution Evidence:** **208 passing tests** in Rust source across six targets (144 unit tests in `src/lib.rs` including elevation handling test `test_spawn_error_elevation_required`, 14 in `tests/cli.rs`, 38 in `tests/core.rs`, 12 in `tests/security.rs`) verified in hosted CI run `43790285367` from source commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`. Total automated tests executed and passing: **383 passed** (0 failed, 100% pass rate).
 - **TypeScript Compilation:** Zero compilation errors (`tsc --noEmit`).
 - **Testing Boundary Distinction:** These automated test suites execute in headless environments (Node.js/JSDOM for Vitest; console test harness for Cargo). They empirically validate logical correctness, state transitions, binary parsing, and IPC contracts; they do **not** constitute native GUI surface verification, live WebView2 window rendering, or runtime acceptance by host security policies.
-- **Consolidated Release Verification Matrix (Phase 12.6.5):**
-  - **Automated Tests:** 378 passing tests (170 frontend + 208 backend).
+- **Consolidated Release Verification Matrix (Phase 12.11):**
+  - **Automated Tests:** 383 passing tests (175 frontend + 208 backend).
   - **Installer Architecture:** Per-machine WiX MSI packaging verified with 0 ICE errors in CI.
   - **1 documented known limitation:** legacy v0.1.0 downgrade ingress.
   - **1 blocked criterion:** native Windows 11 runtime execution (blocked by Windows Application Control with Error 4551 on enforced hosts).
   - **1 pending verification:** empirical runtime verification on genuine Windows 10 hardware/VMs.
   - **1 pending verification:** clean-machine installation lifecycle validation on dedicated Windows 11 hardware.
   - **1 unsatisfied gate:** Authenticode digital signing for unrestricted general distribution.
-  - **Non-functional UI placeholders:** Settings, Terminal, and Window Layout controls in the navigation sidebar are non-functional UI placeholders.
+  - **Sidebar Functional Honesty:** Non-functional Settings, Terminal, and Window Layout controls were removed from the navigation sidebar in Phase 12.8, and explicit manual refresh action with loading feedback and concurrency protection was added for Application Discovery.
 
 ---
 
