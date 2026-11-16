@@ -312,6 +312,8 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       // Search toolbar rendered
       expect(html).toContain('Search Applications');
       expect(html).toContain('Refresh Catalog');
+      expect(html).toContain('aria-label="Refresh catalog"');
+      expect(html).toContain('title="Refresh application catalog"');
     });
 
     it('renders warning banner when partialFailures are present', () => {

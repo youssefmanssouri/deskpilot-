@@ -107,6 +107,23 @@ describe('Frontend Component Interaction & Root Integration', () => {
   });
 
   describe('Refresh Button & Discovery Concurrency', () => {
+    it('renders refresh button with accessible attributes and SVG icon', () => {
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i }) as HTMLButtonElement;
+      expect(refreshBtn).toBeDefined();
+      expect(refreshBtn.getAttribute('aria-label')).toBe('Refresh catalog');
+      expect(refreshBtn.getAttribute('title')).toBe('Refresh application catalog');
+      expect(refreshBtn.disabled).toBe(false);
+      expect(refreshBtn.querySelector('svg')).not.toBeNull();
+      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+    });
+
     it('transitions to scanning state and updates catalog on resolution', async () => {
       const refreshedResult: DiscoveryResultDto = {
         applications: [
@@ -150,6 +167,142 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(refreshBtn.textContent).toBe('Refresh Catalog');
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryByText('Visual Studio Code')).toBeNull();
+      expect(tauriCore.invoke).toHaveBeenCalledWith('discover_applications', undefined);
+    });
+
+    it('prevents overlapping discovery requests when clicked repeatedly while in-flight', async () => {
+      let resolveDiscovery!: (val: DiscoveryResultDto) => void;
+      const pendingPromise = new Promise<DiscoveryResultDto>((resolve) => {
+        resolveDiscovery = resolve;
+      });
+
+      vi.mocked(tauriCore.invoke).mockReturnValueOnce(pendingPromise);
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i }) as HTMLButtonElement;
+      expect(refreshBtn.disabled).toBe(false);
+
+      // Trigger first click
+      fireEvent.click(refreshBtn);
+      expect(refreshBtn.textContent).toBe('Scanning...');
+      expect(refreshBtn.disabled).toBe(true);
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+
+      // Subsequent clicks while in-flight
+      fireEvent.click(refreshBtn);
+      fireEvent.click(refreshBtn);
+
+      // Double-call guard ensures no overlapping requests
+      expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
+
+      // Resolve pending discovery
+      resolveDiscovery({
+        applications: [
+          {
+            id: 'app_new_resolved',
+            displayName: 'Concurrent Proof App',
+            publisher: 'Proof Corp',
+            sources: ['Registry (HKLM 64-bit)'],
+            availability: 'Available',
+            isInstalled: true,
+          },
+        ],
+        scannedSources: ['Registry (HKLM 64-bit)'],
+        partialFailures: [],
+        totalDiscovered: 1,
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Concurrent Proof App')).toBeDefined();
+      });
+
+      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.disabled).toBe(false);
+    });
+
+    it('displays error banner and resets loading state when discovery fails', async () => {
+      vi.mocked(tauriCore.invoke).mockRejectedValueOnce({
+        code: 'OPERATION_FAILED',
+        message: 'Registry scanning access denied',
+      });
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i }) as HTMLButtonElement;
+      fireEvent.click(refreshBtn);
+
+      // Displays error banner and resets button state
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeDefined();
+        expect(screen.getByText('Registry scanning access denied')).toBeDefined();
+      });
+
+      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.disabled).toBe(false);
+    });
+
+    it('retains catalog search and filtering functionality after manual refresh', async () => {
+      const refreshedResult: DiscoveryResultDto = {
+        applications: [
+          {
+            id: 'app_r1',
+            displayName: 'Alpha Editor',
+            publisher: 'Alpha Team',
+            sources: ['Registry (HKLM 64-bit)'],
+            availability: 'Available',
+            isInstalled: true,
+          },
+          {
+            id: 'app_r2',
+            displayName: 'Beta Browser',
+            publisher: 'Beta Org',
+            sources: ['Registry (HKLM 64-bit)'],
+            availability: 'Available',
+            isInstalled: true,
+          },
+        ],
+        scannedSources: ['Registry (HKLM 64-bit)'],
+        partialFailures: [],
+        totalDiscovered: 2,
+      };
+
+      vi.mocked(tauriCore.invoke).mockResolvedValueOnce(refreshedResult);
+
+      render(
+        <ApplicationCatalog
+          initialApplications={sampleApps}
+          autoDiscover={false}
+        />
+      );
+
+      const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i });
+      fireEvent.click(refreshBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText('Alpha Editor')).toBeDefined();
+        expect(screen.getByText('Beta Browser')).toBeDefined();
+      });
+
+      const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
+      fireEvent.change(searchInput, { target: { value: 'alpha' } });
+
+      expect(screen.getAllByText('Alpha Editor').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Beta Browser')).toBeNull();
+
+      fireEvent.change(searchInput, { target: { value: '' } });
+      expect(screen.getAllByText('Alpha Editor').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Beta Browser').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -309,7 +462,9 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       // Verifies primary launch button is rendered in inspector for selected application
-      expect(screen.getByRole('button', { name: `Launch ${sampleApps[0].displayName}` })).toBeDefined();
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: `Launch ${sampleApps[0].displayName}` })).toBeDefined();
+      });
 
       // Verifies persistent sidebar navigation is present
       const nav = screen.getByRole('navigation', { name: /views/i });
@@ -386,6 +541,48 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getAllByRole('region', { name: /system intelligence/i }).length).toBeGreaterThanOrEqual(1);
         expect(screen.getByRole('heading', { level: 1, name: /system intelligence/i })).toBeDefined();
       });
+    });
+
+    it('confirms non-functional sidebar controls are eliminated and functional navigation is intact', async () => {
+      const mockStatus: AppStatusDto = {
+        appName: 'DeskPilot',
+        version: '0.1.1',
+        status: 'ready',
+        uptimeSeconds: 60,
+        environment: 'development',
+      };
+
+      const mockDiscovery: DiscoveryResultDto = {
+        applications: sampleApps,
+        scannedSources: ['Registry (HKLM 64-bit)'],
+        partialFailures: [],
+        totalDiscovered: 3,
+      };
+
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_app_status') return mockStatus;
+        if (cmd === 'discover_applications') return mockDiscovery;
+        throw new Error(`Unexpected command ${cmd}`);
+      });
+
+      render(<App />);
+
+      // Non-functional sidebar placeholder controls must be completely absent from DOM
+      expect(screen.queryByRole('button', { name: /settings/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /terminal/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /window layout/i })).toBeNull();
+      expect(screen.queryByTitle(/settings/i)).toBeNull();
+      expect(screen.queryByTitle(/terminal/i)).toBeNull();
+      expect(screen.queryByTitle(/window layout/i)).toBeNull();
+      expect(document.querySelector('.sidebar-footer-actions')).toBeNull();
+
+      // Authentic functional navigation controls must be present and accessible
+      expect(screen.getByRole('button', { name: 'Applications' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Active Processes' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'System Intelligence' })).toBeDefined();
+
+      // Sidebar telemetry pulse remains present in app-sidebar-bottom
+      expect(document.querySelector('.sidebar-pulse-card')).not.toBeNull();
     });
 
     it('focuses the search input when global Ctrl+K shortcut is triggered', async () => {

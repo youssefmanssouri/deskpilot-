@@ -200,6 +200,7 @@ export function ApplicationCatalog({
   });
   const [hasDiscovered, setHasDiscovered] = useState<boolean>(initialApplications !== undefined);
   const discoveryRequestIdRef = useRef<number>(0);
+  const isLoadingRef = useRef<boolean>(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const hasAutoFocusedRef = useRef<boolean>(false);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
@@ -210,6 +211,10 @@ export function ApplicationCatalog({
   });
 
   const fetchDiscovery = useCallback(async () => {
+    if (isLoadingRef.current) {
+      return;
+    }
+    isLoadingRef.current = true;
     const requestId = ++discoveryRequestIdRef.current;
     setIsLoading(true);
     setErrorMsg(null);
@@ -228,6 +233,7 @@ export function ApplicationCatalog({
       }
     } finally {
       if (requestId === discoveryRequestIdRef.current) {
+        isLoadingRef.current = false;
         setIsLoading(false);
       }
     }
@@ -382,8 +388,22 @@ export function ApplicationCatalog({
               onClick={fetchDiscovery}
               disabled={isLoading}
               aria-label="Refresh catalog"
+              title="Refresh application catalog"
             >
-              {isLoading ? 'Scanning...' : 'Refresh Catalog'}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              <span>{isLoading ? 'Scanning...' : 'Refresh Catalog'}</span>
             </button>
           </div>
 
