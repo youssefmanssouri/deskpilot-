@@ -72,14 +72,14 @@ DeskPilot provides five core native capabilities built on least-privilege archit
 
 | Operating System | Architecture | Verification Status | Operational Notes |
 | :--- | :---: | :---: | :--- |
-| **Windows 11 (22H2 / 23H2 / 24H2)** | x64 | **Architecture Compatible / Native Runtime Blocked** | Structurally compatible. Passed automated suites and disposable Sandbox evaluation. However, on host machines enforcing Windows Application Control, native execution of the unsigned binary is currently blocked (Win32 Error 4551). |
+| **Windows 11 (22H2 / 23H2 / 24H2)** | x64 | **Sandbox Runtime Validated / Host Native Blocked** | Structurally compatible. Continuous installation and runtime execution succeeded in isolated Windows Sandbox (Phase 13.9). However, on developer hosts enforcing Windows Application Control (WDAC), native execution of the unsigned binary is intercepted (Win32 Error 4551). |
 | **Windows 10 (21H2 / 22H2)** | x64 | **Architecture Compatible / Runtime Verification Pending** | Win32 APIs and Evergreen WebView2 are structurally compatible. Windows 10 lacks Smart App Control, but genuine Windows 10 empirical runtime testing on physical or virtual hardware is still pending. |
 | **Windows on ARM (ARM64)** | ARM64 | **Outside Tested Scope** | Compiles natively for `x86_64-pc-windows-msvc`; native ARM64 binaries are not built, and x64 emulation is unverified. |
 | **Legacy Windows (7 / 8 / 8.1)** | Any | **Outside Target Scope** | DeskPilot relies on Windows 10+ Win32 APIs and the Evergreen WebView2 runtime. |
 
 > [!NOTE]
-> **Platform Scope for Preview:**  
-> While underlying Win32 APIs and WebView2 are standard across Windows 10 and 11, compatibility on Windows 10 has not yet been verified through empirical runtime execution on physical or virtual Windows 10 hardware. On Windows 11, native process execution is subject to active Windows Application Control policies.
+> **Platform Scope & Validation Boundaries for Preview:**  
+> While underlying Win32 APIs and WebView2 are standard across Windows 10 and 11, compatibility on Windows 10 has not yet been verified through empirical runtime execution on physical or virtual Windows 10 hardware. On Windows 11, runtime execution was validated inside Windows Sandbox (using silent `/qn` MSI installation); native process execution on physical hosts remains subject to active Windows Application Control policies, and third-party GUI application launching remains unverified in the sandbox environment.
 
 ---
 
@@ -104,6 +104,17 @@ Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 # Expected output must match:
 # 8D05ED157BBC6660F97F48BF1B00F5C44D0C096F1AECFFD7F085449DF7E9578E
 ```
+
+### Executable Hash Provenance & Installed Payload Reconciliation
+
+When verifying the installed binary at `C:\Program Files\DeskPilot\deskpilot.exe` (or when extracting the MSI payload via administrative extraction `msiexec /a`), the resulting executable produces a different cryptographic hash:
+- **MSI-Embedded Payload SHA-256:** `52e641f0055e0636cfa170f35cd2d75dcff9389a9b0bd5f68d15ae1df425333a`
+- **Standalone Release Binary SHA-256:** `12be660a18f48f1451531dd0723b31839e7b625ee5835bcfe77ad1a27a65e26f`
+
+This hash variance was forensically investigated and reconciled in Phase 13.11:
+1. **Compilation Origin:** Both executables originated from the exact same compilation invocation in GitHub Actions CI run `43790285367` (`windows-2022`, compile timestamp `2026-11-16 02:22:24 UTC`, PE `TimeDateStamp = 1794795744`).
+2. **The 3-Byte Bundler Tag:** The files are **not completely byte-identical**: exactly **3 bytes** differ at file offset `0x0041E5C7` in the `.rdata` section. The Tauri CLI bundler (`crates/tauri-bundler/src/bundle.rs`) automatically stamps a duplicate of the binary with package-type marker `__TAURI_BUNDLE_TYPE_VAR_MSI` prior to WiX packaging, whereas the standalone binary output in `target/release` retains the default `__TAURI_BUNDLE_TYPE_VAR_UNK` marker.
+3. **Machine Code Identity:** All 3,782,656 bytes of machine instructions in the `.text` section, as well as the `.data`, `.pdata`, `.rsrc`, and `.reloc` sections, are **100% byte-for-byte identical**. There is zero divergence in executable logic, security guards, or embedded frontend assets.
 
 ---
 
@@ -155,18 +166,20 @@ Sandbox testing in Phase 10.9C evaluated specific installer transitions:
 
 DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeSignature` reports `NotSigned`):
 
-### 1. Unsigned Publisher Status
-- An Authenticode code signing certificate is not strictly necessary to publish, download, or evaluate an open-source preview release in an unconstrained environment.
-- However, unsigned binaries lack cryptographic publisher attribution and encounter standard Windows operating system defense prompts and Application Control policies.
+### 1. Controlled Developer Evaluation & Unsigned Status
+- The v0.1.1 preview binaries are unsigned. Code signing has not been completed, and no signing date has been scheduled.
+- This release is intended strictly for controlled developer evaluation and technical feedback in non-production environments, not for unrestricted enterprise deployment.
+- Unsigned binaries lack cryptographic publisher attribution and encounter standard Windows operating system defense prompts and Application Control policies.
 
 ### 2. Microsoft Defender SmartScreen Reputation & Warnings
 - When downloading and running the unsigned MSI or standalone executable, Windows Defender SmartScreen may display an alert:
   *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."*
 - SmartScreen assesses applications algorithmically based on download volume, telemetry, and established publisher reputation.
 - Even if an Authenticode certificate (standard OV or hardware-token EV) is applied, warning-free execution is not guaranteed immediately. Reputation must accrue over time across multiple downloads before SmartScreen warnings subside.
+- **Integrity Verification Guidance:** Users should obtain binaries exclusively from the official project repository release (`youssefmanssouri/deskpilot-`) and validate published SHA-256 checksums before running any file. Never download binaries from untrusted third-party mirrors.
 
 ### 3. Windows Application Control & Error 4551 Disclosures
-- **Windows Application Control Execution Interception:** Windows Application Control blocked execution of the unsigned application on the tested Windows 11 machine (Win32 Error `4551` / `0x11C7`, Code Integrity Operational Events `3033` and `3077` under Policy ID `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`).
+- **Windows Application Control Execution Interception:** Windows Application Control blocked execution of the unsigned application on the tested developer Windows 11 machine (Win32 Error `4551` / `0x11C7`, Code Integrity Operational Events `3033` and `3077` under Policy ID `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`).
 - **Policy-Dependent Behavior:** Execution behavior depends entirely on the active security policy of the host machine (such as Smart App Control or App Control for Business / WDAC). When an application control policy enforces strict code integrity, unsigned binaries are blocked at the kernel loader without an inline user override prompt.
 - **Code Signing Expectations:** Code signing with a trusted Authenticode certificate establishes verifiable publisher identity and allows eligibility for reputation evaluation. However, digital signing alone does not guarantee that every Application Control restriction will be automatically bypassed if the active policy mandates specific enterprise roots or whitelisted signers.
 
@@ -175,7 +188,7 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 
 > [!CAUTION]
 > **Security Advice:**  
-> Never disable Microsoft Defender SmartScreen, Smart App Control, or Windows Application Control policies to run untrusted software. If your organizational or personal security policy prohibits running unsigned software, please defer evaluating DeskPilot until officially signed releases become available.
+> Never disable Microsoft Defender SmartScreen, Smart App Control, or Windows Application Control policies to run untrusted software. Do not instruct users to bypass enterprise security controls or blindly override Windows warnings. If your organizational or personal security policy requires signed binaries or prohibits running unsigned software, please defer evaluating DeskPilot until officially signed releases become available.
 
 ---
 
@@ -204,7 +217,16 @@ DeskPilot v0.1.1 release binaries are currently **unsigned** (`Get-AuthenticodeS
 ### 6. Clean-Machine Installation Lifecycle Pending
 - While installer lifecycle transitions (install, repair, upgrade, uninstall) were evaluated in isolated sandbox environments, empirical validation on a clean, production-configured Windows 11 machine without developer tooling remains pending.
 
-### 7. Release Artifact Publication Status
+### 7. Windows 11 Sandbox Runtime Verification Scope & Protocol Boundaries (Phase 13)
+- **Continuous Execution Validated:** In Phase 13.9, continuous end-to-end execution (`START` → `ISOLATION` → `INSTALL` → `VERIFY` → `LAUNCH` → `TEST` → `SHUTDOWN`) was successfully verified in Windows Sandbox. DeskPilot started interactively, initialized its Evergreen WebView2 runtime, exposed 373 UIAutomation elements, supported catalog search and empty-state filtering, rendered process monitor records with manual snapshot refresh, displayed live Win32 system intelligence metrics, enforced single-instance mutex focus forwarding, and terminated cleanly.
+- **Silent Installation Protocol:** The MSI installer was validated using silent execution (`msiexec /i ... /qn`). Interactive graphical installer wizard dialog behavior was not tested.
+- **Application Launcher Scope:** DeskPilot self-launch (exercising IPC, process spawning, and single-instance exit) and separate process lifecycle creation (`cmd.exe`) were confirmed. Because Windows Sandbox base images lack provisioned inbox UWP/MSIX applications (Notepad/Calculator), launching third-party GUI applications from the catalog remains unverified in this test environment.
+- **Ephemeral Guest Artifact Retention:** Original guest-generated `.png` screenshots and verbose MSI installation logs were stored on the disposable container disk and were destroyed upon container shutdown; host verification rests on the real-time execution commands, integer exit codes, and UIA telemetry recorded in the test trajectory.
+
+### 8. Windows 10 Empirical Verification Pending
+- DeskPilot is structurally compatible with Windows 10 (1809+) via standard Win32 APIs and Evergreen WebView2. However, empirical runtime execution and testing on physical or virtual Windows 10 hardware has not yet been conducted.
+
+### 9. Release Artifact Publication Status
 - The binaries, installer, and checksums documented in these release notes were generated and validated by hosted GitHub Actions CI run `43790285367` from commit `0772d4661589f2e87a42bc2527b165f3c92cc3ee`. The GitHub Draft Release `438757492` and preview tag `v0.1.1-preview` are synchronized with this commit; these artifacts remain in a private draft release and are not published for general public download.
 
 ---
