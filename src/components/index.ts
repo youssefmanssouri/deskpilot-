@@ -9,3 +9,4 @@ export * from './CpuSparkline';
 export * from './useSystemMetrics';
 export * from './useApplicationLauncher';
 
+export * from './HomeView';
