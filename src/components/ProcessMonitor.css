@@ -46,7 +46,7 @@
 
 .process-search-icon {
   position: absolute;
-  left: 10px;
+  left: 14px;
   width: 16px;
   height: 16px;
   color: var(--dp-text-muted);
@@ -66,6 +66,16 @@
   box-shadow: var(--dp-shadow-xs);
   outline: none;
   transition: border-color var(--dp-transition-fast), box-shadow var(--dp-transition-fast);
+}
+
+/* App.css also styles .process-search-input (loaded later, same specificity) and resets
+   its padding, which put the search icon on top of the placeholder text.
+   This more specific rule keeps room for the icon. */
+.process-search-input-box .process-search-input {
+  height: 40px;
+  padding-left: 40px;
+  border-radius: var(--dp-radius-pill);
+  font-size: var(--dp-font-size-md);
 }
 
 .process-search-input:focus {
@@ -97,7 +107,7 @@
   color: var(--dp-text-primary);
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-medium);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   box-shadow: var(--dp-shadow-xs);
   cursor: pointer;
   white-space: nowrap;
@@ -171,9 +181,9 @@
 }
 
 .process-filter-chip.active {
-  background-color: var(--dp-accent-subtle);
-  color: var(--dp-accent-primary);
-  border-color: var(--dp-border-selected);
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+  border-color: var(--dp-accent-primary);
   font-weight: var(--dp-font-weight-semibold);
 }
 
@@ -196,8 +206,9 @@
 }
 
 .process-filter-chip.active .process-filter-badge {
-  background-color: #ffffff;
-  color: var(--dp-accent-primary);
+  background-color: transparent;
+  color: var(--dp-text-on-accent);
+  opacity: 0.75;
 }
 
 /* ==========================================================================
@@ -225,15 +236,15 @@
   font-size: var(--dp-font-size-xs);
   font-weight: var(--dp-font-weight-medium);
   color: var(--dp-status-missing);
-  background-color: #ffffff;
+  background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-status-missing-border);
-  border-radius: var(--dp-radius-xs);
+  border-radius: var(--dp-radius-pill);
   cursor: pointer;
   transition: background-color var(--dp-transition-fast);
 }
 
 .process-retry-button:hover {
-  background-color: #fef2f2;
+  background-color: var(--dp-status-missing-bg);
 }
 
 .process-truncation-banner {
@@ -295,7 +306,7 @@
 .process-table-container {
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-lg);
+  border-radius: var(--dp-radius-xl);
   box-shadow: var(--dp-shadow-sm);
   overflow-x: auto;
   width: 100%;

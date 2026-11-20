@@ -25,7 +25,7 @@ describe('ApplicationCard Component', () => {
     expect(html).toContain('v1.2.3');
     expect(html).toContain('Registry (HKLM 64-bit)');
     expect(html).toContain('Start Menu (User)');
-    expect(html).toContain('Available');
+    expect(html).toContain('>Ready<');
     expect(html).toContain('badge-available');
 
     // Accessibility attributes present
@@ -33,8 +33,8 @@ describe('ApplicationCard Component', () => {
     expect(html).toContain('id="app-card-title-app_a1b2c3d4e5f6789012345678abcdef01"');
 
     // Renders LaunchButton with applicationId
-    expect(html).toContain('aria-label="Launch application app_a1b2c3d4e5f6789012345678abcdef01"');
-    expect(html).toContain('Launch');
+    expect(html).toContain('aria-label="Open application app_a1b2c3d4e5f6789012345678abcdef01"');
+    expect(html).toContain('>Open<');
   });
 
   it('renders "Unknown Publisher" when publisher is undefined', () => {

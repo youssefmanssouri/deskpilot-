@@ -81,7 +81,7 @@ export function getLoadColorClass(percent: number): string {
 }
 
 /**
- * SystemMonitor renders the System Intelligence & Resource Ledger dashboard.
+ * SystemMonitor renders the System resources view.
  *
  * Guarantees:
  * - Precision Command design: high information density, factual data, no fabricated metrics.
@@ -119,12 +119,11 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
     <div
       className={`system-monitor-container ${className}`.trim()}
       role="region"
-      aria-label="System Intelligence Dashboard"
+      aria-label="System resources"
     >
       {/* Top Toolbar */}
       <div className="system-toolbar">
         <div className="system-toolbar-info">
-          <h2 className="system-title">System Intelligence & Resource Ledger</h2>
           <div className="system-subtitle-row">
             {lastUpdated && (
               <span className="system-timestamp">
@@ -133,7 +132,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
             )}
             {isPaused && refreshMode !== 'manual' && (
               <span className="system-badge paused-badge" role="status">
-                Polling Paused (Window Inactive)
+                Updates paused while DeskPilot is in the background
               </span>
             )}
           </div>
@@ -142,18 +141,18 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
         <div className="system-toolbar-actions">
           <div className="system-refresh-mode-wrapper">
             <label htmlFor="system-refresh-mode" className="system-mode-label">
-              Refresh Mode
+              Update every
             </label>
             <select
               id="system-refresh-mode"
               className="system-mode-select"
               value={refreshMode}
               onChange={(e) => setRefreshMode(e.target.value as RefreshMode)}
-              aria-label="Select auto-refresh interval"
+              aria-label="Update interval"
             >
-              <option value="manual">Manual</option>
-              <option value="3s">Auto (3s)</option>
-              <option value="5s">Auto (5s)</option>
+              <option value="manual">Only when I refresh</option>
+              <option value="3s">3 seconds</option>
+              <option value="5s">5 seconds</option>
             </select>
           </div>
 
@@ -167,14 +166,14 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
             {isLoading ? (
               <>
                 <span className="spinner-icon" aria-hidden="true" />
-                <span>Reading...</span>
+                <span>Updating…</span>
               </>
             ) : (
               <>
                 <svg
                   width="14"
                   height="14"
-                  viewBox="0 0 16 16"
+                  viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -182,10 +181,8 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                   strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <path d="M14 2v4h-4" />
-                  <path d="M2 14v-4h4" />
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L20 7" />
-                  <path d="M12.49 7a9 9 0 0 1-14.85 3.36L4 9" />
+                  <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                  <path d="M21 3v5h-5" />
                 </svg>
                 <span>Refresh</span>
               </>
@@ -225,7 +222,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
             {/* CPU Card */}
             <section className="system-card" role="region" aria-label="Processor (CPU) Metrics">
               <div className="system-card-header">
-                <span className="system-card-title">Processor (CPU)</span>
+                <span className="system-card-title">Processor</span>
                 <span className="system-badge arch-badge">{metrics.cpu.architecture}</span>
               </div>
               <div className="system-card-body">
@@ -235,7 +232,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
                       {metrics.cpu.utilizationPercent.toFixed(1)}%
                     </span>
                     <span className="system-metric-sub">
-                      {metrics.cpu.logicalCores} Logical Cores
+                      {metrics.cpu.logicalCores} logical cores
                     </span>
                   </div>
                   <CpuSparkline samples={cpuHistory} />
@@ -268,7 +265,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
             {/* RAM Card */}
             <section className="system-card" role="region" aria-label="Physical RAM Metrics">
               <div className="system-card-header">
-                <span className="system-card-title">Memory (RAM)</span>
+                <span className="system-card-title">Memory</span>
                 <span className="system-badge mem-badge">
                   {metrics.memory.usedPercent.toFixed(1)}%
                 </span>
@@ -276,11 +273,11 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
               <div className="system-card-body">
                 <div className="system-metric-hero-block">
                   <span className="system-metric-hero">
-                    {formatBytes(metrics.memory.usedBytes)} Active
+                    {formatBytes(metrics.memory.usedBytes)} in use
                   </span>
                   <span className="system-metric-sub">
-                    / {formatBytes(metrics.memory.availableBytes)} Available (
-                    {formatBytes(metrics.memory.totalBytes)} Total)
+                    of {formatBytes(metrics.memory.totalBytes)} ·{' '}
+                    {formatBytes(metrics.memory.availableBytes)} free
                   </span>
                 </div>
 
@@ -321,18 +318,13 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
           <section
             className="system-storage-ledger-section"
             role="region"
-            aria-label="Fixed Disk Storage Ledger"
+            aria-label="Drives"
           >
             <div className="system-section-header">
               <div className="system-section-title-group">
-                <h3 className="system-section-heading">Fixed Disk Storage</h3>
+                <h3 className="system-section-heading">Drives</h3>
                 <span className="system-badge storage-badge">
-                  <span>Local Storage</span>
-                  <span> • </span>
-                  <span>
-                    {metrics.storage.drives.length} Volume
-                    {metrics.storage.drives.length === 1 ? '' : 's'}
-                  </span>
+                  {metrics.storage.drives.length} {metrics.storage.drives.length === 1 ? 'drive' : 'drives'}
                 </span>
               </div>
               <span className="system-section-sub">
@@ -354,7 +346,7 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
 
             {metrics.storage.drives.length === 0 ? (
               <div className="system-storage-empty" role="status">
-                <p>No fixed storage volumes detected.</p>
+                <p>No drives found.</p>
               </div>
             ) : (
               <div className="system-table-responsive-wrapper">
@@ -430,43 +422,43 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
           <section
             className="system-runtime-ledger-section"
             role="region"
-            aria-label="System Runtime Ledger"
+            aria-label="Windows and DeskPilot uptime"
           >
             <div className="system-card">
               <div className="system-card-header">
-                <span className="system-card-title">System Uptime</span>
+                <span className="system-card-title">Uptime</span>
                 <span className="system-badge os-badge">{metrics.system.osName}</span>
               </div>
               <div className="system-card-body">
                 <div className="system-runtime-grid">
                   <div className="runtime-metric-tile">
-                    <span className="runtime-label">System OS Uptime</span>
+                    <span className="runtime-label">PC running for</span>
                     <strong className="runtime-hero">
                       {formatUptime(metrics.system.uptimeSeconds)}
                     </strong>
-                    <span className="runtime-caption">Operating system elapsed time</span>
+                    <span className="runtime-caption">Since Windows last started</span>
                   </div>
 
                   <div className="runtime-metric-tile">
-                    <span className="runtime-label">DeskPilot Session Uptime</span>
+                    <span className="runtime-label">DeskPilot running for</span>
                     <strong className="runtime-hero">
                       {formatUptime(metrics.system.appUptimeSeconds)}
                     </strong>
-                    <span className="runtime-caption">Current desktop process lifetime</span>
+                    <span className="runtime-caption">Since DeskPilot started</span>
                   </div>
 
                   <div className="runtime-metric-tile">
                     <span className="runtime-label">Architecture</span>
                     <strong className="runtime-val">{metrics.system.architecture}</strong>
-                    <span className="runtime-caption">Windows target instruction set</span>
+                    <span className="runtime-caption">Processor architecture</span>
                   </div>
 
                   <div className="runtime-metric-tile">
-                    <span className="runtime-label">Telemetry Timestamp</span>
+                    <span className="runtime-label">Last updated</span>
                     <strong className="runtime-val">
                       {new Date(metrics.sampledAtMs).toLocaleTimeString()}
                     </strong>
-                    <span className="runtime-caption">Epoch sample time</span>
+                    <span className="runtime-caption">Time of the latest reading</span>
                   </div>
                 </div>
               </div>

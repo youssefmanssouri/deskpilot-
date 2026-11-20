@@ -1,67 +1,70 @@
-/* DeskPilot — Precision Command Design System & Application Shell */
+/* DeskPilot design tokens and application shell. Every colour in src/ must come from a --dp-* token. */
 
 :root {
+  color-scheme: light;
+
   /* ==========================================================================
-     Surfaces & Canvas (Light Theme Desktop Utility)
+     Surfaces (monochrome, light)
      ========================================================================== */
-  --dp-surface-canvas: #f8f9fa;
+  --dp-surface-canvas: #f2f2f4;
   --dp-surface-sidebar: #ffffff;
   --dp-surface-card: #ffffff;
-  --dp-surface-subtle: #f1f3f5;
-  --dp-surface-hover: #f1f5f9;
-  --dp-surface-active: #e2e8f0;
-  --dp-surface-selected: #eff6ff;
+  --dp-surface-subtle: #f1f1f3;
+  --dp-surface-hover: #ececef;
+  --dp-surface-active: #e2e2e6;
+  --dp-surface-selected: #ececef;
   --dp-surface-header: #ffffff;
 
   /* ==========================================================================
-     Typography / Text Colors (High Contrast WCAG AA / AAA)
+     Text (contrast measured on --dp-surface-card; all >= 4.5:1 except disabled)
      ========================================================================== */
-  --dp-text-primary: #111827;       /* 16.1:1 contrast on white */
-  --dp-text-secondary: #374151;     /* 9.6:1 contrast on white */
-  --dp-text-muted: #6b7280;         /* 4.6:1 contrast on white */
-  --dp-text-disabled: #9ca3af;
+  --dp-text-primary: #111113;
+  --dp-text-secondary: #3f3f46;
+  --dp-text-muted: #5f5f67;
+  --dp-text-disabled: #a1a1aa;
   --dp-text-on-accent: #ffffff;
 
   /* ==========================================================================
      Borders & Dividers
      ========================================================================== */
-  --dp-border-subtle: #e5e7eb;
-  --dp-border-medium: #d1d5db;
-  --dp-border-strong: #9ca3af;
-  --dp-border-selected: #bfdbfe;
+  --dp-border-subtle: #e4e4e8;
+  --dp-border-medium: #d4d4d8;
+  --dp-border-strong: #a1a1aa;
+  --dp-border-selected: #111113;
 
   /* ==========================================================================
-     Accent & Focus Ring (Precision Blue)
+     Accent & Focus (ink: black in light mode, white in dark mode)
      ========================================================================== */
-  --dp-accent-primary: #2563eb;
-  --dp-accent-hover: #1d4ed8;
-  --dp-accent-active: #1e40af;
-  --dp-accent-subtle: #dbeafe;
-  --dp-focus-ring: #2563eb;
+  --dp-accent-primary: #111113;
+  --dp-accent-hover: #2a2a2e;
+  --dp-accent-active: #000000;
+  --dp-accent-subtle: #e4e4e8;
+  --dp-focus-ring: #111113;
 
   /* ==========================================================================
-     Semantic Status Colors
+     Semantic Status (the only hues in the UI; text colours meet AA on card and on their bg)
      ========================================================================== */
-  --dp-status-available: #059669;
+  --dp-status-available: #047857;
   --dp-status-available-bg: #ecfdf5;
   --dp-status-available-border: #a7f3d0;
 
-  --dp-status-unverified: #d97706;
+  --dp-status-unverified: #b45309;
   --dp-status-unverified-bg: #fffbeb;
   --dp-status-unverified-border: #fde68a;
 
-  --dp-status-missing: #dc2626;
+  --dp-status-missing: #b91c1c;
   --dp-status-missing-bg: #fef2f2;
   --dp-status-missing-border: #fecaca;
 
-  --dp-status-incomplete: #6b7280;
-  --dp-status-incomplete-bg: #f3f4f6;
-  --dp-status-incomplete-border: #e5e7eb;
+  --dp-status-incomplete: #5f5f67;
+  --dp-status-incomplete-bg: #f1f1f3;
+  --dp-status-incomplete-border: #e4e4e8;
 
   /* ==========================================================================
-     Typography Scale
+     Typography (fonts are bundled locally; see main.tsx)
      ========================================================================== */
-  --dp-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --dp-font-sans: "Inter Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --dp-font-display: "Manrope Variable", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
   --dp-font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
 
   --dp-font-size-xs: 11px;
@@ -90,20 +93,21 @@
   --dp-space-8: 32px;
 
   /* ==========================================================================
-     Border Radii
+     Border Radii (soft, rounded; buttons use --dp-radius-pill)
      ========================================================================== */
-  --dp-radius-xs: 3px;
-  --dp-radius-sm: 4px;
-  --dp-radius-md: 6px;
-  --dp-radius-lg: 8px;
+  --dp-radius-xs: 4px;
+  --dp-radius-sm: 6px;
+  --dp-radius-md: 10px;
+  --dp-radius-lg: 16px;
+  --dp-radius-xl: 24px;
   --dp-radius-pill: 9999px;
 
   /* ==========================================================================
      Elevation & Shadows
      ========================================================================== */
-  --dp-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-  --dp-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-  --dp-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --dp-shadow-xs: 0 1px 2px 0 rgba(17, 17, 19, 0.04);
+  --dp-shadow-sm: 0 1px 3px 0 rgba(17, 17, 19, 0.06), 0 1px 2px -1px rgba(17, 17, 19, 0.04);
+  --dp-shadow-md: 0 8px 24px -8px rgba(17, 17, 19, 0.14), 0 2px 4px -2px rgba(17, 17, 19, 0.06);
 
   /* ==========================================================================
      Transitions
@@ -117,6 +121,116 @@
   --dp-sidebar-width: 220px;
   --dp-sidebar-collapsed-width: 60px;
   --dp-header-height: 54px;
+}
+
+/* Dark theme: follows the Windows app theme through prefers-color-scheme, unless the
+   user forces Light (data-theme="light") in Settings. Only colour tokens change. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --dp-surface-canvas: #0e0e10;
+    --dp-surface-sidebar: #18181b;
+    --dp-surface-card: #1c1c1f;
+    --dp-surface-subtle: #26262a;
+    --dp-surface-hover: #2a2a2e;
+    --dp-surface-active: #323237;
+    --dp-surface-selected: #2a2a2e;
+    --dp-surface-header: #18181b;
+
+    --dp-text-primary: #f4f4f5;
+    --dp-text-secondary: #d4d4d8;
+    --dp-text-muted: #a1a1aa;
+    --dp-text-disabled: #5c5c63;
+    --dp-text-on-accent: #111113;
+
+    --dp-border-subtle: #2e2e33;
+    --dp-border-medium: #3f3f46;
+    --dp-border-strong: #71717a;
+    --dp-border-selected: #f4f4f5;
+
+    --dp-accent-primary: #f4f4f5;
+    --dp-accent-hover: #d4d4d8;
+    --dp-accent-active: #ffffff;
+    --dp-accent-subtle: #3f3f46;
+    --dp-focus-ring: #f4f4f5;
+
+    --dp-status-available: #4ade80;
+    --dp-status-available-bg: #0f2a1a;
+    --dp-status-available-border: #166534;
+
+    --dp-status-unverified: #fbbf24;
+    --dp-status-unverified-bg: #2e2410;
+    --dp-status-unverified-border: #854d0e;
+
+    --dp-status-missing: #f87171;
+    --dp-status-missing-bg: #2f1416;
+    --dp-status-missing-border: #991b1b;
+
+    --dp-status-incomplete: #a1a1aa;
+    --dp-status-incomplete-bg: #26262a;
+    --dp-status-incomplete-border: #3f3f46;
+
+    --dp-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --dp-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
+    --dp-shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Explicit dark choice in Settings (works even when Windows uses the light theme). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --dp-surface-canvas: #0e0e10;
+  --dp-surface-sidebar: #18181b;
+  --dp-surface-card: #1c1c1f;
+  --dp-surface-subtle: #26262a;
+  --dp-surface-hover: #2a2a2e;
+  --dp-surface-active: #323237;
+  --dp-surface-selected: #2a2a2e;
+  --dp-surface-header: #18181b;
+
+  --dp-text-primary: #f4f4f5;
+  --dp-text-secondary: #d4d4d8;
+  --dp-text-muted: #a1a1aa;
+  --dp-text-disabled: #5c5c63;
+  --dp-text-on-accent: #111113;
+
+  --dp-border-subtle: #2e2e33;
+  --dp-border-medium: #3f3f46;
+  --dp-border-strong: #71717a;
+  --dp-border-selected: #f4f4f5;
+
+  --dp-accent-primary: #f4f4f5;
+  --dp-accent-hover: #d4d4d8;
+  --dp-accent-active: #ffffff;
+  --dp-accent-subtle: #3f3f46;
+  --dp-focus-ring: #f4f4f5;
+
+  --dp-status-available: #4ade80;
+  --dp-status-available-bg: #0f2a1a;
+  --dp-status-available-border: #166534;
+
+  --dp-status-unverified: #fbbf24;
+  --dp-status-unverified-bg: #2e2410;
+  --dp-status-unverified-border: #854d0e;
+
+  --dp-status-missing: #f87171;
+  --dp-status-missing-bg: #2f1416;
+  --dp-status-missing-border: #991b1b;
+
+  --dp-status-incomplete: #a1a1aa;
+  --dp-status-incomplete-bg: #26262a;
+  --dp-status-incomplete-border: #3f3f46;
+
+  --dp-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --dp-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
+  --dp-shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* Glass (Mica): only the window background becomes transparent; cards stay opaque. */
+:root[data-glass="true"] {
+  --dp-surface-canvas: transparent;
 }
 
 /* ==========================================================================
@@ -140,6 +254,13 @@ body {
   user-select: none;
 }
 
+/* Headings use the display face (Manrope); body text stays Inter. */
+h1, h2, h3, h4,
+.app-brand-title {
+  font-family: var(--dp-font-display);
+  letter-spacing: -0.01em;
+}
+
 /* Accessible focus ring */
 :focus-visible {
   outline: 2px solid var(--dp-focus-ring);
@@ -151,22 +272,28 @@ body {
    ========================================================================== */
 .app-shell {
   display: flex;
+  gap: var(--dp-space-3);
   width: 100vw;
   height: 100vh;
+  padding: var(--dp-space-3);
   overflow: hidden;
   background-color: var(--dp-surface-canvas);
 }
 
 /* Sidebar */
 .app-sidebar {
+  /* Floating sidebar card */
   width: var(--dp-sidebar-width);
   min-width: var(--dp-sidebar-width);
-  height: 100vh;
+  height: 100%;
   background-color: var(--dp-surface-sidebar);
-  border-right: 1px solid var(--dp-border-subtle);
+  border: 1px solid var(--dp-border-subtle);
+  border-radius: var(--dp-radius-xl);
+  box-shadow: var(--dp-shadow-sm);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  overflow: hidden;
   transition: width var(--dp-transition-normal), min-width var(--dp-transition-normal);
   z-index: 10;
   flex-shrink: 0;
@@ -175,8 +302,8 @@ body {
 .app-sidebar-top {
   display: flex;
   flex-direction: column;
-  padding: var(--dp-space-3);
-  gap: var(--dp-space-3);
+  padding: var(--dp-space-5) var(--dp-space-3) var(--dp-space-3);
+  gap: var(--dp-space-5);
 }
 
 .app-sidebar-brand {
@@ -230,7 +357,7 @@ body {
   font-family: var(--dp-font-sans);
   font-size: var(--dp-font-size-base);
   font-weight: var(--dp-font-weight-medium);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   cursor: pointer;
   transition: background-color var(--dp-transition-fast), color var(--dp-transition-fast);
   text-align: left;
@@ -245,21 +372,11 @@ body {
 }
 
 .app-nav-button.active {
-  background-color: var(--dp-surface-selected);
-  color: var(--dp-accent-primary);
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
   font-weight: var(--dp-font-weight-semibold);
 }
 
-.app-nav-button.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  background-color: var(--dp-accent-primary);
-  border-radius: var(--dp-radius-pill);
-}
 
 .app-nav-icon {
   width: 18px;
@@ -280,14 +397,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--dp-space-3);
-  border-top: 1px solid var(--dp-border-subtle);
 }
 
 .sidebar-pulse-card {
   background-color: var(--dp-surface-subtle);
-  border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-md);
-  padding: var(--dp-space-2) var(--dp-space-3);
+  border-radius: var(--dp-radius-lg);
+  padding: var(--dp-space-3);
   font-size: var(--dp-font-size-xs);
   color: var(--dp-text-muted);
 }
@@ -353,7 +468,7 @@ body {
   min-width: 32px;
   min-height: 32px;
   padding: 8px;
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   color: var(--dp-text-muted);
   cursor: pointer;
   display: inline-flex;
@@ -372,22 +487,18 @@ body {
    ========================================================================== */
 .app-main-layout {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
-  background-color: var(--dp-surface-canvas);
 }
 
 .app-header {
-  height: var(--dp-header-height);
-  min-height: var(--dp-header-height);
-  background-color: var(--dp-surface-header);
-  border-bottom: 1px solid var(--dp-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--dp-space-5);
+  padding: var(--dp-space-2) var(--dp-space-2) var(--dp-space-4);
   gap: var(--dp-space-4);
   flex-shrink: 0;
 }
@@ -401,88 +512,36 @@ body {
 
 .app-header-title h1 {
   margin: 0;
-  font-size: var(--dp-font-size-base);
-  font-weight: var(--dp-font-weight-semibold);
+  font-size: var(--dp-font-size-3xl);
+  font-weight: var(--dp-font-weight-bold);
   color: var(--dp-text-primary);
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .app-header-subtitle {
   margin: 0;
-  font-size: var(--dp-font-size-xs);
+  font-size: var(--dp-font-size-base);
   color: var(--dp-text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.app-header-right {
-  display: flex;
-  align-items: center;
-  gap: var(--dp-space-3);
-  flex-shrink: 0;
-}
 
 /* Global Search Trigger */
-.global-search-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dp-space-2);
-  background-color: var(--dp-surface-subtle);
-  border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-md);
-  padding: 5px 10px;
-  color: var(--dp-text-muted);
-  font-family: var(--dp-font-sans);
-  font-size: var(--dp-font-size-sm);
-  cursor: pointer;
-  transition: border-color var(--dp-transition-fast), background-color var(--dp-transition-fast);
-  width: 240px;
-}
 
-.global-search-trigger:hover {
-  background-color: var(--dp-surface-card);
-  border-color: var(--dp-border-medium);
-  color: var(--dp-text-secondary);
-}
 
-.global-search-trigger:focus-visible {
-  outline: 2px solid var(--dp-focus-ring);
-  outline-offset: 1px;
-}
 
-.global-search-icon {
-  width: 14px;
-  height: 14px;
-  color: inherit;
-  flex-shrink: 0;
-}
 
-.global-search-placeholder {
-  flex: 1;
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.global-search-hotkey {
-  font-family: var(--dp-font-mono);
-  font-size: var(--dp-font-size-xs);
-  background-color: var(--dp-surface-card);
-  border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-xs);
-  padding: 1px 5px;
-  color: var(--dp-text-muted);
-  box-shadow: var(--dp-shadow-xs);
-}
 
 /* Workspace Area */
 .app-workspace {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--dp-space-5);
+  padding: 0 var(--dp-space-2) var(--dp-space-2);
   display: flex;
   flex-direction: column;
 }
@@ -525,7 +584,7 @@ body {
   background-color: var(--dp-surface-card);
   color: var(--dp-text-secondary);
   border: 1px solid var(--dp-border-medium);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   padding: 6px 12px;
   font-family: var(--dp-font-sans);
   font-size: var(--dp-font-size-sm);
@@ -716,17 +775,9 @@ body {
     padding: 10px 0;
   }
 
-  .app-nav-button.active::before {
-    left: 2px;
-  }
-
   .sidebar-footer-actions {
     flex-direction: column;
     gap: var(--dp-space-2);
-  }
-
-  .global-search-trigger {
-    width: 180px;
   }
 }
 
@@ -740,14 +791,23 @@ body {
     padding: var(--dp-space-3);
   }
 
-  .global-search-placeholder {
-    display: none;
+  .app-shell {
+    padding: var(--dp-space-2);
+    gap: var(--dp-space-2);
   }
+}
 
-  .global-search-trigger {
-    width: auto;
-    padding: 6px 8px;
-  }
+/* Screen-reader-only text (keeps form controls labelled without visible labels). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ==========================================================================
@@ -767,5 +827,42 @@ body {
   .process-spinner,
   .system-spinner {
     animation: none !important;
+  }
+}
+
+/* Quick launcher shortcut hint in the sidebar */
+.sidebar-launcher-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  border: 1px dashed var(--dp-border-medium);
+  border-radius: var(--dp-radius-lg);
+  font-size: var(--dp-font-size-xs);
+  color: var(--dp-text-muted);
+}
+
+.sidebar-launcher-hint kbd {
+  font-family: var(--dp-font-mono);
+  font-size: 10.5px;
+  padding: 0 5px;
+  border: 1px solid var(--dp-border-medium);
+  border-bottom-width: 2px;
+  border-radius: var(--dp-radius-xs);
+  background-color: var(--dp-surface-card);
+  color: var(--dp-text-secondary);
+}
+
+.sidebar-launcher-hint.warning {
+  border-style: solid;
+  border-color: var(--dp-status-unverified-border);
+  background-color: var(--dp-status-unverified-bg);
+  color: var(--dp-text-primary);
+}
+
+@media (max-width: 860px) {
+  .sidebar-launcher-hint {
+    display: none;
   }
 }

@@ -89,8 +89,8 @@ export const CpuSparkline: React.FC<CpuSparklineProps> = ({
       >
         <defs>
           <linearGradient id="cpuSparklineGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--dp-accent-primary, #0969da)" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="var(--dp-accent-primary, #0969da)" stopOpacity="0.0" />
+            <stop offset="0%" stopColor="var(--dp-accent-primary)" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="var(--dp-accent-primary)" stopOpacity="0.0" />
           </linearGradient>
         </defs>
 

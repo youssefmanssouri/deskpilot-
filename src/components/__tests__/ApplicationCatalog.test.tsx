@@ -301,19 +301,21 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       expect(html).toContain('Legacy Utility');
 
       // Metric summary bar rendered
-      expect(html).toContain('Total Discovered: <strong>4</strong>');
-      expect(html).toContain('Available: <strong style="color:#58a6ff">2</strong>');
-      expect(html).toContain('Missing Target: <strong style="color:#f85149">1</strong>');
+      expect(html).toContain('Found: <strong>4</strong>');
+      expect(html).toContain('Ready: <strong class="summary-value-available">2</strong>');
+      expect(html).toContain('Missing: <strong class="summary-value-missing">1</strong>');
+      // Colours come from token classes, never inline styles
+      expect(html).not.toMatch(/style="color:#/);
 
       // Scanned sources pills rendered
       expect(html).toContain('Registry (HKLM 64-bit)');
       expect(html).toContain('Start Menu (User)');
 
       // Search toolbar rendered
-      expect(html).toContain('Search Applications');
-      expect(html).toContain('Refresh Catalog');
+      expect(html).toContain('Search applications');
       expect(html).toContain('aria-label="Refresh catalog"');
-      expect(html).toContain('title="Refresh application catalog"');
+      expect(html).toContain('aria-label="Refresh catalog"');
+      expect(html).toContain('title="Scan the Start menu and registry again"');
     });
 
     it('renders warning banner when partialFailures are present', () => {
@@ -399,10 +401,13 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
         />
       );
 
-      expect(html).toContain('aria-label="Source filters"');
+      // Source filter is now a single dropdown; status filters are chips.
+      expect(html).toContain('id="catalog-source-select"');
       for (const filter of SOURCE_FILTERS) {
+        expect(html).toContain(`<option value="${filter.id}"`);
         expect(html).toContain(filter.label);
       }
+      expect(html).toContain('aria-label="Filter by status"');
       expect(html).toContain('aria-pressed="true"');
     });
 
@@ -415,7 +420,7 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       );
 
       expect(html).toContain('catalog-count-indicator');
-      expect(html).toContain('Showing 4 applications');
+      expect(html).toContain('Showing 4 apps');
     });
 
     it('renders System Intelligence panel when defaultView is system', () => {
@@ -428,7 +433,7 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       );
 
       expect(html).toContain('id="panel-system"');
-      expect(html).toContain('aria-label="System Intelligence"');
+      expect(html).toContain('aria-label="System"');
       expect(html).toContain('system-monitor-container');
     });
   });

@@ -14,6 +14,7 @@
 ## Contents
 
 - [Status at a glance](#status-at-a-glance)
+- [Unreleased: UI redesign](#unreleased-ui-redesign)
 - [Features](#features)
 - [What DeskPilot does not do](#what-deskpilot-does-not-do)
 - [System requirements](#system-requirements)
@@ -44,7 +45,37 @@
 
 ---
 
+## Unreleased: UI redesign
+
+The `main` branch contains a UI redesign that is **not part of the v0.1.1 release** and has **not yet been validated on Windows**. The status table above and the sections below describe v0.1.1.
+
+- **New look:** monochrome design system with light and dark themes that follow Windows, fonts bundled locally, and plain wording throughout.
+- **Home page:** PC summary, live CPU and memory, a "Needs attention" list, and Recent apps.
+- **Apps:** search first, status chips and a source filter, a dense list with one Tab stop, and launch errors explained inline.
+- **Quick launcher:** a global shortcut (default Ctrl+Alt+Space, changeable) opens a small search window from any app.
+- **Settings:**
+  - theme
+  - launcher shortcut
+  - start with Windows (one per-user startup entry)
+  - recent apps on/off
+  - glass effect (Windows 11 only, applied after restart)
+- **Local data:** unlike v0.1.1, the redesign writes two small files (launch history and settings) and, only if you turn it on, one startup entry. See [PRIVACY.md](PRIVACY.md).
+
+> The screenshots below were rendered from the app's real frontend code with **sample data** in a browser. They are not captures from a Windows installation and will be replaced after Windows testing.
+
+![DeskPilot Home with sample data](docs/screenshots/redesign_home.png)
+
+![DeskPilot Apps with sample data](docs/screenshots/redesign_apps.png)
+
+![DeskPilot quick launcher with sample data](docs/screenshots/redesign_launcher.png)
+
+![DeskPilot Settings with sample data](docs/screenshots/redesign_settings.png)
+
+---
+
 ## Features
+
+This section describes the **v0.1.1 release**. For what is new on `main`, see [Unreleased: UI redesign](#unreleased-ui-redesign).
 
 DeskPilot has three views — **Applications**, **Processes**, and **System Intelligence** — plus a system tray presence.
 
@@ -90,8 +121,9 @@ DeskPilot has three views — **Applications**, **Processes**, and **System Inte
 - Default window 960×680, minimum 520×450.
 
 <!--
-Screenshots: the images in docs/screenshots/ were captured from v0.1.0, before the
-v0.1.1 interface redesign. Recapture from a v0.1.1 build before re-adding them here.
+Screenshots: deskpilot_overview.png and deskpilot_search.png in docs/screenshots/ were
+captured from v0.1.0. The redesign_*.png images are sample-data renders of the unreleased
+redesign (shown above). Recapture both from real Windows builds before a release.
 -->
 
 ---
@@ -186,7 +218,7 @@ This removes the program files, shortcuts, and the *Installed apps* entry. **Web
 **DeskPilot's own code** (Rust backend and React frontend):
 
 - implements no HTTP/WebSocket client, analytics, telemetry, crash reporting, or update check;
-- writes no database, configuration file, or log file — all state is in memory and discarded on exit;
+- in v0.1.1, writes no database, configuration file, or log file — all state is in memory and discarded on exit. The unreleased redesign on `main` adds a small launch-history file, a settings file, and an optional per-user startup entry (see [PRIVACY.md](PRIVACY.md));
 - serves its UI from assets embedded in the executable, under a Content Security Policy that only allows same-origin resources.
 
 **Components DeskPilot depends on behave independently:**
