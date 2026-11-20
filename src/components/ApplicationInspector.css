@@ -3,7 +3,7 @@
 .app-inspector {
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-lg);
+  border-radius: var(--dp-radius-xl);
   box-shadow: var(--dp-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -12,9 +12,7 @@
 }
 
 .app-inspector-header {
-  padding: var(--dp-space-3) var(--dp-space-4);
-  background-color: var(--dp-surface-subtle);
-  border-bottom: 1px solid var(--dp-border-subtle);
+  padding: var(--dp-space-4) var(--dp-space-5) 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -30,7 +28,7 @@
 }
 
 .app-inspector-body {
-  padding: var(--dp-space-4);
+  padding: var(--dp-space-4) var(--dp-space-5) var(--dp-space-5);
   display: flex;
   flex-direction: column;
   gap: var(--dp-space-4);
@@ -44,16 +42,18 @@
 }
 
 .app-inspector-icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--dp-radius-md);
-  background-color: var(--dp-surface-subtle);
-  border: 1px solid var(--dp-border-subtle);
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+  font-family: var(--dp-font-display);
+  font-size: var(--dp-font-size-lg);
+  font-weight: var(--dp-font-weight-bold);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: var(--dp-accent-primary);
 }
 
 .app-inspector-hero-info {
@@ -138,8 +138,6 @@
 
 /* Actions Footer */
 .app-inspector-actions {
-  border-top: 1px solid var(--dp-border-subtle);
-  padding-top: var(--dp-space-3);
   display: flex;
   flex-direction: column;
   gap: var(--dp-space-2);
@@ -248,4 +246,30 @@
 
 .app-inspector-launch-error .retry-button {
   margin-top: var(--dp-space-1);
+}
+
+/* Provenance (sources + internal id), collapsed by default */
+.app-inspector-provenance {
+  border-top: 1px solid var(--dp-border-subtle);
+  padding-top: var(--dp-space-3);
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-muted);
+}
+
+.app-inspector-provenance > summary {
+  cursor: pointer;
+  width: fit-content;
+  border-radius: var(--dp-radius-xs);
+}
+
+.app-inspector-provenance > summary:focus-visible {
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: 2px;
+}
+
+.app-inspector-provenance[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--dp-space-2);
 }

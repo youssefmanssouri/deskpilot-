@@ -24,20 +24,44 @@
 }
 
 .catalog-search-wrapper {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  align-items: center;
   flex: 1;
-  min-width: 260px;
+  min-width: 0;
 }
 
-.catalog-search-label {
-  font-size: 0.75rem;
+.catalog-search-icon {
+  position: absolute;
+  left: 14px;
+  width: 16px;
+  height: 16px;
   color: var(--dp-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
+  pointer-events: none;
 }
+
+.catalog-search-hotkey {
+  position: absolute;
+  right: 12px;
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-font-size-xs);
+  color: var(--dp-text-muted);
+  background-color: var(--dp-surface-subtle);
+  border: 1px solid var(--dp-border-subtle);
+  border-radius: var(--dp-radius-xs);
+  padding: 0 5px;
+  pointer-events: none;
+}
+
+/* Scoped under the wrapper so App.css's shared input rule (loaded later) cannot
+   reset the padding that reserves room for the icon and the hotkey hint. */
+.catalog-search-wrapper .catalog-search-input {
+  height: 40px;
+  padding: 0 64px 0 40px;
+  border-radius: var(--dp-radius-pill);
+  font-size: var(--dp-font-size-md);
+}
+
 
 .catalog-search-input {
   background-color: var(--dp-surface-card);
@@ -66,11 +90,6 @@
   cursor: not-allowed;
 }
 
-.catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 1rem;
-}
 
 /* Application Card */
 .app-card {
@@ -297,57 +316,12 @@
   top: var(--dp-space-3);
 }
 
-/* Source Filter Pills */
-.catalog-source-filters {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
 
-.source-filter-pill {
-  padding: 4px 12px;
-  font-size: var(--dp-font-size-xs);
-  font-weight: var(--dp-font-weight-medium);
-  border-radius: var(--dp-radius-pill);
-  background-color: var(--dp-surface-subtle);
-  color: var(--dp-text-secondary);
-  border: 1px solid var(--dp-border-subtle);
-  cursor: pointer;
-  transition: all var(--dp-transition-fast);
-}
 
-.source-filter-pill:hover {
-  background-color: var(--dp-surface-hover);
-  color: var(--dp-text-primary);
-  border-color: var(--dp-border-strong);
-}
 
-.source-filter-pill.active {
-  background-color: var(--dp-accent-primary);
-  color: var(--dp-text-on-accent);
-  border-color: var(--dp-accent-primary);
-  font-weight: var(--dp-font-weight-semibold);
-}
 
-.source-filter-pill:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--dp-accent-primary);
-}
 
-/* Dynamic count row */
-.catalog-count-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--dp-font-size-xs);
-  color: var(--dp-text-muted);
-  padding: 2px 4px;
-}
 
-.catalog-count-indicator {
-  font-weight: var(--dp-font-weight-medium);
-}
 
 /* Responsive Master-Detail Behavior */
 @media (max-width: 959px) {
@@ -360,3 +334,271 @@
     position: static;
   }
 }
+
+/* ==========================================================================
+   Phase 2: toolbar, filters, dense app list, discovery details
+   ========================================================================== */
+.catalog-toolbar {
+  flex-wrap: nowrap;
+  gap: var(--dp-space-2);
+}
+
+.catalog-toolbar .refresh-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.catalog-toolbar .refresh-button .spinning {
+  animation: catalog-spin 0.9s linear infinite;
+}
+
+@keyframes catalog-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--dp-space-2);
+}
+
+.catalog-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-font-size-sm);
+  font-weight: var(--dp-font-weight-medium);
+  color: var(--dp-text-secondary);
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-medium);
+  border-radius: var(--dp-radius-pill);
+  cursor: pointer;
+  transition: background-color var(--dp-transition-fast), border-color var(--dp-transition-fast);
+}
+
+.filter-chip:hover {
+  border-color: var(--dp-border-strong);
+  color: var(--dp-text-primary);
+}
+
+.filter-chip.active {
+  background-color: var(--dp-accent-primary);
+  border-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+}
+
+.filter-chip:focus-visible,
+.catalog-source-select:focus-visible {
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: 2px;
+}
+
+.filter-chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.catalog-source-select {
+  height: 30px;
+  padding: 0 10px;
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-secondary);
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-medium);
+  border-radius: var(--dp-radius-pill);
+}
+
+.catalog-count-indicator {
+  margin-left: auto;
+  font-size: var(--dp-font-size-xs);
+  font-weight: var(--dp-font-weight-medium);
+  color: var(--dp-text-muted);
+}
+
+.catalog-master-pane {
+  container-type: inline-size;
+}
+
+.catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-subtle);
+  border-radius: var(--dp-radius-lg);
+  box-shadow: var(--dp-shadow-xs);
+}
+
+/* Row variant of ApplicationCard (role="option"); overrides the standalone card styles. */
+.app-card.app-card--row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) 96px 112px;
+  align-items: center;
+  gap: var(--dp-space-3);
+  height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--dp-radius-md);
+  background-color: transparent;
+  box-shadow: none;
+  transform: none;
+  cursor: default;
+}
+
+.app-card.app-card--row:hover {
+  background-color: var(--dp-surface-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.app-card.app-card--row.selected {
+  background-color: var(--dp-surface-selected);
+  box-shadow: inset 0 0 0 1.5px var(--dp-border-selected);
+}
+
+.app-card.app-card--row:focus-visible {
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: -2px;
+  box-shadow: none;
+  transform: none;
+}
+
+.app-row-tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+  font-family: var(--dp-font-display);
+  font-size: 11px;
+  font-weight: var(--dp-font-weight-bold);
+}
+
+.app-card--row .app-card-title {
+  font-size: var(--dp-font-size-md);
+  font-weight: var(--dp-font-weight-semibold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: normal;
+}
+
+.app-card--row .app-card-publisher,
+.app-card--row .app-card-version {
+  color: var(--dp-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-card--row .app-card-publisher {
+  font-size: var(--dp-font-size-base);
+}
+
+/* Scoped (0,2,0) to override App.css's .badge-* fills: rows show a dot + word, not a pill. */
+.app-card--row .app-row-status {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: var(--dp-font-weight-regular);
+}
+
+.app-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-secondary);
+  white-space: nowrap;
+}
+
+.app-row-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: var(--dp-status-incomplete);
+}
+
+.app-row-status.badge-available::before {
+  background-color: var(--dp-status-available);
+}
+
+.app-row-status.badge-unverified::before {
+  background-color: var(--dp-status-unverified);
+}
+
+.app-row-status.badge-missing::before {
+  background-color: var(--dp-status-missing);
+}
+
+/* Narrow list: drop the version first, then the publisher. */
+@container (max-width: 560px) {
+  .app-card.app-card--row {
+    grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) 104px;
+  }
+
+  .app-card--row .app-card-version {
+    display: none;
+  }
+}
+
+@container (max-width: 380px) {
+  .app-card.app-card--row {
+    grid-template-columns: 28px minmax(0, 1fr) 104px;
+  }
+
+  .app-card--row .app-card-publisher {
+    display: none;
+  }
+}
+
+.catalog-discovery-details {
+  margin-top: var(--dp-space-2);
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-muted);
+}
+
+.catalog-discovery-details > summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 2px 4px;
+  border-radius: var(--dp-radius-xs);
+}
+
+.catalog-discovery-details > summary:focus-visible {
+  outline: 2px solid var(--dp-focus-ring);
+}
+
+.catalog-discovery-details[open] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-2);
+}
+
+.catalog-inspector-pane {
+  width: 300px;
+}
+

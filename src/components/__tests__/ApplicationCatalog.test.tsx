@@ -312,10 +312,10 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       expect(html).toContain('Start Menu (User)');
 
       // Search toolbar rendered
-      expect(html).toContain('Search Applications');
-      expect(html).toContain('Refresh Catalog');
+      expect(html).toContain('Search applications');
       expect(html).toContain('aria-label="Refresh catalog"');
-      expect(html).toContain('title="Refresh application catalog"');
+      expect(html).toContain('aria-label="Refresh catalog"');
+      expect(html).toContain('title="Scan the Start menu and registry again"');
     });
 
     it('renders warning banner when partialFailures are present', () => {
@@ -401,10 +401,13 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
         />
       );
 
-      expect(html).toContain('aria-label="Source filters"');
+      // Source filter is now a single dropdown; status filters are chips.
+      expect(html).toContain('id="catalog-source-select"');
       for (const filter of SOURCE_FILTERS) {
+        expect(html).toContain(`<option value="${filter.id}"`);
         expect(html).toContain(filter.label);
       }
+      expect(html).toContain('aria-label="Filter by status"');
       expect(html).toContain('aria-pressed="true"');
     });
 
@@ -417,7 +420,7 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
       );
 
       expect(html).toContain('catalog-count-indicator');
-      expect(html).toContain('Showing 4 applications');
+      expect(html).toContain('Showing 4 apps');
     });
 
     it('renders System Intelligence panel when defaultView is system', () => {
