@@ -153,7 +153,7 @@
   background-color: var(--dp-accent-primary);
   color: var(--dp-text-on-accent);
   border: 1px solid var(--dp-accent-primary);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   box-shadow: var(--dp-shadow-sm);
   cursor: pointer;
   display: inline-flex;

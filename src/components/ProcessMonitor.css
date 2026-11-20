@@ -104,7 +104,7 @@
   color: var(--dp-text-primary);
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-medium);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-pill);
   box-shadow: var(--dp-shadow-xs);
   cursor: pointer;
   white-space: nowrap;
@@ -203,7 +203,7 @@
 }
 
 .process-filter-chip.active .process-filter-badge {
-  background-color: #ffffff;
+  background-color: var(--dp-surface-card);
   color: var(--dp-accent-primary);
 }
 
@@ -232,15 +232,15 @@
   font-size: var(--dp-font-size-xs);
   font-weight: var(--dp-font-weight-medium);
   color: var(--dp-status-missing);
-  background-color: #ffffff;
+  background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-status-missing-border);
-  border-radius: var(--dp-radius-xs);
+  border-radius: var(--dp-radius-pill);
   cursor: pointer;
   transition: background-color var(--dp-transition-fast);
 }
 
 .process-retry-button:hover {
-  background-color: #fef2f2;
+  background-color: var(--dp-status-missing-bg);
 }
 
 .process-truncation-banner {
