@@ -203,19 +203,11 @@ function AppContent() {
       <aside className="app-sidebar" aria-label="Main Navigation">
         <div className="app-sidebar-top">
           <div className="app-sidebar-brand">
-            <svg
-              className="app-brand-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <polygon points="12 2 2 7 12 12 22 7 12 2" />
-              <polyline points="2 17 12 22 22 17" />
-              <polyline points="2 12 12 17 22 12" />
+            {/* DeskPilot "dp" monogram; source of truth: docs/brand/deskpilot-mark.svg */}
+            <svg className="app-brand-icon" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+              <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="13" />
+              <rect x="63.5" y="6" width="13" height="50" rx="6.5" />
+              <rect x="23.5" y="44" width="13" height="50" rx="6.5" />
             </svg>
             <span className="app-brand-title">DeskPilot</span>
             <span

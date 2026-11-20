@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/brand/deskpilot-app-icon.svg" width="88" alt="DeskPilot logo"></p>
+
 # DeskPilot
 
 **A local-first Windows desktop command center: find and launch installed applications, inspect running processes, and monitor system resources — without accounts, cloud services, or telemetry.**
