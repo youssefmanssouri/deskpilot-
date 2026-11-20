@@ -12,10 +12,12 @@
 //! This module has no Tauri or Windows dependencies so its logic can be unit-tested
 //! on any platform.
 
+use crate::core::persistence::write_atomic;
 use crate::error::DomainError;
 use crate::security::InputGuard;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// Maximum number of entries kept (most recent first).
@@ -119,6 +121,8 @@ pub fn push_entry(
 pub struct LaunchHistoryStore {
     path: OnceLock<PathBuf>,
     entries: Mutex<Vec<LaunchHistoryEntry>>,
+    /// When false, `record` does nothing (the "Launch history" setting is off).
+    enabled: AtomicBool,
 }
 
 impl LaunchHistoryStore {
@@ -128,6 +132,7 @@ impl LaunchHistoryStore {
         Self {
             path: OnceLock::new(),
             entries: Mutex::new(Vec::new()),
+            enabled: AtomicBool::new(true),
         }
     }
 
@@ -177,13 +182,26 @@ impl LaunchHistoryStore {
         Ok(self.lock()?.clone())
     }
 
-    /// Records a successful launch and persists the result.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    /// Turns recording on or off. Turning it off does not delete existing entries;
+    /// callers that want that call `clear` as well.
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    /// Records a successful launch and persists the result. Does nothing while disabled.
     pub fn record(
         &self,
         application_id: &str,
         display_name: &str,
         launched_at_ms: u64,
     ) -> Result<(), DomainError> {
+        if !self.is_enabled() {
+            return Ok(());
+        }
         InputGuard::validate_application_id(application_id)?;
         let display_name = sanitize_display_name(display_name).ok_or_else(|| {
             DomainError::InvalidInput("Display name is empty after sanitization.".to_string())
@@ -221,11 +239,6 @@ impl LaunchHistoryStore {
         let Some(path) = self.path.get() else {
             return Ok(());
         };
-        let io_err = |_| DomainError::OperationFailed("Could not save launch history.".to_string());
-
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(io_err)?;
-        }
         let file = HistoryFile {
             version: FORMAT_VERSION,
             entries: entries.to_vec(),
@@ -233,10 +246,8 @@ impl LaunchHistoryStore {
         let json = serde_json::to_string_pretty(&file).map_err(|_| {
             DomainError::InternalError("Could not serialize launch history.".to_string())
         })?;
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, json).map_err(io_err)?;
-        std::fs::rename(&tmp, path).map_err(io_err)?;
-        Ok(())
+        write_atomic(path, &json)
+            .map_err(|_| DomainError::OperationFailed("Could not save launch history.".to_string()))
     }
 }
 
@@ -423,6 +434,17 @@ mod tests {
 
         assert!(store.attach_file(temp_path("other")).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn disabled_store_records_nothing_until_re_enabled() {
+        let store = LaunchHistoryStore::in_memory();
+        store.set_enabled(false);
+        store.record(&id(1), "App", 1).unwrap();
+        assert!(store.entries().unwrap().is_empty());
+        store.set_enabled(true);
+        store.record(&id(1), "App", 2).unwrap();
+        assert_eq!(store.entries().unwrap().len(), 1);
     }
 
     #[test]

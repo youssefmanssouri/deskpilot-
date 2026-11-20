@@ -3,6 +3,7 @@
 //! No Tauri or Windows dependencies, so the logic is unit-testable on any platform.
 //! Window handling lives in `commands::launcher`.
 
+use crate::core::settings::{DEFAULT_SHORTCUT, shortcut_label};
 use crate::error::DomainError;
 use crate::security::InputGuard;
 use serde::Serialize;
@@ -10,12 +11,6 @@ use std::sync::Mutex;
 
 /// Label of the launcher window declared in `tauri.conf.json`.
 pub const LAUNCHER_WINDOW_LABEL: &str = "launcher";
-
-/// Default global shortcut, in the format `tauri-plugin-global-shortcut` parses.
-pub const DEFAULT_LAUNCHER_SHORTCUT: &str = "ctrl+alt+space";
-
-/// Human-readable form of the default shortcut, shown in the UI.
-pub const DEFAULT_LAUNCHER_SHORTCUT_LABEL: &str = "Ctrl+Alt+Space";
 
 /// Event emitted to the main window to switch view (and optionally select an app).
 pub const NAVIGATE_EVENT: &str = "deskpilot://navigate";
@@ -89,28 +84,31 @@ impl LauncherShortcutState {
     pub fn new() -> Self {
         Self {
             status: Mutex::new(ShortcutStatus {
-                accelerator: DEFAULT_LAUNCHER_SHORTCUT_LABEL.to_string(),
+                accelerator: shortcut_label(DEFAULT_SHORTCUT),
                 registered: false,
                 message: Some("The shortcut has not been registered yet.".to_string()),
             }),
         }
     }
 
-    pub fn set_registered(&self) {
+    /// Records that `canonical` (e.g. "Ctrl+Alt+Space") is now active.
+    pub fn set_registered(&self, canonical: &str) {
         if let Ok(mut s) = self.status.lock() {
+            s.accelerator = shortcut_label(canonical);
             s.registered = true;
             s.message = None;
         }
     }
 
-    /// Records a registration failure. The raw plugin error is not shown to users;
-    /// the message explains the likely cause and what to do.
-    pub fn set_failed(&self) {
+    /// Records that `canonical` could not be registered. The raw plugin error is not
+    /// shown to users; the message explains the likely cause and what to do.
+    pub fn set_failed(&self, canonical: &str) {
         if let Ok(mut s) = self.status.lock() {
+            s.accelerator = shortcut_label(canonical);
             s.registered = false;
             s.message = Some(format!(
-                "{} is already used by another app, so the quick launcher can't open with it. \
-                 Close the other app or change its shortcut, then restart DeskPilot.",
+                "{} is already used by another app or reserved by Windows, so the quick \
+                 launcher can't open with it. Choose another shortcut in Settings.",
                 s.accelerator
             ));
         }
@@ -172,12 +170,13 @@ mod tests {
         assert!(!initial.registered);
         assert_eq!(initial.accelerator, "Ctrl+Alt+Space");
 
-        state.set_registered();
+        state.set_registered("Ctrl+Super+K");
         let ok = state.status().unwrap();
         assert!(ok.registered);
+        assert_eq!(ok.accelerator, "Ctrl+Win+K");
         assert_eq!(ok.message, None);
 
-        state.set_failed();
+        state.set_failed("Ctrl+Alt+Space");
         let failed = state.status().unwrap();
         assert!(!failed.registered);
         assert!(
