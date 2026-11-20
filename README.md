@@ -1,12 +1,18 @@
-<p align="center"><img src="docs/brand/deskpilot-app-icon.svg" width="88" alt="DeskPilot logo"></p>
+<p align="center">
+  <img src="docs/brand/deskpilot-app-icon.svg" width="88" alt="DeskPilot logo">
+</p>
 
-                                                                # DeskPilot
+<h1 align="center">DeskPilot</h1>
 
-**A local-first Windows desktop command center: find and launch installed applications, inspect running processes, and monitor system resources — without accounts, cloud services, or telemetry.**
+<p align="center">
+  <strong>A local-first Windows desktop command center: find and launch installed applications, inspect running processes, and monitor system resources — without accounts, cloud services, or telemetry.</strong>
+</p>
 
-![License: MIT](https://img.shields.io/badge/License-MIT-blue)
-![Status: Developer Preview](https://img.shields.io/badge/Status-Developer%20Preview-orange)
-![Platform: Windows x64](https://img.shields.io/badge/Platform-Windows%20x64-0078D6?logo=windows&logoColor=white)
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue" alt="License: MIT">
+  <img src="https://img.shields.io/badge/Status-Developer%20Preview-orange" alt="Status: Developer Preview">
+  <img src="https://img.shields.io/badge/Platform-Windows%20x64-0078D6?logo=windows&amp;logoColor=white" alt="Platform: Windows x64">
+</p>
 
 > [!IMPORTANT]
 > **v0.1.1 is a developer preview.** Release binaries are **unsigned**, are **not publicly downloadable** (they are held in a private draft release), and have **not been validated on Windows 10** or on a clean physical machine. To try DeskPilot today, [build it from source](#building-from-source). See [Known limitations](#known-limitations) before use.
