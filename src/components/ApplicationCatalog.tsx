@@ -59,6 +59,8 @@ export interface ApplicationCatalogProps {
   onViewChange?: (view: CatalogView) => void;
   onLaunchSuccess?: (applicationId: string, processId: number) => void;
   onLaunchError?: (applicationId: string, error: IpcError) => void;
+  /** Select this app in the Apps view (e.g. requested by the quick launcher). A new nonce re-triggers it. */
+  selectRequest?: { applicationId: string; nonce: number } | null;
   className?: string;
 }
 
@@ -201,6 +203,7 @@ export function ApplicationCatalog({
   onViewChange,
   onLaunchSuccess,
   onLaunchError,
+  selectRequest,
   className = '',
 }: ApplicationCatalogProps) {
   const activeView = controlledActiveView ?? defaultView;
@@ -392,6 +395,12 @@ export function ApplicationCatalog({
     },
     [onViewChange]
   );
+
+  useEffect(() => {
+    if (selectRequest) showApp(selectRequest.applicationId);
+    // Only a new request (new nonce) should re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectRequest?.nonce]);
 
   const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Escape') {
