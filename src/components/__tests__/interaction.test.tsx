@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import { ApplicationCatalog } from '../ApplicationCatalog';
 import { ApplicationCard } from '../ApplicationCard';
 import { LaunchButton } from '../LaunchButton';
@@ -17,6 +17,9 @@ import {
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
+
+/** App rows in the catalog listbox (excludes <option>s of the source dropdown). */
+const getAppRows = () => within(screen.getByRole('listbox', { name: 'Apps' })).getAllByRole('option');
 
 describe('Frontend Component Interaction & Root Integration', () => {
   const sampleApps: ApplicationDto[] = [
@@ -118,10 +121,10 @@ describe('Frontend Component Interaction & Root Integration', () => {
       const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i }) as HTMLButtonElement;
       expect(refreshBtn).toBeDefined();
       expect(refreshBtn.getAttribute('aria-label')).toBe('Refresh catalog');
-      expect(refreshBtn.getAttribute('title')).toBe('Refresh application catalog');
+      expect(refreshBtn.getAttribute('title')).toBe('Scan the Start menu and registry again');
       expect(refreshBtn.disabled).toBe(false);
       expect(refreshBtn.querySelector('svg')).not.toBeNull();
-      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('false');
     });
 
     it('transitions to scanning state and updates catalog on resolution', async () => {
@@ -151,12 +154,12 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       const refreshBtn = screen.getByRole('button', { name: /refresh catalog/i });
-      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('false');
 
       fireEvent.click(refreshBtn);
 
       // Button enters scanning state immediately
-      expect(refreshBtn.textContent).toBe('Scanning...');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('true');
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
 
       // Awaits resolution and updates the DOM
@@ -164,7 +167,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getByText('Refreshed New App')).toBeDefined();
       });
 
-      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('false');
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(false);
       expect(screen.queryByText('Visual Studio Code')).toBeNull();
       expect(tauriCore.invoke).toHaveBeenCalledWith('discover_applications', undefined);
@@ -190,7 +193,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // Trigger first click
       fireEvent.click(refreshBtn);
-      expect(refreshBtn.textContent).toBe('Scanning...');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('true');
       expect(refreshBtn.disabled).toBe(true);
       expect(tauriCore.invoke).toHaveBeenCalledTimes(1);
 
@@ -222,7 +225,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getByText('Concurrent Proof App')).toBeDefined();
       });
 
-      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('false');
       expect(refreshBtn.disabled).toBe(false);
     });
 
@@ -248,7 +251,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getByText('Registry scanning access denied')).toBeDefined();
       });
 
-      expect(refreshBtn.textContent).toBe('Refresh Catalog');
+      expect(refreshBtn.getAttribute('aria-busy')).toBe('false');
       expect(refreshBtn.disabled).toBe(false);
     });
 
@@ -452,7 +455,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // Verifies AppStatus header subtitle loads with synchronized v0.1.1
       await waitFor(() => {
-        expect(screen.getByText(/Core v0.1.1/)).toBeDefined();
+        expect(screen.getByTitle(/Core v0.1.1/)).toBeDefined();
       });
 
       // Verifies ApplicationCatalog is rendered under App
@@ -627,7 +630,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(document.activeElement).toBe(searchInput);
     });
 
-    it('focuses search input when global search trigger button in header is clicked', async () => {
+    it('renders exactly one search box per view (the duplicate header search is removed)', async () => {
       vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
         if (cmd === 'get_app_status') {
           return {
@@ -655,13 +658,15 @@ describe('Frontend Component Interaction & Root Integration', () => {
         expect(screen.getByText('Visual Studio Code')).toBeDefined();
       });
 
+      expect(screen.getAllByRole('searchbox')).toHaveLength(1);
+      expect(document.querySelector('.global-search-trigger')).toBeNull();
+
       const searchInput = screen.getByRole('searchbox', { name: /search applications/i }) as HTMLInputElement;
       searchInput.blur();
       expect(document.activeElement).not.toBe(searchInput);
 
-      const searchTrigger = screen.getByRole('button', { name: /search applications \(ctrl\+k\)/i });
-      fireEvent.click(searchTrigger);
-
+      // Ctrl+K still focuses the view's own search box
+      fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
       expect(document.activeElement).toBe(searchInput);
     });
   });
@@ -998,7 +1003,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       const searchInput = screen.getByRole('searchbox', { name: /search applications/i });
-      const cards = screen.getAllByRole('article');
+      const cards = getAppRows();
 
       expect(document.activeElement).toBe(searchInput);
 
@@ -1040,7 +1045,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         />
       );
 
-      const cards = screen.getAllByRole('article');
+      const cards = getAppRows();
       cards[0].focus();
       expect(document.activeElement).toBe(cards[0]);
 
@@ -1070,7 +1075,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(inspector.textContent).toContain('Visual Studio Code');
 
       // Click on Google Chrome card
-      const cards = screen.getAllByRole('article');
+      const cards = getAppRows();
       fireEvent.click(cards[1]);
 
       // Google Chrome is now selected
@@ -1089,22 +1094,21 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       // Initially 3 applications
-      expect(screen.getByText('Showing 3 applications')).toBeDefined();
+      expect(screen.getByText('Showing 3 apps')).toBeDefined();
 
-      // Click "HKLM 64-bit" pill
-      const hklmPill = screen.getByRole('button', { name: 'HKLM 64-bit' });
-      fireEvent.click(hklmPill);
+      // Choose "Registry, all users (64-bit)" in the source dropdown
+      const sourceSelect = screen.getByRole('combobox', { name: /where the app was found/i });
+      fireEvent.change(sourceSelect, { target: { value: 'hklm-64' } });
 
       // Only Google Chrome has HKLM 64-bit in sampleApps
-      expect(screen.getByText(/filtered from 3 total/i)).toBeDefined();
-      const cards = screen.getAllByRole('article');
+      expect(screen.getByText('Showing 1 of 3 apps')).toBeDefined();
+      const cards = getAppRows();
       expect(cards).toHaveLength(1);
       expect(cards[0].textContent).toContain('Google Chrome');
 
       // Return to All
-      const allPill = screen.getByRole('button', { name: 'All' });
-      fireEvent.click(allPill);
-      expect(screen.getAllByRole('article')).toHaveLength(3);
+      fireEvent.change(sourceSelect, { target: { value: 'all' } });
+      expect(getAppRows()).toHaveLength(3);
     });
 
     it('arrow key navigation updates selection and ApplicationInspector synchronization', () => {
@@ -1115,7 +1119,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         />
       );
 
-      const cards = screen.getAllByRole('article');
+      const cards = getAppRows();
       const inspector = screen.getByTestId('application-inspector');
 
       // Card 0 is selected initially
@@ -1147,8 +1151,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(inspector.textContent).toContain('Visual Studio Code');
 
       // Click "HKLM 64-bit" which excludes Visual Studio Code (HKCU only)
-      const hklmPill = screen.getByRole('button', { name: 'HKLM 64-bit' });
-      fireEvent.click(hklmPill);
+      const sourceSelect = screen.getByRole('combobox', { name: /where the app was found/i });
+      fireEvent.change(sourceSelect, { target: { value: 'hklm-64' } });
 
       // Reconciles to Google Chrome (the only matching app)
       expect(inspector.textContent).toContain('Google Chrome');
@@ -1168,7 +1172,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       // Select Google Chrome
-      const cards = screen.getAllByRole('article');
+      const cards = getAppRows();
       fireEvent.click(cards[1]);
 
       // Launch from inspector button
@@ -1280,16 +1284,17 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
       expect(document.activeElement).toBe(procSearch);
 
-      // 3. In System view: search trigger button is disabled and Ctrl+K does nothing
+      // 3. In System view there is no search box, so Ctrl+K has nothing to focus
       const sysNavBtn = screen.getByRole('button', { name: 'System' });
       fireEvent.click(sysNavBtn);
 
       await waitFor(() => {
         expect(screen.getByRole('heading', { level: 1, name: /^system$/i })).toBeDefined();
       });
-      const headerSearchBtn = document.querySelector('button.global-search-trigger') as HTMLButtonElement;
-      expect(headerSearchBtn).toBeDefined();
-      expect(headerSearchBtn.disabled).toBe(true);
+      expect(screen.queryAllByRole('searchbox')).toHaveLength(0);
+      const beforeFocus = document.activeElement;
+      fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+      expect(document.activeElement).toBe(beforeFocus);
 
       // 4. Input-focus guard: typing Ctrl+K inside an arbitrary input element does not hijack focus or prevent default
       const arbitraryInput = document.createElement('input');
