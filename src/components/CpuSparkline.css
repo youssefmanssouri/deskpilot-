@@ -13,7 +13,7 @@
 }
 
 .cpu-sparkline-baseline {
-  stroke: var(--dp-border-subtle, #d0d7de);
+  stroke: var(--dp-border-subtle);
   stroke-width: 1;
   stroke-dasharray: 2 2;
   opacity: 0.6;
@@ -21,7 +21,7 @@
 
 .cpu-sparkline-path {
   fill: none;
-  stroke: var(--dp-accent-primary, #0969da);
+  stroke: var(--dp-accent-primary);
   stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -32,15 +32,15 @@
 }
 
 .cpu-sparkline-dot {
-  fill: var(--dp-accent-primary, #0969da);
-  stroke: var(--dp-surface-card, #ffffff);
+  fill: var(--dp-accent-primary);
+  stroke: var(--dp-surface-card);
   stroke-width: 1.5;
 }
 
 .cpu-sparkline-caption {
   font-size: 10px;
-  color: var(--dp-text-muted, #6e7781);
-  font-family: var(--dp-font-mono, monospace);
+  color: var(--dp-text-muted);
+  font-family: var(--dp-font-mono);
   line-height: 1;
 }
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import {
   ProcessMonitor,
   formatWorkingSet,
@@ -124,11 +124,11 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
         className: 'status-badge status-badge-full',
       });
       expect(getStatusBadge('partial')).toEqual({
-        label: 'Partial',
+        label: 'Limited',
         className: 'status-badge status-badge-partial',
       });
       expect(getStatusBadge('handleUnavailable')).toEqual({
-        label: 'Handle Unavailable',
+        label: 'Protected',
         className: 'status-badge status-badge-unavailable',
       });
       expect(getStatusBadge('exited')).toEqual({
@@ -216,7 +216,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
 
       render(<ProcessMonitor autoFetch={true} />);
 
-      expect(screen.getByText('Scanning active processes...')).toBeDefined();
+      expect(screen.getByText('Reading running processes…')).toBeDefined();
     });
 
     it('renders process rows, headers, and metadata on successful load', async () => {
@@ -245,14 +245,16 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       expect(screen.getByText('45.0 s')).toBeDefined();
 
       // Verify status badges
-      expect(screen.getByText('Full')).toBeDefined();
-      expect(screen.getByText('Partial')).toBeDefined();
-      expect(screen.getByText('Handle Unavailable')).toBeDefined();
-      expect(screen.getByText('Exited')).toBeDefined();
+      // ("Protected" is also a filter chip, so look inside the table.)
+      const table = within(screen.getByRole('table'));
+      expect(table.getByText('Full')).toBeDefined();
+      expect(table.getByText('Limited')).toBeDefined();
+      expect(table.getByText('Protected')).toBeDefined();
+      expect(table.getByText('Exited')).toBeDefined();
 
       // Verify summary bar metrics
-      expect(screen.getByText('Retained Processes:')).toBeDefined();
-      expect(screen.getByText('Total Observed:')).toBeDefined();
+      expect(screen.getByText('Showing:')).toBeDefined();
+      expect(screen.getByText('Running:')).toBeDefined();
     });
 
     it('renders empty state when process list is empty', async () => {
@@ -342,7 +344,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       render(<ProcessMonitor initialData={sampleResult} autoFetch={false} />);
 
       const refreshBtn = screen.getByRole('button', { name: /refresh process list/i });
-      expect(refreshBtn.textContent).toBe('Refresh Processes');
+      expect(refreshBtn.textContent).toBe('Refresh');
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(false);
 
       vi.mocked(tauriCore.invoke).mockReturnValueOnce(refreshPromise);
@@ -350,13 +352,13 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       // Trigger refresh
       fireEvent.click(refreshBtn);
 
-      expect(refreshBtn.textContent).toBe('Scanning...');
+      expect(refreshBtn.textContent).toBe('Updating…');
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
 
       resolveRefresh(sampleResult);
 
       await waitFor(() => {
-        expect(refreshBtn.textContent).toBe('Refresh Processes');
+        expect(refreshBtn.textContent).toBe('Refresh');
         expect((refreshBtn as HTMLButtonElement).disabled).toBe(false);
       });
       expect(tauriCore.invoke).toHaveBeenCalledWith('list_processes', undefined);
@@ -437,7 +439,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
 
       const { unmount } = render(<ProcessMonitor autoFetch={true} />);
 
-      expect(screen.getByText('Scanning active processes...')).toBeDefined();
+      expect(screen.getByText('Reading running processes…')).toBeDefined();
 
       // Unmounting while request is in-flight must cleanly unmount without throwing
       expect(() => unmount()).not.toThrow();
@@ -499,7 +501,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       expect(screen.getByText('transient.exe')).toBeDefined();
 
       // Click "High Memory (> 100 MiB)" chip with exact visible label
-      const highMemChip = screen.getByRole('button', { name: /high memory \(> 100 mib\)/i });
+      const highMemChip = screen.getByRole('button', { name: /over 100 mib/i });
       fireEvent.click(highMemChip);
 
       expect(screen.getByText('code.exe')).toBeDefined();
@@ -517,8 +519,8 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       // Clear search
       fireEvent.change(searchInput, { target: { value: '' } });
 
-      // Click "Restricted Handles" chip
-      const restrictedChip = screen.getByRole('button', { name: /restricted handles/i });
+      // Click "Protected" chip
+      const restrictedChip = screen.getByRole('button', { name: /protected/i });
       fireEvent.click(restrictedChip);
 
       expect(screen.getByText('System Idle Process')).toBeDefined();
@@ -526,7 +528,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       expect(screen.queryByText('browser.exe')).toBeNull();
 
       // Click "All Processes" to restore
-      const allChip = screen.getByRole('button', { name: /all processes/i });
+      const allChip = screen.getByRole('button', { name: /^all/i });
       fireEvent.click(allChip);
 
       expect(screen.getByText('code.exe')).toBeDefined();
@@ -629,7 +631,7 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       fireEvent.click(refreshBtn);
 
       await waitFor(() => {
-        expect(refreshBtn.textContent).toBe('Refresh Processes');
+        expect(refreshBtn.textContent).toBe('Refresh');
       });
 
       // Filter and sort must be retained

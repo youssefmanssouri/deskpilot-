@@ -3,7 +3,7 @@
 .process-inspector {
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-lg);
+  border-radius: var(--dp-radius-xl);
   box-shadow: var(--dp-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -14,9 +14,7 @@
 }
 
 .process-inspector-header {
-  padding: var(--dp-space-3) var(--dp-space-4);
-  background-color: var(--dp-surface-subtle);
-  border-bottom: 1px solid var(--dp-border-subtle);
+  padding: var(--dp-space-4) var(--dp-space-5) var(--dp-space-2);
   display: flex;
   justify-content: space-between;
   align-items: center;

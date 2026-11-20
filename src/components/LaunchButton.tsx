@@ -169,14 +169,14 @@ export function LaunchButton({
   const getButtonText = () => {
     switch (status) {
       case 'launching':
-        return 'Launching...';
+        return 'Opening…';
       case 'launched':
-        return displayPid ? `Launched (PID ${displayPid})` : 'Launched';
+        return displayPid ? `Opened (PID ${displayPid})` : 'Opened';
       case 'failed':
-        return 'Launch Failed';
+        return "Couldn't open";
       case 'idle':
       default:
-        return 'Launch';
+        return 'Open';
     }
   };
 
@@ -188,7 +188,7 @@ export function LaunchButton({
       className={statusClass}
       onClick={handleClick}
       disabled={disabled || isLaunching}
-      aria-label={ariaLabel ?? `Launch application ${applicationId}`}
+      aria-label={ariaLabel ?? `Open application ${applicationId}`}
       aria-busy={isLaunching}
       title={displayError ? `Error: ${displayError}` : undefined}
     >

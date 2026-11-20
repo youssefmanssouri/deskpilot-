@@ -1,11 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
-import { deskpilotApi, type AppStatusDto } from './lib/ipc';
+import {
+  deskpilotApi,
+  type AppStatusDto,
+  type NavigateRequestDto,
+  type ShortcutStatusDto,
+} from './lib/ipc';
+import { isTauriRuntime, NAVIGATE_EVENT, onTauriEvent } from './lib/tauriEnv';
+import { applyAppearance } from './lib/appearance';
 import {
   ApplicationCatalog,
   type CatalogView,
   SystemMetricsProvider,
   useSharedSystemMetrics,
   formatUptime,
+  getGreeting,
 } from './components';
 import './App.css';
 
@@ -26,23 +34,36 @@ export function getBadgeClass(availability: string): string {
 /**
  * Returns header title and descriptive subtitle based on the active catalog view.
  */
-export function getHeaderInfo(view: CatalogView): { title: string; subtitle: string } {
+export function getHeaderInfo(
+  view: CatalogView,
+  now: Date = new Date()
+): { title: string; subtitle: string } {
   switch (view) {
+    case 'settings':
+      return {
+        title: 'Settings',
+        subtitle: 'Theme, shortcut, startup and privacy.',
+      };
+    case 'home':
+      return {
+        title: getGreeting(now),
+        subtitle: 'Everything on this PC, one shortcut away.',
+      };
     case 'processes':
       return {
-        title: 'Process Monitor',
-        subtitle: 'Real-time Windows process inspection & diagnostic telemetry ledger',
+        title: 'Processes',
+        subtitle: 'What is running on this PC right now. Read-only.',
       };
     case 'system':
       return {
-        title: 'System Intelligence',
-        subtitle: 'Win32 hardware utilization, fixed disk storage & operating system telemetry',
+        title: 'System',
+        subtitle: 'Processor, memory, drives and uptime.',
       };
     case 'applications':
     default:
       return {
-        title: 'Application Discovery',
-        subtitle: 'Local-first Windows application metadata catalog & deterministic identity engine',
+        title: 'Apps',
+        subtitle: 'Search, filter and open the apps installed on this PC.',
       };
   }
 }
@@ -53,10 +74,10 @@ function SidebarTelemetryPulse() {
   const cpuStr = shared?.metrics ? `${shared.metrics.cpu.utilizationPercent.toFixed(1)}%` : null;
 
   return (
-    <div className="sidebar-pulse-card" role="region" aria-label="Live Telemetry Pulse">
+    <div className="sidebar-pulse-card" role="region" aria-label="System summary">
       <div className="sidebar-pulse-header">
         <span className="sidebar-pulse-dot" aria-hidden="true" />
-        <span>Live Telemetry</span>
+        <span>System</span>
       </div>
       <div className="sidebar-pulse-metrics">
         <div className="sidebar-pulse-item">
@@ -74,14 +95,60 @@ function SidebarTelemetryPulse() {
 
 function AppContent() {
   const [appStatus, setAppStatus] = useState<AppStatusDto | null>(null);
-  const [activeView, setActiveView] = useState<CatalogView>('applications');
+  const [activeView, setActiveView] = useState<CatalogView>('home');
+  const [selectRequest, setSelectRequest] = useState<{ applicationId: string; nonce: number } | null>(null);
+  const [shortcut, setShortcut] = useState<ShortcutStatusDto | null>(null);
+
+  // The quick launcher asks the main window to show a view or a specific app.
+  useEffect(() => {
+    return onTauriEvent<NavigateRequestDto>(NAVIGATE_EVENT, (req) => {
+      const views: CatalogView[] = ['home', 'applications', 'processes', 'system'];
+      if (!views.includes(req.view)) return;
+      setActiveView(req.view);
+      if (req.applicationId) {
+        setSelectRequest({ applicationId: req.applicationId, nonce: Date.now() });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    deskpilotApi.getLauncherShortcut().then(setShortcut).catch(() => {});
+    deskpilotApi
+      .getSettings()
+      .then((s) => s && applyAppearance(s))
+      .catch(() => {});
+  }, []);
+
+  // Keep the sidebar shortcut hint current after it is changed in Settings.
+  useEffect(() => {
+    if (activeView !== 'settings' || !isTauriRuntime()) return;
+    return () => {
+      deskpilotApi.getLauncherShortcut().then(setShortcut).catch(() => {});
+    };
+  }, [activeView]);
 
   useEffect(() => {
     deskpilotApi.getAppStatus().then(setAppStatus).catch(() => null);
   }, []);
 
+  // Set when Ctrl+K is pressed on Home: switch to Apps, then focus its search once rendered.
+  const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
+
+  useEffect(() => {
+    if (pendingSearchFocus && activeView === 'applications') {
+      setPendingSearchFocus(false);
+      const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
+      searchInput?.focus();
+      searchInput?.select();
+    }
+  }, [pendingSearchFocus, activeView]);
+
   const focusSearchInput = useCallback(() => {
-    if (activeView === 'applications') {
+    if (activeView === 'home') {
+      setPendingSearchFocus(true);
+      setActiveView('applications');
+    } else if (activeView === 'applications') {
       const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
       if (searchInput) {
         searchInput.focus();
@@ -117,7 +184,7 @@ function AppContent() {
           return;
         }
 
-        if (activeView === 'applications' || activeView === 'processes') {
+        if (activeView === 'home' || activeView === 'applications' || activeView === 'processes') {
           e.preventDefault();
           focusSearchInput();
         }
@@ -151,7 +218,10 @@ function AppContent() {
               <polyline points="2 12 12 17 22 12" />
             </svg>
             <span className="app-brand-title">DeskPilot</span>
-            <span className="app-brand-badge">
+            <span
+              className="app-brand-badge"
+              title={appStatus ? `Core v${appStatus.version} (${appStatus.environment})` : undefined}
+            >
               {appStatus ? `v${appStatus.version}` : 'v0.1.1'}
             </span>
           </div>
@@ -159,10 +229,35 @@ function AppContent() {
           <nav className="app-sidebar-nav" aria-label="Views">
             <button
               type="button"
+              className={`app-nav-button ${activeView === 'home' ? 'active' : ''}`}
+              onClick={() => setActiveView('home')}
+              aria-current={activeView === 'home' ? 'page' : undefined}
+              aria-label="Home"
+            >
+              <svg
+                className="app-nav-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="7" height="9" rx="2" />
+                <rect x="14" y="3" width="7" height="5" rx="2" />
+                <rect x="14" y="12" width="7" height="9" rx="2" />
+                <rect x="3" y="16" width="7" height="5" rx="2" />
+              </svg>
+              <span className="app-nav-label">Home</span>
+            </button>
+
+            <button
+              type="button"
               className={`app-nav-button ${activeView === 'applications' ? 'active' : ''}`}
               onClick={() => setActiveView('applications')}
               aria-current={activeView === 'applications' ? 'page' : undefined}
-              aria-label="Applications"
+              aria-label="Apps"
             >
               <svg
                 className="app-nav-icon"
@@ -178,7 +273,7 @@ function AppContent() {
                 <line x1="3" y1="9" x2="21" y2="9" />
                 <line x1="9" y1="21" x2="9" y2="9" />
               </svg>
-              <span className="app-nav-label">Applications</span>
+              <span className="app-nav-label">Apps</span>
             </button>
 
             <button
@@ -186,7 +281,7 @@ function AppContent() {
               className={`app-nav-button ${activeView === 'processes' ? 'active' : ''}`}
               onClick={() => setActiveView('processes')}
               aria-current={activeView === 'processes' ? 'page' : undefined}
-              aria-label="Active Processes"
+              aria-label="Processes"
             >
               <svg
                 className="app-nav-icon"
@@ -209,7 +304,7 @@ function AppContent() {
               className={`app-nav-button ${activeView === 'system' ? 'active' : ''}`}
               onClick={() => setActiveView('system')}
               aria-current={activeView === 'system' ? 'page' : undefined}
-              aria-label="System Intelligence"
+              aria-label="System"
             >
               <svg
                 className="app-nav-icon"
@@ -223,12 +318,54 @@ function AppContent() {
               >
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
-              <span className="app-nav-label">System Intelligence</span>
+              <span className="app-nav-label">System</span>
             </button>
           </nav>
         </div>
 
         <div className="app-sidebar-bottom">
+          <button
+            type="button"
+            className={`app-nav-button ${activeView === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveView('settings')}
+            aria-current={activeView === 'settings' ? 'page' : undefined}
+            aria-label="Settings"
+          >
+            <svg
+              className="app-nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+              <circle cx="9" cy="6" r="2" />
+              <circle cx="15" cy="12" r="2" />
+              <circle cx="8" cy="18" r="2" />
+            </svg>
+            <span className="app-nav-label">Settings</span>
+          </button>
+          {shortcut && (
+            <div
+              className={`sidebar-launcher-hint ${shortcut.registered ? '' : 'warning'}`.trim()}
+              role="status"
+              title={shortcut.message ?? undefined}
+            >
+              {shortcut.registered ? (
+                <>
+                  <kbd>{shortcut.accelerator}</kbd>
+                  <span>opens the quick launcher from anywhere</span>
+                </>
+              ) : (
+                <span>Quick launcher shortcut unavailable. Hover for details.</span>
+              )}
+            </div>
+          )}
           <SidebarTelemetryPulse />
         </div>
       </aside>
@@ -243,46 +380,7 @@ function AppContent() {
             </div>
             <p className="app-header-subtitle">
               {headerInfo.subtitle}
-              {appStatus && ` • Core v${appStatus.version} (${appStatus.environment})`}
             </p>
-          </div>
-
-          <div className="app-header-right">
-            <button
-              type="button"
-              className="global-search-trigger"
-              onClick={focusSearchInput}
-              disabled={activeView === 'system'}
-              aria-label={
-                activeView === 'processes'
-                  ? 'Search processes (Ctrl+K)'
-                  : activeView === 'system'
-                    ? 'System Intelligence'
-                    : 'Search applications (Ctrl+K)'
-              }
-            >
-              <svg
-                className="global-search-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <span className="global-search-placeholder">
-                {activeView === 'processes'
-                  ? 'Search processes...'
-                  : activeView === 'system'
-                    ? 'System Intelligence'
-                    : 'Search applications...'}
-              </span>
-              {activeView !== 'system' && <kbd className="global-search-hotkey">Ctrl+K</kbd>}
-            </button>
           </div>
         </header>
 
@@ -292,6 +390,7 @@ function AppContent() {
             <ApplicationCatalog
               activeView={activeView}
               onViewChange={setActiveView}
+              selectRequest={selectRequest}
             />
           </div>
         </main>

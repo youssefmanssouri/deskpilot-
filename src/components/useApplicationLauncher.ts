@@ -7,6 +7,8 @@ export interface ActiveLaunchState {
   status: LaunchStatus;
   launchedPid?: number | null;
   errorMessage?: string | null;
+  /** Sanitized IPC error category (e.g. PERMISSION_DENIED) for a failed launch. */
+  errorCode?: string | null;
 }
 
 export interface UseApplicationLauncherOptions {
@@ -17,7 +19,7 @@ export interface UseApplicationLauncherOptions {
 
 /**
  * Consolidated React hook for managing application launch execution,
- * visual state transitions (idle -> launching -> launched / failed -> idle),
+ * visual state transitions (idle -> launching -> launched -> idle, or -> failed until the next launch),
  * debounced duplicate-launch prevention, and auto-reset timers.
  */
 export function useApplicationLauncher({
@@ -99,9 +101,11 @@ export function useApplicationLauncher({
                 applicationId,
                 status: 'failed',
                 errorMessage: err.message,
+                errorCode: err.code,
               });
               onError?.(applicationId, err);
-              scheduleReset(currentAttempt);
+              // Failures are not auto-reset: the explanation stays visible until the
+              // user retries or launches another application.
             }
           },
         });

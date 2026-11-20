@@ -1,8 +1,14 @@
 import { invokeSafe } from './client';
 import type {
   AppStatusDto,
+  ApplicationDto,
   CommandIntentDto,
   DiscoveryResultDto,
+  LaunchHistoryEntryDto,
+  NavigableView,
+  SettingsDto,
+  ShortcutStatusDto,
+  ThemePreference,
   LaunchResult,
   LaunchResultDto,
   ProcessListResultDto,
@@ -60,6 +66,66 @@ export const deskpilotApi = {
    */
   getSystemMetrics(): Promise<SystemMetricsDto> {
     return invokeSafe<SystemMetricsDto>('get_system_metrics');
+  },
+
+  /** Recent launches recorded by the backend after successful launches. */
+  getLaunchHistory(): Promise<LaunchHistoryEntryDto[]> {
+    return invokeSafe<LaunchHistoryEntryDto[]>('get_launch_history');
+  },
+
+  /** Deletes the local launch history (memory and file). */
+  clearLaunchHistory(): Promise<void> {
+    return invokeSafe<void>('clear_launch_history');
+  },
+
+  /** Current catalog without rescanning (empty until discovery has run once). */
+  listApplications(): Promise<ApplicationDto[]> {
+    return invokeSafe<ApplicationDto[]>('list_applications');
+  },
+
+  /** Hides the quick launcher window. */
+  hideLauncher(): Promise<void> {
+    return invokeSafe<void>('hide_launcher');
+  },
+
+  /** Shows the main window on a view, optionally with an app selected; hides the launcher. */
+  showMainWindow(view: NavigableView, applicationId?: string): Promise<void> {
+    return invokeSafe<void>('show_main_window', {
+      view,
+      applicationId: applicationId ?? null,
+    });
+  },
+
+  /** Whether the quick launcher's global shortcut is registered. */
+  getLauncherShortcut(): Promise<ShortcutStatusDto> {
+    return invokeSafe<ShortcutStatusDto>('get_launcher_shortcut');
+  },
+
+  getSettings(): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('get_settings');
+  },
+
+  setTheme(theme: ThemePreference): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_theme', { theme });
+  },
+
+  /** Turning history off also clears it. */
+  setHistoryEnabled(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_history_enabled', { enabled });
+  },
+
+  /** Rejected with an IpcError if the shortcut is invalid or taken; the old one stays active. */
+  setLauncherShortcut(shortcut: string): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_launcher_shortcut', { shortcut });
+  },
+
+  setStartWithWindows(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_start_with_windows', { enabled });
+  },
+
+  /** Saved now; applied the next time DeskPilot starts (Windows 11 only). */
+  setGlassEffect(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_glass_effect', { enabled });
   },
 };
 

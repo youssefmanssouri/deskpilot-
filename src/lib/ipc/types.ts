@@ -194,3 +194,54 @@ export interface SystemMetricsDto {
   sampledAtMs: number;
 }
 
+/**
+ * One recent launch from the local history (most recent first).
+ * Holds only the application id, its display name and the launch time; never paths.
+ */
+export interface LaunchHistoryEntryDto {
+  applicationId: string;
+  displayName: string;
+  /** Milliseconds since the Unix epoch. */
+  launchedAtMs: number;
+}
+
+/** Whether the quick launcher's global shortcut is active. */
+export interface ShortcutStatusDto {
+  /** Human-readable shortcut, e.g. "Ctrl+Alt+Space". */
+  accelerator: string;
+  registered: boolean;
+  /** Plain-language explanation when registration failed. */
+  message: string | null;
+}
+
+/** Views the main window can be asked to show. Mirrors CatalogView. */
+export type NavigableView = 'home' | 'applications' | 'processes' | 'system';
+
+/** Payload of the "deskpilot://navigate" event sent to the main window. */
+export interface NavigateRequestDto {
+  view: NavigableView;
+  applicationId: string | null;
+}
+
+/** Theme preference: follow Windows, or force light/dark. */
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+/** Everything the Settings page shows (see commands::settings::SettingsDto). */
+export interface SettingsDto {
+  theme: ThemePreference;
+  historyEnabled: boolean;
+  /** Canonical form, e.g. "Ctrl+Super+K". */
+  launcherShortcut: string;
+  /** Display form, e.g. "Ctrl+Win+K". */
+  launcherShortcutLabel: string;
+  shortcutRegistered: boolean;
+  shortcutMessage: string | null;
+  /** Read from Windows; null if it could not be checked. */
+  startWithWindows: boolean | null;
+  /** Saved preference (applies after restart). */
+  glassEffect: boolean;
+  /** True on Windows 11. */
+  glassSupported: boolean;
+  /** True if glass is on in this session. */
+  glassActive: boolean;
+}
