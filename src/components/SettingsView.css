@@ -1,0 +1,212 @@
+/* Settings page. All colours come from --dp-* tokens. */
+
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-4);
+  max-width: 760px;
+  padding-bottom: var(--dp-space-2);
+}
+
+.settings-card {
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-subtle);
+  border-radius: var(--dp-radius-xl);
+  box-shadow: var(--dp-shadow-xs);
+  padding: var(--dp-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--dp-space-3);
+}
+
+.settings-card-title {
+  margin: 0;
+  font-size: var(--dp-font-size-lg);
+  font-weight: var(--dp-font-weight-bold);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dp-space-4);
+  flex-wrap: wrap;
+  padding-top: var(--dp-space-3);
+  border-top: 1px solid var(--dp-border-subtle);
+}
+
+.settings-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.settings-row-label {
+  font-weight: var(--dp-font-weight-semibold);
+}
+
+.settings-row-help,
+.settings-muted {
+  margin: 0;
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-muted);
+}
+
+.settings-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--dp-space-2);
+  flex-wrap: wrap;
+}
+
+/* Segmented theme picker */
+.settings-segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--dp-radius-pill);
+  background-color: var(--dp-surface-subtle);
+  border: 1px solid var(--dp-border-subtle);
+}
+
+.settings-segmented button {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: var(--dp-radius-pill);
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-font-size-sm);
+  font-weight: var(--dp-font-weight-medium);
+  color: var(--dp-text-secondary);
+  cursor: pointer;
+}
+
+.settings-segmented button.active {
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+}
+
+.settings-segmented button:focus-visible,
+.settings-switch:focus-visible,
+.settings-button:focus-visible,
+.settings-capture:focus-visible {
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Switch */
+.settings-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dp-radius-pill);
+  background-color: var(--dp-border-medium);
+  cursor: pointer;
+  transition: background-color var(--dp-transition-fast);
+}
+
+.settings-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: var(--dp-surface-card);
+  box-shadow: var(--dp-shadow-sm);
+  transition: left var(--dp-transition-fast);
+}
+
+.settings-switch[aria-checked="true"] {
+  background-color: var(--dp-accent-primary);
+}
+
+.settings-switch[aria-checked="true"]::after {
+  left: 23px;
+  background-color: var(--dp-text-on-accent);
+}
+
+.settings-switch:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Buttons and shortcut display */
+.settings-button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--dp-radius-pill);
+  border: 1px solid var(--dp-border-medium);
+  background-color: var(--dp-surface-card);
+  color: var(--dp-text-primary);
+  font-family: var(--dp-font-sans);
+  font-size: var(--dp-font-size-sm);
+  font-weight: var(--dp-font-weight-semibold);
+  cursor: pointer;
+}
+
+.settings-button.primary {
+  background-color: var(--dp-accent-primary);
+  border-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+}
+
+.settings-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-kbd {
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-font-size-sm);
+  padding: 4px 10px;
+  border: 1px solid var(--dp-border-medium);
+  border-bottom-width: 2px;
+  border-radius: var(--dp-radius-sm);
+  background-color: var(--dp-surface-subtle);
+}
+
+.settings-kbd.warning {
+  border-color: var(--dp-status-unverified-border);
+  background-color: var(--dp-status-unverified-bg);
+}
+
+.settings-capture {
+  min-width: 200px;
+  padding: 6px 12px;
+  border: 2px dashed var(--dp-border-strong);
+  border-radius: var(--dp-radius-md);
+  font-family: var(--dp-font-mono);
+  font-size: var(--dp-font-size-sm);
+  color: var(--dp-text-primary);
+  background-color: var(--dp-surface-subtle);
+}
+
+.settings-note {
+  margin: 0;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  border-radius: var(--dp-radius-md);
+  background-color: var(--dp-surface-subtle);
+  font-size: var(--dp-font-size-sm);
+}
+
+.settings-error {
+  margin: 0;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  border-radius: var(--dp-radius-md);
+  background-color: var(--dp-status-missing-bg);
+  border: 1px solid var(--dp-status-missing-border);
+  border-left: 3px solid var(--dp-status-missing);
+  font-size: var(--dp-font-size-sm);
+}

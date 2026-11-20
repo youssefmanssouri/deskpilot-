@@ -222,3 +222,26 @@ export interface NavigateRequestDto {
   view: NavigableView;
   applicationId: string | null;
 }
+
+/** Theme preference: follow Windows, or force light/dark. */
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+/** Everything the Settings page shows (see commands::settings::SettingsDto). */
+export interface SettingsDto {
+  theme: ThemePreference;
+  historyEnabled: boolean;
+  /** Canonical form, e.g. "Ctrl+Super+K". */
+  launcherShortcut: string;
+  /** Display form, e.g. "Ctrl+Win+K". */
+  launcherShortcutLabel: string;
+  shortcutRegistered: boolean;
+  shortcutMessage: string | null;
+  /** Read from Windows; null if it could not be checked. */
+  startWithWindows: boolean | null;
+  /** Saved preference (applies after restart). */
+  glassEffect: boolean;
+  /** True on Windows 11. */
+  glassSupported: boolean;
+  /** True if glass is on in this session. */
+  glassActive: boolean;
+}
