@@ -6,6 +6,7 @@ import {
   type ShortcutStatusDto,
 } from './lib/ipc';
 import { isTauriRuntime, NAVIGATE_EVENT, onTauriEvent } from './lib/tauriEnv';
+import { applyAppearance } from './lib/appearance';
 import {
   ApplicationCatalog,
   type CatalogView,
@@ -38,6 +39,11 @@ export function getHeaderInfo(
   now: Date = new Date()
 ): { title: string; subtitle: string } {
   switch (view) {
+    case 'settings':
+      return {
+        title: 'Settings',
+        subtitle: 'Theme, shortcut, startup and privacy.',
+      };
     case 'home':
       return {
         title: getGreeting(now),
@@ -108,7 +114,19 @@ function AppContent() {
   useEffect(() => {
     if (!isTauriRuntime()) return;
     deskpilotApi.getLauncherShortcut().then(setShortcut).catch(() => {});
+    deskpilotApi
+      .getSettings()
+      .then((s) => s && applyAppearance(s))
+      .catch(() => {});
   }, []);
+
+  // Keep the sidebar shortcut hint current after it is changed in Settings.
+  useEffect(() => {
+    if (activeView !== 'settings' || !isTauriRuntime()) return;
+    return () => {
+      deskpilotApi.getLauncherShortcut().then(setShortcut).catch(() => {});
+    };
+  }, [activeView]);
 
   useEffect(() => {
     deskpilotApi.getAppStatus().then(setAppStatus).catch(() => null);
@@ -306,6 +324,32 @@ function AppContent() {
         </div>
 
         <div className="app-sidebar-bottom">
+          <button
+            type="button"
+            className={`app-nav-button ${activeView === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveView('settings')}
+            aria-current={activeView === 'settings' ? 'page' : undefined}
+            aria-label="Settings"
+          >
+            <svg
+              className="app-nav-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+              <circle cx="9" cy="6" r="2" />
+              <circle cx="15" cy="12" r="2" />
+              <circle cx="8" cy="18" r="2" />
+            </svg>
+            <span className="app-nav-label">Settings</span>
+          </button>
           {shortcut && (
             <div
               className={`sidebar-launcher-hint ${shortcut.registered ? '' : 'warning'}`.trim()}

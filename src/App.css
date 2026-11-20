@@ -123,10 +123,10 @@
   --dp-header-height: 54px;
 }
 
-/* Dark theme: follows the Windows app theme through prefers-color-scheme.
-   Only colour tokens change; sizes, radii and type are shared. */
+/* Dark theme: follows the Windows app theme through prefers-color-scheme, unless the
+   user forces Light (data-theme="light") in Settings. Only colour tokens change. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
 
     --dp-surface-canvas: #0e0e10;
@@ -175,6 +175,62 @@
     --dp-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
     --dp-shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
   }
+}
+
+/* Explicit dark choice in Settings (works even when Windows uses the light theme). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --dp-surface-canvas: #0e0e10;
+  --dp-surface-sidebar: #18181b;
+  --dp-surface-card: #1c1c1f;
+  --dp-surface-subtle: #26262a;
+  --dp-surface-hover: #2a2a2e;
+  --dp-surface-active: #323237;
+  --dp-surface-selected: #2a2a2e;
+  --dp-surface-header: #18181b;
+
+  --dp-text-primary: #f4f4f5;
+  --dp-text-secondary: #d4d4d8;
+  --dp-text-muted: #a1a1aa;
+  --dp-text-disabled: #5c5c63;
+  --dp-text-on-accent: #111113;
+
+  --dp-border-subtle: #2e2e33;
+  --dp-border-medium: #3f3f46;
+  --dp-border-strong: #71717a;
+  --dp-border-selected: #f4f4f5;
+
+  --dp-accent-primary: #f4f4f5;
+  --dp-accent-hover: #d4d4d8;
+  --dp-accent-active: #ffffff;
+  --dp-accent-subtle: #3f3f46;
+  --dp-focus-ring: #f4f4f5;
+
+  --dp-status-available: #4ade80;
+  --dp-status-available-bg: #0f2a1a;
+  --dp-status-available-border: #166534;
+
+  --dp-status-unverified: #fbbf24;
+  --dp-status-unverified-bg: #2e2410;
+  --dp-status-unverified-border: #854d0e;
+
+  --dp-status-missing: #f87171;
+  --dp-status-missing-bg: #2f1416;
+  --dp-status-missing-border: #991b1b;
+
+  --dp-status-incomplete: #a1a1aa;
+  --dp-status-incomplete-bg: #26262a;
+  --dp-status-incomplete-border: #3f3f46;
+
+  --dp-shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --dp-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.5);
+  --dp-shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+}
+
+/* Glass (Mica): only the window background becomes transparent; cards stay opaque. */
+:root[data-glass="true"] {
+  --dp-surface-canvas: transparent;
 }
 
 /* ==========================================================================

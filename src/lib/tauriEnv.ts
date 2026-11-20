@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 /** Event names shared with the Rust side (core::launcher). */
 export const NAVIGATE_EVENT = 'deskpilot://navigate';
 export const LAUNCHER_SHOWN_EVENT = 'deskpilot://launcher-shown';
+export const SETTINGS_CHANGED_EVENT = 'deskpilot://settings-changed';
 
 /**
  * True only inside the Tauri webview. Event and window APIs are skipped elsewhere

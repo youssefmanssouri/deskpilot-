@@ -6,7 +6,9 @@ import type {
   DiscoveryResultDto,
   LaunchHistoryEntryDto,
   NavigableView,
+  SettingsDto,
   ShortcutStatusDto,
+  ThemePreference,
   LaunchResult,
   LaunchResultDto,
   ProcessListResultDto,
@@ -97,6 +99,33 @@ export const deskpilotApi = {
   /** Whether the quick launcher's global shortcut is registered. */
   getLauncherShortcut(): Promise<ShortcutStatusDto> {
     return invokeSafe<ShortcutStatusDto>('get_launcher_shortcut');
+  },
+
+  getSettings(): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('get_settings');
+  },
+
+  setTheme(theme: ThemePreference): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_theme', { theme });
+  },
+
+  /** Turning history off also clears it. */
+  setHistoryEnabled(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_history_enabled', { enabled });
+  },
+
+  /** Rejected with an IpcError if the shortcut is invalid or taken; the old one stays active. */
+  setLauncherShortcut(shortcut: string): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_launcher_shortcut', { shortcut });
+  },
+
+  setStartWithWindows(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_start_with_windows', { enabled });
+  },
+
+  /** Saved now; applied the next time DeskPilot starts (Windows 11 only). */
+  setGlassEffect(enabled: boolean): Promise<SettingsDto> {
+    return invokeSafe<SettingsDto>('set_glass_effect', { enabled });
   },
 };
 
