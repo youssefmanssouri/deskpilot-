@@ -6,6 +6,7 @@ import {
   SystemMetricsProvider,
   useSharedSystemMetrics,
   formatUptime,
+  getGreeting,
 } from './components';
 import './App.css';
 
@@ -26,8 +27,16 @@ export function getBadgeClass(availability: string): string {
 /**
  * Returns header title and descriptive subtitle based on the active catalog view.
  */
-export function getHeaderInfo(view: CatalogView): { title: string; subtitle: string } {
+export function getHeaderInfo(
+  view: CatalogView,
+  now: Date = new Date()
+): { title: string; subtitle: string } {
   switch (view) {
+    case 'home':
+      return {
+        title: getGreeting(now),
+        subtitle: 'Everything on this PC, one shortcut away.',
+      };
     case 'processes':
       return {
         title: 'Processes',
@@ -74,14 +83,29 @@ function SidebarTelemetryPulse() {
 
 function AppContent() {
   const [appStatus, setAppStatus] = useState<AppStatusDto | null>(null);
-  const [activeView, setActiveView] = useState<CatalogView>('applications');
+  const [activeView, setActiveView] = useState<CatalogView>('home');
 
   useEffect(() => {
     deskpilotApi.getAppStatus().then(setAppStatus).catch(() => null);
   }, []);
 
+  // Set when Ctrl+K is pressed on Home: switch to Apps, then focus its search once rendered.
+  const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
+
+  useEffect(() => {
+    if (pendingSearchFocus && activeView === 'applications') {
+      setPendingSearchFocus(false);
+      const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
+      searchInput?.focus();
+      searchInput?.select();
+    }
+  }, [pendingSearchFocus, activeView]);
+
   const focusSearchInput = useCallback(() => {
-    if (activeView === 'applications') {
+    if (activeView === 'home') {
+      setPendingSearchFocus(true);
+      setActiveView('applications');
+    } else if (activeView === 'applications') {
       const searchInput = document.getElementById('catalog-search-input') as HTMLInputElement | null;
       if (searchInput) {
         searchInput.focus();
@@ -117,7 +141,7 @@ function AppContent() {
           return;
         }
 
-        if (activeView === 'applications' || activeView === 'processes') {
+        if (activeView === 'home' || activeView === 'applications' || activeView === 'processes') {
           e.preventDefault();
           focusSearchInput();
         }
@@ -160,6 +184,31 @@ function AppContent() {
           </div>
 
           <nav className="app-sidebar-nav" aria-label="Views">
+            <button
+              type="button"
+              className={`app-nav-button ${activeView === 'home' ? 'active' : ''}`}
+              onClick={() => setActiveView('home')}
+              aria-current={activeView === 'home' ? 'page' : undefined}
+              aria-label="Home"
+            >
+              <svg
+                className="app-nav-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="7" height="9" rx="2" />
+                <rect x="14" y="3" width="7" height="5" rx="2" />
+                <rect x="14" y="12" width="7" height="9" rx="2" />
+                <rect x="3" y="16" width="7" height="5" rx="2" />
+              </svg>
+              <span className="app-nav-label">Home</span>
+            </button>
+
             <button
               type="button"
               className={`app-nav-button ${activeView === 'applications' ? 'active' : ''}`}

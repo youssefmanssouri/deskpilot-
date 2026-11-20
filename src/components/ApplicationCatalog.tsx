@@ -3,17 +3,19 @@ import {
   deskpilotApi,
   type ApplicationDto,
   type DiscoveryResultDto,
+  type LaunchHistoryEntryDto,
   IpcError,
 } from '../lib/ipc';
 import { ApplicationCard } from './ApplicationCard';
 import { ApplicationInspector } from './ApplicationInspector';
+import { HomeView, pushRecentEntry } from './HomeView';
 import { ProcessMonitor } from './ProcessMonitor';
 import { SystemMonitor } from './SystemMonitor';
 import { useApplicationLauncher } from './useApplicationLauncher';
 import { canLaunchWithKeyboard } from './launchPolicy';
 import './ApplicationCatalog.css';
 
-export type CatalogView = 'applications' | 'processes' | 'system';
+export type CatalogView = 'home' | 'applications' | 'processes' | 'system';
 
 export type SourceFilterId = 'all' | 'hklm-64' | 'hklm-32' | 'hkcu' | 'start-menu';
 
@@ -196,7 +198,7 @@ export function ApplicationCatalog({
   autoDiscover = true,
   defaultView = 'applications',
   activeView: controlledActiveView,
-  onViewChange: _onViewChange,
+  onViewChange,
   onLaunchSuccess,
   onLaunchError,
   className = '',
@@ -224,10 +226,67 @@ export function ApplicationCatalog({
   const hasAutoFocusedRef = useRef<boolean>(false);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
 
+  // Launch history (Recent apps on Home). Loaded lazily the first time Home is shown,
+  // so other views never pay for it.
+  const [history, setHistory] = useState<LaunchHistoryEntryDto[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState<boolean>(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const historyRequestedRef = useRef<boolean>(false);
+  const applicationsRef = useRef<ApplicationDto[]>(applications);
+  applicationsRef.current = applications;
+
+  const handleLaunchSuccess = useCallback(
+    (applicationId: string, processId: number) => {
+      // Mirror the backend's record immediately; the backend file stays the source of truth.
+      const app = applicationsRef.current.find((a) => a.id === applicationId);
+      if (app) {
+        setHistory((prev) =>
+          pushRecentEntry(prev, {
+            applicationId,
+            displayName: app.displayName,
+            launchedAtMs: Date.now(),
+          })
+        );
+      }
+      onLaunchSuccess?.(applicationId, processId);
+    },
+    [onLaunchSuccess]
+  );
+
   const { activeLaunch, launch } = useApplicationLauncher({
-    onSuccess: onLaunchSuccess,
+    onSuccess: handleLaunchSuccess,
     onError: onLaunchError,
   });
+
+  useEffect(() => {
+    if (activeView !== 'home' || historyRequestedRef.current) return;
+    historyRequestedRef.current = true;
+    deskpilotApi
+      .getLaunchHistory()
+      .then((entries) => {
+        // Merge with anything launched before the history arrived (newest first).
+        setHistory((local) =>
+          local.reduceRight(
+            (acc, e) => pushRecentEntry(acc, e),
+            Array.isArray(entries) ? entries : []
+          )
+        );
+      })
+      .catch((err) => {
+        setHistoryError(IpcError.fromResponse(err).message || 'Recent apps could not be loaded.');
+      })
+      .finally(() => setHistoryLoaded(true));
+  }, [activeView]);
+
+  const clearHistory = useCallback(() => {
+    setHistoryError(null);
+    deskpilotApi
+      .clearLaunchHistory()
+      .then(() => setHistory([]))
+      .catch((err) => {
+        setHistoryError(IpcError.fromResponse(err).message || 'Recent apps could not be cleared.');
+      });
+  }, []);
 
   const fetchDiscovery = useCallback(async () => {
     if (isLoadingRef.current) {
@@ -312,6 +371,28 @@ export function ApplicationCatalog({
     return computeAvailabilityCounts(applications);
   }, [applications]);
 
+  /** Opens the Apps view with one app selected and every filter cleared, so it is visible. */
+  const showApp = useCallback(
+    (applicationId: string) => {
+      setSearchFilter('');
+      setActiveSourceFilter('all');
+      setActiveStatusFilter('all');
+      setSelectedAppId(applicationId);
+      onViewChange?.('applications');
+    },
+    [onViewChange]
+  );
+
+  const showApps = useCallback(
+    (filter: StatusFilterId) => {
+      setSearchFilter('');
+      setActiveSourceFilter('all');
+      setActiveStatusFilter(filter);
+      onViewChange?.('applications');
+    },
+    [onViewChange]
+  );
+
   const handleSearchKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (e) => {
     if (e.key === 'Escape') {
       if (searchFilter.length > 0) {
@@ -380,7 +461,21 @@ export function ApplicationCatalog({
 
   return (
     <div className={`catalog-container ${className}`.trim()}>
-      {activeView === 'system' ? (
+      {activeView === 'home' ? (
+        <HomeView
+          applications={applications}
+          hasDiscovered={hasDiscovered}
+          history={history}
+          historyLoaded={historyLoaded}
+          historyError={historyError}
+          activeLaunch={activeLaunch}
+          onOpenApp={(id) => void launch(id)}
+          onShowApp={showApp}
+          onShowApps={showApps}
+          onShowSystem={() => onViewChange?.('system')}
+          onClearHistory={clearHistory}
+        />
+      ) : activeView === 'system' ? (
         <div id="panel-system" role="region" aria-label="System">
           <SystemMonitor />
         </div>

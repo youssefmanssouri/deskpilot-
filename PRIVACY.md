@@ -11,8 +11,15 @@ DeskPilot is engineered as a local-first Windows command center and desktop util
 
 ### In-Memory Application State
 - In the audited application codebase (including application discovery, search indexing, launcher execution, process management, system monitoring, and system tray lifecycle), all application runtime state (indexed application catalog entries, active process cache, and system metrics) is held exclusively in volatile host memory (`AppState` guarded by standard concurrency primitives).
-- Source inspection of the application codebase confirms that these application subsystems implement no database persistence (such as SQLite), no configuration-file persistence, and no disk-based log files.
+- Source inspection of the application codebase confirms that these application subsystems implement no database persistence (such as SQLite) and no disk-based log files. The only file DeskPilot writes is the local launch history described below.
 - Session indices and in-memory caches are discarded when the application process terminates.
+
+### Local Launch History ("Recent apps")
+- After an application launches successfully, DeskPilot records it so the Home view can show recently opened apps.
+- Each entry contains only the application's catalog identifier (`app_` followed by 32 hexadecimal characters), its display name, and the launch time. No executable paths, arguments, working directories, or usernames are stored.
+- At most 10 entries are kept, newest first, one per application.
+- The history is stored in a single file, `launch-history.json`, in DeskPilot's application data folder (on Windows: `%APPDATA%\com.deskpilot.app\`). It never leaves the machine.
+- The **Clear** button in the Recent apps section deletes all entries from memory and from the file. Deleting the file manually has the same effect; a missing or damaged file is treated as an empty history.
 
 ### Network Behavior & Telemetry
 - The audited application code contains no implemented outbound HTTP or WebSocket client, analytics, telemetry, crash reporting, or automatic update mechanism.
