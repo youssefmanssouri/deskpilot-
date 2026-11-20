@@ -1,5 +1,6 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
+import { canLaunchWithClick } from './launchPolicy';
 
 export interface ApplicationCardProps {
   application: ApplicationDto;
@@ -60,7 +61,7 @@ export function ApplicationCard({
   onLaunchRequest,
   showLaunchButton = true,
 }: ApplicationCardProps) {
-  const isLaunchDisabled = disabled || application.availability === 'MissingTarget';
+  const isLaunchDisabled = disabled || !canLaunchWithClick(application);
   const badgeClass = getAvailabilityBadgeClass(application.availability);
   const cardTitleId = `app-card-title-${application.id}`;
 

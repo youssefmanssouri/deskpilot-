@@ -7,6 +7,7 @@ import {
   IpcError,
 } from '../lib/ipc';
 import { ProcessInspector } from './ProcessInspector';
+import { shortenPathMiddle } from './formatPath';
 import './ProcessMonitor.css';
 
 export type SortField = 'name' | 'pid' | 'memory' | 'cpu' | 'status';
@@ -659,7 +660,7 @@ export function ProcessMonitor({
                           className="process-path-cell"
                           title={proc.executablePath ?? 'Path unavailable or restricted by operating system'}
                         >
-                          {proc.executablePath ?? '—'}
+                          {proc.executablePath ? shortenPathMiddle(proc.executablePath) : '—'}
                         </td>
                       </tr>
                     );

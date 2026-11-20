@@ -68,6 +68,13 @@
   transition: border-color var(--dp-transition-fast), box-shadow var(--dp-transition-fast);
 }
 
+/* App.css also styles .process-search-input (loaded later, same specificity) and resets
+   its padding, which put the search icon on top of the placeholder text.
+   This more specific rule keeps room for the icon. */
+.process-search-input-box .process-search-input {
+  padding-left: 32px;
+}
+
 .process-search-input:focus {
   border-color: var(--dp-focus-ring);
   box-shadow: 0 0 0 2px var(--dp-accent-subtle);

@@ -212,3 +212,40 @@
   line-height: 1.4;
 }
 
+
+/* Inline launch error (replaces the former tooltip-only error message) */
+.app-inspector-launch-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--dp-space-1);
+  padding: var(--dp-space-3);
+  border: 1px solid var(--dp-status-missing-border);
+  border-left: 3px solid var(--dp-status-missing);
+  border-radius: var(--dp-radius-md);
+  background-color: var(--dp-status-missing-bg);
+  color: var(--dp-text-primary);
+  font-size: var(--dp-font-size-sm);
+}
+
+.app-inspector-launch-error p {
+  margin: 0;
+}
+
+.app-inspector-launch-error-title {
+  font-weight: var(--dp-font-weight-semibold);
+  /* Dark text: the red token on the red tint is only 4.4:1, under WCAG AA for small text. */
+  color: var(--dp-text-primary);
+}
+
+.app-inspector-launch-error-detail {
+  color: var(--dp-text-secondary);
+}
+
+.app-inspector-launch-error-hint {
+  color: var(--dp-text-primary);
+}
+
+.app-inspector-launch-error .retry-button {
+  margin-top: var(--dp-space-1);
+}

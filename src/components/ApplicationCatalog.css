@@ -1,4 +1,5 @@
 /* Application Catalog & Card Styles */
+/* All colours come from the --dp-* tokens defined in App.css. Do not add hex or rgb() literals here. */
 
 .catalog-tab-content {
   display: flex;
@@ -32,17 +33,17 @@
 
 .catalog-search-label {
   font-size: 0.75rem;
-  color: #8b949e;
+  color: var(--dp-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 500;
 }
 
 .catalog-search-input {
-  background-color: #0d1117;
-  border: 1px solid #30363d;
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-medium);
   border-radius: 6px;
-  color: #c9d1d9;
+  color: var(--dp-text-primary);
   padding: 0.5rem 0.85rem;
   font-size: 0.9rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -50,10 +51,14 @@
   box-sizing: border-box;
 }
 
+.catalog-search-input::placeholder {
+  color: var(--dp-text-muted);
+}
+
 .catalog-search-input:focus {
   outline: none;
-  border-color: #58a6ff;
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+  border-color: var(--dp-focus-ring);
+  box-shadow: 0 0 0 3px var(--dp-accent-subtle);
 }
 
 .catalog-search-input:disabled {
@@ -69,8 +74,8 @@
 
 /* Application Card */
 .app-card {
-  background-color: #161b22;
-  border: 1px solid #30363d;
+  background-color: var(--dp-surface-card);
+  border: 1px solid var(--dp-border-subtle);
   border-radius: 8px;
   padding: 1rem;
   display: flex;
@@ -80,22 +85,22 @@
 }
 
 .app-card:hover {
-  border-color: #484f58;
+  border-color: var(--dp-border-strong);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--dp-shadow-md);
 }
 
 .app-card:focus-visible {
   outline: none;
-  border-color: #58a6ff;
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.4);
+  border-color: var(--dp-focus-ring);
+  box-shadow: 0 0 0 3px var(--dp-accent-subtle);
   transform: translateY(-1px);
 }
 
 .app-card.selected {
-  border-color: var(--dp-accent-primary, #0969da);
-  background-color: var(--dp-surface-selected, rgba(9, 105, 218, 0.05));
-  box-shadow: 0 0 0 1px var(--dp-accent-primary, #0969da);
+  border-color: var(--dp-accent-primary);
+  background-color: var(--dp-surface-selected);
+  box-shadow: 0 0 0 1px var(--dp-accent-primary);
 }
 
 .app-card-header {
@@ -116,7 +121,7 @@
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--dp-text-primary);
   word-break: break-word;
 }
 
@@ -128,12 +133,12 @@
 
 .app-card-publisher {
   font-size: 0.85rem;
-  color: #c9d1d9;
+  color: var(--dp-text-secondary);
 }
 
 .app-card-version {
   font-size: 0.75rem;
-  color: #8b949e;
+  color: var(--dp-text-muted);
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
@@ -149,7 +154,7 @@
   justify-content: flex-end;
   align-items: center;
   padding-top: 0.5rem;
-  border-top: 1px solid #21262d;
+  border-top: 1px solid var(--dp-border-subtle);
 }
 
 /* Launch Button States */
@@ -163,20 +168,19 @@
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
-  border: 1px solid rgba(240, 246, 252, 0.1);
-  background-color: #238636;
-  color: #ffffff;
+  border: 1px solid transparent;
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
   min-width: 90px;
 }
 
 .launch-button:hover:not(:disabled) {
-  background-color: #2ea043;
+  background-color: var(--dp-accent-hover);
 }
 
 .launch-button:focus-visible {
-  outline: none;
-  border-color: #58a6ff;
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: 2px;
 }
 
 .launch-button:disabled {
@@ -185,25 +189,25 @@
 }
 
 .launch-button.launching {
-  background-color: #1f6feb;
-  color: #ffffff;
+  background-color: var(--dp-accent-active);
+  color: var(--dp-text-on-accent);
 }
 
 .launch-button.launched {
-  background-color: #238636;
-  color: #ffffff;
+  background-color: var(--dp-accent-active);
+  color: var(--dp-text-on-accent);
 }
 
 .launch-button.failed {
-  background-color: #b62324;
-  color: #ffffff;
+  background-color: var(--dp-status-missing);
+  color: var(--dp-text-on-accent);
 }
 
 /* Retry Button */
 .retry-button {
-  background-color: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
+  background-color: var(--dp-surface-card);
+  color: var(--dp-text-secondary);
+  border: 1px solid var(--dp-border-medium);
   border-radius: 6px;
   padding: 0.35rem 0.85rem;
   font-size: 0.85rem;
@@ -212,14 +216,13 @@
 }
 
 .retry-button:hover {
-  background-color: #30363d;
-  color: #ffffff;
+  background-color: var(--dp-surface-hover);
+  color: var(--dp-text-primary);
 }
 
 .retry-button:focus-visible {
-  outline: none;
-  border-color: #58a6ff;
-  box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+  outline: 2px solid var(--dp-focus-ring);
+  outline-offset: 2px;
 }
 
 /* Error banner details */
@@ -244,19 +247,37 @@
   font-weight: 600;
   font-size: 1.1rem;
   margin: 0 0 0.35rem 0;
-  color: #c9d1d9;
+  color: var(--dp-text-primary);
 }
 
 .empty-subtitle {
   font-size: 0.85rem;
   margin: 0;
-  color: #8b949e;
+  color: var(--dp-text-muted);
+}
+
+/* Summary bar values (replaces former inline colours).
+   Scoped under .summary-item to beat App.css's `.summary-item strong` rule. */
+.summary-item .summary-value-available {
+  color: var(--dp-accent-primary);
+}
+
+.summary-item .summary-value-unverified {
+  color: var(--dp-status-unverified);
+}
+
+.summary-item .summary-value-incomplete {
+  color: var(--dp-status-incomplete);
+}
+
+.summary-item .summary-value-missing {
+  color: var(--dp-status-missing);
 }
 
 /* Master-Detail Split Pane */
 .catalog-master-detail {
   display: flex;
-  gap: var(--dp-space-4, 16px);
+  gap: var(--dp-space-4);
   align-items: flex-start;
   width: 100%;
 }
@@ -266,14 +287,14 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--dp-space-3, 12px);
+  gap: var(--dp-space-3);
 }
 
 .catalog-inspector-pane {
   width: 340px;
   flex-shrink: 0;
   position: sticky;
-  top: var(--dp-space-3, 12px);
+  top: var(--dp-space-3);
 }
 
 /* Source Filter Pills */
@@ -286,32 +307,32 @@
 
 .source-filter-pill {
   padding: 4px 12px;
-  font-size: var(--dp-font-size-xs, 12px);
-  font-weight: var(--dp-font-weight-medium, 500);
-  border-radius: var(--dp-radius-pill, 9999px);
-  background-color: var(--dp-surface-subtle, #f6f8fa);
-  color: var(--dp-text-secondary, #57606a);
-  border: 1px solid var(--dp-border-subtle, #d0d7de);
+  font-size: var(--dp-font-size-xs);
+  font-weight: var(--dp-font-weight-medium);
+  border-radius: var(--dp-radius-pill);
+  background-color: var(--dp-surface-subtle);
+  color: var(--dp-text-secondary);
+  border: 1px solid var(--dp-border-subtle);
   cursor: pointer;
-  transition: all var(--dp-transition-fast, 0.15s ease);
+  transition: all var(--dp-transition-fast);
 }
 
 .source-filter-pill:hover {
-  background-color: var(--dp-surface-hover, #f3f4f6);
-  color: var(--dp-text-primary, #24292f);
-  border-color: var(--dp-border-default, #afb8c1);
+  background-color: var(--dp-surface-hover);
+  color: var(--dp-text-primary);
+  border-color: var(--dp-border-strong);
 }
 
 .source-filter-pill.active {
-  background-color: var(--dp-accent-primary, #0969da);
-  color: var(--dp-text-on-accent, #ffffff);
-  border-color: var(--dp-accent-primary, #0969da);
-  font-weight: var(--dp-font-weight-semibold, 600);
+  background-color: var(--dp-accent-primary);
+  color: var(--dp-text-on-accent);
+  border-color: var(--dp-accent-primary);
+  font-weight: var(--dp-font-weight-semibold);
 }
 
 .source-filter-pill:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--dp-accent-primary, #0969da);
+  box-shadow: 0 0 0 2px var(--dp-accent-primary);
 }
 
 /* Dynamic count row */
@@ -319,13 +340,13 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--dp-font-size-xs, 12px);
-  color: var(--dp-text-muted, #6e7781);
+  font-size: var(--dp-font-size-xs);
+  color: var(--dp-text-muted);
   padding: 2px 4px;
 }
 
 .catalog-count-indicator {
-  font-weight: var(--dp-font-weight-medium, 500);
+  font-weight: var(--dp-font-weight-medium);
 }
 
 /* Responsive Master-Detail Behavior */
@@ -339,4 +360,3 @@
     position: static;
   }
 }
-
