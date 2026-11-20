@@ -32,15 +32,49 @@ Built on **Tauri 2**, **Rust**, and **React 19**, DeskPilot pairs native Win32 p
 
 ## Preview
 
-### Application Discovery Catalog
-Discovers applications across Windows Registry hives and Start Menu hierarchies with provenance tracking, operational availability badges, and secure launch controls.
+> **Note:** These screenshots show the **unreleased UI redesign** (see [Unreleased: UI redesign](#unreleased-ui-redesign)). They were rendered from the app's real frontend code with **sample data** in a browser, not captured from a Windows installation, and will be replaced with real captures after Windows testing. The released v0.1.1 build still has the previous interface.
 
-![DeskPilot Application Catalog](docs/screenshots/deskpilot_overview.png)
+### Home
+A summary of the PC (apps found, uptime, problems that need attention), live CPU and memory, and recently opened apps.
 
-### Real-Time Deterministic Search & Ranking
-Real-time query filtering utilizing a four-tier ranking hierarchy (exact match, prefix match, substring match, and publisher metadata) with keyboard-first navigation, query matching, Escape-key clearing, and empty-state rendering.
+![DeskPilot Home with sample data](docs/screenshots/redesign_home.png)
 
-![DeskPilot Real-Time Search](docs/screenshots/deskpilot_search.png)
+### Apps
+Search, filter by status or source, and open apps from a dense list. Failed launches explain what happened and what to try next.
+
+![DeskPilot Apps with sample data](docs/screenshots/redesign_apps.png)
+
+### Quick launcher
+Opened from any app with a global shortcut (Ctrl+Alt+Space by default).
+
+![DeskPilot quick launcher with sample data](docs/screenshots/redesign_launcher.png)
+
+### Settings and dark mode
+Theme (follow Windows, light or dark), launcher shortcut, start with Windows, recent apps, and an optional Windows 11 glass effect.
+
+![DeskPilot Settings with sample data](docs/screenshots/redesign_settings.png)
+
+![DeskPilot Home in dark mode with sample data](docs/screenshots/redesign_home_dark.png)
+
+---
+
+## Unreleased: UI redesign
+
+The redesign lives on the `ui/phase-*` branches (draft pull requests, one per phase) and is **not part of the v0.1.1 release**. The test counts, checksums and Windows verification results elsewhere in this README describe v0.1.1 only.
+
+- **New look:** monochrome design system with light and dark themes that follow Windows. Fonts are bundled locally, and the wording is plain throughout.
+- **Home page:** PC summary, live CPU and memory, a "Needs attention" list, and Recent apps.
+- **Apps:** search first, status chips and a source filter, a dense list with one Tab stop, and launch errors explained inline.
+- **Quick launcher:** a global shortcut (default Ctrl+Alt+Space, changeable) opens a small search window from any app.
+- **Settings:**
+  - theme
+  - launcher shortcut
+  - start with Windows (a per-user startup entry only)
+  - recent apps on/off
+  - glass effect (Windows 11 only, applied after restart)
+- **Local data:** launch history and settings are stored in two small files on this PC; see [PRIVACY.md](PRIVACY.md).
+
+Windows verification of the redesign (including the Rust `cargo test` suite) is still pending.
 
 ---
 

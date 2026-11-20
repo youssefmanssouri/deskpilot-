@@ -9,13 +9,14 @@ import {
 import { ApplicationCard } from './ApplicationCard';
 import { ApplicationInspector } from './ApplicationInspector';
 import { HomeView, pushRecentEntry } from './HomeView';
+import { SettingsView } from './SettingsView';
 import { ProcessMonitor } from './ProcessMonitor';
 import { SystemMonitor } from './SystemMonitor';
 import { useApplicationLauncher } from './useApplicationLauncher';
 import { canLaunchWithKeyboard } from './launchPolicy';
 import './ApplicationCatalog.css';
 
-export type CatalogView = 'home' | 'applications' | 'processes' | 'system';
+export type CatalogView = 'home' | 'applications' | 'processes' | 'system' | 'settings';
 
 export type SourceFilterId = 'all' | 'hklm-64' | 'hklm-32' | 'hkcu' | 'start-menu';
 
@@ -470,7 +471,9 @@ export function ApplicationCatalog({
 
   return (
     <div className={`catalog-container ${className}`.trim()}>
-      {activeView === 'home' ? (
+      {activeView === 'settings' ? (
+        <SettingsView onHistoryCleared={() => setHistory([])} />
+      ) : activeView === 'home' ? (
         <HomeView
           applications={applications}
           hasDiscovered={hasDiscovered}

@@ -3,7 +3,9 @@ pub mod application_identity;
 pub mod application_launcher;
 pub mod launch_history;
 pub mod launcher;
+pub mod persistence;
 pub mod process_service;
+pub mod settings;
 pub mod status_service;
 pub mod system_service;
 

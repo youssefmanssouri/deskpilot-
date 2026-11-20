@@ -4,11 +4,14 @@ import ReactDOM from "react-dom/client";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/manrope";
 import "./App.css";
+import { applyCachedTheme } from "./lib/appearance";
 import App from "./App";
 import { LauncherApp } from "./launcher/LauncherApp";
 
 // The same bundle serves two windows: the main window and the quick launcher
 // (declared in tauri.conf.json with url "index.html?window=launcher").
+applyCachedTheme();
+
 const isLauncherWindow = new URLSearchParams(window.location.search).get("window") === "launcher";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

@@ -7,6 +7,7 @@ use crate::models::ApplicationDto;
 use crate::state::AppState;
 use crate::tray::{self, MAIN_WINDOW_LABEL};
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 /// Shows the launcher centred and focused, or hides it if it is already visible.
 /// Called by the global shortcut handler.
@@ -24,6 +25,27 @@ pub fn toggle_launcher<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         window.emit(LAUNCHER_SHOWN_EVENT, ())?;
     }
     Ok(())
+}
+
+/// Registers `canonical` (e.g. "Ctrl+Alt+Space") as the global shortcut that toggles the
+/// launcher. Returns the plugin's error text on failure (shortcut taken or reserved).
+pub fn register_launcher_shortcut<R: Runtime>(
+    app: &AppHandle<R>,
+    canonical: &str,
+) -> Result<(), String> {
+    app.global_shortcut()
+        .on_shortcut(canonical, |app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                let _ = toggle_launcher(app);
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Unregisters a shortcut previously registered by DeskPilot. Errors are ignored: the
+/// shortcut may already be gone, and there is nothing useful to report.
+pub fn unregister_launcher_shortcut<R: Runtime>(app: &AppHandle<R>, canonical: &str) {
+    let _ = app.global_shortcut().unregister(canonical);
 }
 
 fn hide_launcher_window<R: Runtime>(app: &AppHandle<R>) {

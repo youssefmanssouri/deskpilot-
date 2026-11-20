@@ -579,13 +579,16 @@ describe('Frontend Component Interaction & Root Integration', () => {
       render(<App />);
 
       // Non-functional sidebar placeholder controls must be completely absent from DOM
-      expect(screen.queryByRole('button', { name: /settings/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /terminal/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /window layout/i })).toBeNull();
-      expect(screen.queryByTitle(/settings/i)).toBeNull();
       expect(screen.queryByTitle(/terminal/i)).toBeNull();
       expect(screen.queryByTitle(/window layout/i)).toBeNull();
       expect(document.querySelector('.sidebar-footer-actions')).toBeNull();
+
+      // Settings is now a real page (Phase 5), not a placeholder: its button must work.
+      fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+      expect(screen.getByRole('heading', { level: 1, name: /^settings$/i })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Settings' }).getAttribute('aria-current')).toBe('page');
 
       // Authentic functional navigation controls must be present and accessible
       expect(screen.getByRole('button', { name: 'Apps' })).toBeDefined();
