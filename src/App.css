@@ -773,3 +773,40 @@ h1, h2, h3, h4,
     animation: none !important;
   }
 }
+
+/* Quick launcher shortcut hint in the sidebar */
+.sidebar-launcher-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: var(--dp-space-2) var(--dp-space-3);
+  border: 1px dashed var(--dp-border-medium);
+  border-radius: var(--dp-radius-lg);
+  font-size: var(--dp-font-size-xs);
+  color: var(--dp-text-muted);
+}
+
+.sidebar-launcher-hint kbd {
+  font-family: var(--dp-font-mono);
+  font-size: 10.5px;
+  padding: 0 5px;
+  border: 1px solid var(--dp-border-medium);
+  border-bottom-width: 2px;
+  border-radius: var(--dp-radius-xs);
+  background-color: var(--dp-surface-card);
+  color: var(--dp-text-secondary);
+}
+
+.sidebar-launcher-hint.warning {
+  border-style: solid;
+  border-color: var(--dp-status-unverified-border);
+  background-color: var(--dp-status-unverified-bg);
+  color: var(--dp-text-primary);
+}
+
+@media (max-width: 860px) {
+  .sidebar-launcher-hint {
+    display: none;
+  }
+}

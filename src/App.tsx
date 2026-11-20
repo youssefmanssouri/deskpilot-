@@ -1,5 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { deskpilotApi, type AppStatusDto } from './lib/ipc';
+import {
+  deskpilotApi,
+  type AppStatusDto,
+  type NavigateRequestDto,
+  type ShortcutStatusDto,
+} from './lib/ipc';
+import { isTauriRuntime, NAVIGATE_EVENT, onTauriEvent } from './lib/tauriEnv';
 import {
   ApplicationCatalog,
   type CatalogView,
@@ -84,6 +90,25 @@ function SidebarTelemetryPulse() {
 function AppContent() {
   const [appStatus, setAppStatus] = useState<AppStatusDto | null>(null);
   const [activeView, setActiveView] = useState<CatalogView>('home');
+  const [selectRequest, setSelectRequest] = useState<{ applicationId: string; nonce: number } | null>(null);
+  const [shortcut, setShortcut] = useState<ShortcutStatusDto | null>(null);
+
+  // The quick launcher asks the main window to show a view or a specific app.
+  useEffect(() => {
+    return onTauriEvent<NavigateRequestDto>(NAVIGATE_EVENT, (req) => {
+      const views: CatalogView[] = ['home', 'applications', 'processes', 'system'];
+      if (!views.includes(req.view)) return;
+      setActiveView(req.view);
+      if (req.applicationId) {
+        setSelectRequest({ applicationId: req.applicationId, nonce: Date.now() });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    deskpilotApi.getLauncherShortcut().then(setShortcut).catch(() => {});
+  }, []);
 
   useEffect(() => {
     deskpilotApi.getAppStatus().then(setAppStatus).catch(() => null);
@@ -281,6 +306,22 @@ function AppContent() {
         </div>
 
         <div className="app-sidebar-bottom">
+          {shortcut && (
+            <div
+              className={`sidebar-launcher-hint ${shortcut.registered ? '' : 'warning'}`.trim()}
+              role="status"
+              title={shortcut.message ?? undefined}
+            >
+              {shortcut.registered ? (
+                <>
+                  <kbd>{shortcut.accelerator}</kbd>
+                  <span>opens the quick launcher from anywhere</span>
+                </>
+              ) : (
+                <span>Quick launcher shortcut unavailable. Hover for details.</span>
+              )}
+            </div>
+          )}
           <SidebarTelemetryPulse />
         </div>
       </aside>
@@ -305,6 +346,7 @@ function AppContent() {
             <ApplicationCatalog
               activeView={activeView}
               onViewChange={setActiveView}
+              selectRequest={selectRequest}
             />
           </div>
         </main>

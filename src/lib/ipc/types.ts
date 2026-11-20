@@ -204,3 +204,21 @@ export interface LaunchHistoryEntryDto {
   /** Milliseconds since the Unix epoch. */
   launchedAtMs: number;
 }
+
+/** Whether the quick launcher's global shortcut is active. */
+export interface ShortcutStatusDto {
+  /** Human-readable shortcut, e.g. "Ctrl+Alt+Space". */
+  accelerator: string;
+  registered: boolean;
+  /** Plain-language explanation when registration failed. */
+  message: string | null;
+}
+
+/** Views the main window can be asked to show. Mirrors CatalogView. */
+export type NavigableView = 'home' | 'applications' | 'processes' | 'system';
+
+/** Payload of the "deskpilot://navigate" event sent to the main window. */
+export interface NavigateRequestDto {
+  view: NavigableView;
+  applicationId: string | null;
+}
