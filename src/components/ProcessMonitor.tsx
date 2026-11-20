@@ -392,7 +392,7 @@ export function ProcessMonitor({
     <div
       className={`process-monitor-container ${className}`.trim()}
       role="region"
-      aria-label="Process Monitor"
+      aria-label="Running processes"
     >
       {/* Top Toolbar */}
       <div className="process-toolbar">
@@ -482,7 +482,7 @@ export function ProcessMonitor({
           aria-pressed={quickFilter === 'restricted'}
           title="Protected system services with handleUnavailable status"
         >
-          Restricted Handles
+          Protected
           <span className="process-filter-badge">{quickFilterCounts.restricted}</span>
         </button>
       </div>
@@ -516,10 +516,10 @@ export function ProcessMonitor({
       {hasLoaded && !errorMsg && (
         <div className="process-summary-bar" role="region" aria-label="Process summary metrics">
           <div className="process-summary-item">
-            Retained Processes: <strong>{processes.length.toLocaleString()}</strong>
+            Showing: <strong>{processes.length.toLocaleString()}</strong>
           </div>
           <div className="process-summary-item">
-            Total Observed: <strong>{totalProcesses.toLocaleString()}</strong>
+            Running: <strong>{totalProcesses.toLocaleString()}</strong>
           </div>
           {formattedCaptureTime && (
             <div className="process-summary-item">
@@ -616,7 +616,7 @@ export function ProcessMonitor({
                         sortField === 'cpu' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
                       }
                     >
-                      CPU Time {getSortIndicator('cpu')}
+                      Total CPU time {getSortIndicator('cpu')}
                     </th>
                     <th role="columnheader">Created</th>
                     <th role="columnheader">Executable Path</th>

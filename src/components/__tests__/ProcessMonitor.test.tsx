@@ -251,8 +251,8 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       expect(screen.getByText('Exited')).toBeDefined();
 
       // Verify summary bar metrics
-      expect(screen.getByText('Retained Processes:')).toBeDefined();
-      expect(screen.getByText('Total Observed:')).toBeDefined();
+      expect(screen.getByText('Showing:')).toBeDefined();
+      expect(screen.getByText('Running:')).toBeDefined();
     });
 
     it('renders empty state when process list is empty', async () => {
@@ -517,8 +517,8 @@ describe('ProcessMonitor Component & Pure Helpers', () => {
       // Clear search
       fireEvent.change(searchInput, { target: { value: '' } });
 
-      // Click "Restricted Handles" chip
-      const restrictedChip = screen.getByRole('button', { name: /restricted handles/i });
+      // Click "Protected" chip
+      const restrictedChip = screen.getByRole('button', { name: /protected/i });
       fireEvent.click(restrictedChip);
 
       expect(screen.getByText('System Idle Process')).toBeDefined();

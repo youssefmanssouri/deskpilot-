@@ -81,7 +81,7 @@ export function getLoadColorClass(percent: number): string {
 }
 
 /**
- * SystemMonitor renders the System Intelligence & Resource Ledger dashboard.
+ * SystemMonitor renders the System resources view.
  *
  * Guarantees:
  * - Precision Command design: high information density, factual data, no fabricated metrics.
@@ -119,12 +119,12 @@ export const SystemMonitor: React.FC<SystemMonitorProps> = ({
     <div
       className={`system-monitor-container ${className}`.trim()}
       role="region"
-      aria-label="System Intelligence Dashboard"
+      aria-label="System resources"
     >
       {/* Top Toolbar */}
       <div className="system-toolbar">
         <div className="system-toolbar-info">
-          <h2 className="system-title">System Intelligence & Resource Ledger</h2>
+          <h2 className="system-title">System resources</h2>
           <div className="system-subtitle-row">
             {lastUpdated && (
               <span className="system-timestamp">

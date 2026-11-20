@@ -351,11 +351,11 @@ export function ApplicationCatalog({
   return (
     <div className={`catalog-container ${className}`.trim()}>
       {activeView === 'system' ? (
-        <div id="panel-system" role="region" aria-label="System Intelligence">
+        <div id="panel-system" role="region" aria-label="System">
           <SystemMonitor />
         </div>
       ) : activeView === 'processes' ? (
-        <div id="panel-processes" role="region" aria-label="Active Processes">
+        <div id="panel-processes" role="region" aria-label="Processes">
           <ProcessMonitor />
         </div>
       ) : (
@@ -454,22 +454,22 @@ export function ApplicationCatalog({
           {hasDiscovered && !errorMsg && (
             <div className="summary-bar" role="region" aria-label="Catalog summary metrics">
               <div className="summary-item">
-                Total Discovered: <strong>{counts.total}</strong>
+                Found: <strong>{counts.total}</strong>
               </div>
               <div className="summary-item">
-                Available: <strong className="summary-value-available">{counts.available}</strong>
+                Ready: <strong className="summary-value-available">{counts.available}</strong>
               </div>
               <div className="summary-item">
                 Unverified: <strong className="summary-value-unverified">{counts.unverified}</strong>
               </div>
               {counts.incomplete > 0 && (
                 <div className="summary-item">
-                  Incomplete: <strong className="summary-value-incomplete">{counts.incomplete}</strong>
+                  Limited info: <strong className="summary-value-incomplete">{counts.incomplete}</strong>
                 </div>
               )}
               {counts.missing > 0 && (
                 <div className="summary-item">
-                  Missing Target: <strong className="summary-value-missing">{counts.missing}</strong>
+                  Missing: <strong className="summary-value-missing">{counts.missing}</strong>
                 </div>
               )}
             </div>

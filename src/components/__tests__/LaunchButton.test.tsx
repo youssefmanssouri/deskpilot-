@@ -107,9 +107,9 @@ describe('LaunchButton Component & Execution Layer', () => {
       );
 
       expect(html).toContain('type="button"');
-      expect(html).toContain('Launch');
+      expect(html).toContain('>Open<');
       expect(html).toContain('class="launch-button idle"');
-      expect(html).toContain('aria-label="Launch application app_11112222333344445555666677778888"');
+      expect(html).toContain('aria-label="Open application app_11112222333344445555666677778888"');
       expect(html).not.toContain('disabled=""');
       expect(html).not.toContain('disabled="true"');
       expect(html).not.toContain('aria-busy="true"');
@@ -123,7 +123,7 @@ describe('LaunchButton Component & Execution Layer', () => {
         />
       );
 
-      expect(html).toContain('Launching...');
+      expect(html).toContain('Opening…');
       expect(html).toContain('disabled=""');
       expect(html).toContain('aria-busy="true"');
       expect(html).toContain('launching');
@@ -137,7 +137,7 @@ describe('LaunchButton Component & Execution Layer', () => {
         />
       );
 
-      expect(html).toContain('Launched');
+      expect(html).toContain('>Opened<');
       expect(html).toContain('class="launch-button launched"');
     });
 
@@ -149,7 +149,7 @@ describe('LaunchButton Component & Execution Layer', () => {
         />
       );
 
-      expect(html).toContain('Launch Failed');
+      expect(html).toContain('Couldn&#x27;t open');
       expect(html).toContain('class="launch-button failed"');
     });
 
@@ -175,8 +175,8 @@ describe('LaunchButton Component & Execution Layer', () => {
 
       render(<LaunchButton applicationId="app_timer_test" />);
 
-      const button = screen.getByRole('button', { name: /launch application app_timer_test/i });
-      expect(button.textContent).toBe('Launch');
+      const button = screen.getByRole('button', { name: /open application app_timer_test/i });
+      expect(button.textContent).toBe('Open');
 
       // Click to launch
       await act(async () => {
@@ -184,14 +184,14 @@ describe('LaunchButton Component & Execution Layer', () => {
       });
 
       // Status becomes launched
-      expect(button.textContent).toBe('Launched (PID 7890)');
+      expect(button.textContent).toBe('Opened (PID 7890)');
       expect(button.classList.contains('launched')).toBe(true);
 
       // Fast-forward 2999ms (not yet reset)
       act(() => {
         vi.advanceTimersByTime(2999);
       });
-      expect(button.textContent).toBe('Launched (PID 7890)');
+      expect(button.textContent).toBe('Opened (PID 7890)');
 
       // Fast-forward past DEFAULT_LAUNCH_RESET_DELAY_MS (3000ms)
       act(() => {
@@ -199,7 +199,7 @@ describe('LaunchButton Component & Execution Layer', () => {
       });
 
       // State is recovered back to idle, allowing repeated launches
-      expect(button.textContent).toBe('Launch');
+      expect(button.textContent).toBe('Open');
       expect(button.classList.contains('idle')).toBe(true);
     });
 
@@ -212,14 +212,14 @@ describe('LaunchButton Component & Execution Layer', () => {
 
       render(<LaunchButton applicationId="app_timer_fail" autoResetDelayMs={1500} />);
 
-      const button = screen.getByRole('button', { name: /launch application app_timer_fail/i });
+      const button = screen.getByRole('button', { name: /open application app_timer_fail/i });
 
       // Click to launch (fails)
       await act(async () => {
         fireEvent.click(button);
       });
 
-      expect(button.textContent).toBe('Launch Failed');
+      expect(button.textContent).toBe("Couldn't open");
       expect(button.classList.contains('failed')).toBe(true);
 
       // Advance by 1500ms
@@ -228,7 +228,7 @@ describe('LaunchButton Component & Execution Layer', () => {
       });
 
       // State recovered to idle
-      expect(button.textContent).toBe('Launch');
+      expect(button.textContent).toBe('Open');
       expect(button.classList.contains('idle')).toBe(true);
     });
 
@@ -240,13 +240,13 @@ describe('LaunchButton Component & Execution Layer', () => {
       });
 
       const { unmount } = render(<LaunchButton applicationId="app_unmount" />);
-      const button = screen.getByRole('button', { name: /launch application app_unmount/i });
+      const button = screen.getByRole('button', { name: /open application app_unmount/i });
 
       await act(async () => {
         fireEvent.click(button);
       });
 
-      expect(button.textContent).toBe('Launched (PID 1111)');
+      expect(button.textContent).toBe('Opened (PID 1111)');
 
       // Unmount before timer fires
       unmount();
@@ -267,13 +267,13 @@ describe('LaunchButton Component & Execution Layer', () => {
       });
 
       render(<LaunchButton applicationId="app_multilaunch" autoResetDelayMs={3000} />);
-      const button = screen.getByRole('button', { name: /launch application app_multilaunch/i });
+      const button = screen.getByRole('button', { name: /open application app_multilaunch/i });
 
       // First launch
       await act(async () => {
         fireEvent.click(button);
       });
-      expect(button.textContent).toBe('Launched (PID 2222)');
+      expect(button.textContent).toBe('Opened (PID 2222)');
 
       // 1000ms passes (timer is pending)
       act(() => {
@@ -289,21 +289,21 @@ describe('LaunchButton Component & Execution Layer', () => {
         fireEvent.click(button);
       });
 
-      expect(button.textContent).toBe('Launched (PID 3333)');
+      expect(button.textContent).toBe('Opened (PID 3333)');
 
       // Another 2000ms passes (total 3000ms since first launch, but only 2000ms since second launch)
       act(() => {
         vi.advanceTimersByTime(2000);
       });
       // Stale timer from first launch MUST NOT reset the second launch early!
-      expect(button.textContent).toBe('Launched (PID 3333)');
+      expect(button.textContent).toBe('Opened (PID 3333)');
 
       // Another 1000ms passes (3000ms since second launch)
       act(() => {
         vi.advanceTimersByTime(1000);
       });
       // Now resets to idle
-      expect(button.textContent).toBe('Launch');
+      expect(button.textContent).toBe('Open');
     });
   });
 });
