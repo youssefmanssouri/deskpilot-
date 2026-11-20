@@ -238,7 +238,7 @@
 .system-card {
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-lg);
+  border-radius: var(--dp-radius-xl);
   box-shadow: var(--dp-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -249,17 +249,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  background-color: var(--dp-surface-subtle);
-  border-bottom: 1px solid var(--dp-border-subtle);
+  padding: var(--dp-space-4) var(--dp-space-5) 0;
 }
 
 .system-card-title {
-  font-size: var(--dp-font-size-xs);
-  font-weight: var(--dp-font-weight-semibold);
-  color: var(--dp-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-family: var(--dp-font-display);
+  font-size: var(--dp-font-size-lg);
+  font-weight: var(--dp-font-weight-bold);
+  color: var(--dp-text-primary);
 }
 
 .system-card-body {
@@ -348,7 +345,7 @@
 .system-storage-ledger-section {
   background-color: var(--dp-surface-card);
   border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-lg);
+  border-radius: var(--dp-radius-xl);
   box-shadow: var(--dp-shadow-sm);
   display: flex;
   flex-direction: column;
@@ -359,9 +356,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
-  background-color: var(--dp-surface-subtle);
-  border-bottom: 1px solid var(--dp-border-subtle);
+  padding: var(--dp-space-4) var(--dp-space-5) var(--dp-space-3);
   flex-wrap: wrap;
   gap: var(--dp-space-2);
 }
@@ -374,11 +369,10 @@
 
 .system-section-heading {
   margin: 0;
-  font-size: var(--dp-font-size-xs);
-  font-weight: var(--dp-font-weight-semibold);
-  color: var(--dp-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-family: var(--dp-font-display);
+  font-size: var(--dp-font-size-lg);
+  font-weight: var(--dp-font-weight-bold);
+  color: var(--dp-text-primary);
 }
 
 .system-section-sub {
@@ -488,8 +482,7 @@
 
 .runtime-metric-tile {
   background-color: var(--dp-surface-subtle);
-  border: 1px solid var(--dp-border-subtle);
-  border-radius: var(--dp-radius-md);
+  border-radius: var(--dp-radius-lg);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
