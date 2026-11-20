@@ -55,6 +55,16 @@ export function getAvailabilityBadgeClass(availability: ApplicationDto['availabi
 }
 
 /**
+ * Two-letter monogram shown in place of an app icon (real icons would need a new
+ * backend command, which is out of scope). Example: "Visual Studio Code" -> "VS".
+ */
+export function getAppInitials(displayName: string): string {
+  const words = displayName.split(/[\s\-_.]+/).filter((w) => /[A-Za-z0-9]/.test(w));
+  const letters = words.slice(0, 2).map((w) => w.match(/[A-Za-z0-9]/)![0]);
+  return (letters.join('') || '?').toUpperCase();
+}
+
+/**
  * ApplicationCard renders presentation metadata for a single discovered application.
  *
  * Conforms to least-privilege security guarantees:
@@ -95,6 +105,36 @@ export function ApplicationCard({
     }
     onKeyDown?.(e);
   };
+
+  if (!showLaunchButton) {
+    // List-row mode, used by the catalog. Rendered as a listbox option, so it must not
+    // contain interactive children; launching happens from the inspector or with Enter.
+    return (
+      <div
+        ref={cardRef}
+        role="option"
+        tabIndex={tabIndex ?? -1}
+        className={`app-card app-card--row ${isSelected ? 'selected' : ''} ${className}`.trim()}
+        aria-labelledby={cardTitleId}
+        aria-selected={isSelected}
+        data-testid={`app-card-${application.id}`}
+        onClick={onClick}
+        onKeyDown={onKeyDown}
+      >
+        <span className="app-row-tile" aria-hidden="true">
+          {getAppInitials(application.displayName)}
+        </span>
+        <span id={cardTitleId} className="app-card-title">
+          {application.displayName}
+        </span>
+        <span className="app-card-publisher">{application.publisher ?? 'Unknown Publisher'}</span>
+        <span className="app-card-version">{application.version ? `v${application.version}` : ''}</span>
+        <span className={`app-row-status ${badgeClass}`}>
+          {getAvailabilityLabel(application.availability)}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <article
