@@ -44,10 +44,10 @@ describe('ProcessInspector Component & Security Invariants', () => {
       render(<ProcessInspector process={null} />);
 
       expect(screen.getByTestId('process-inspector-empty')).toBeDefined();
-      expect(screen.getByText('Process Inspector')).toBeDefined();
-      expect(screen.getByText('No Process Selected')).toBeDefined();
+      expect(screen.getByText('Details')).toBeDefined();
+      expect(screen.getByText('No process selected')).toBeDefined();
       expect(
-        screen.getByText(/Select a process from the ledger to inspect detailed telemetry/i)
+        screen.getByText(/Select a process in the list to see/i)
       ).toBeDefined();
       expect(screen.queryByTestId('process-inspector')).toBeNull();
     });
@@ -83,10 +83,10 @@ describe('ProcessInspector Component & Security Invariants', () => {
     });
 
     it('renders accurate status explanation for each query status', () => {
-      expect(getStatusExplanation('full')).toContain('PROCESS_QUERY_LIMITED_INFORMATION');
-      expect(getStatusExplanation('partial')).toContain('restricted rights');
-      expect(getStatusExplanation('handleUnavailable')).toMatch(/operating system denied/i);
-      expect(getStatusExplanation('exited')).toContain('terminated');
+      expect(getStatusExplanation('full')).toContain('can read all of the details');
+      expect(getStatusExplanation('partial')).toContain('only shares some details');
+      expect(getStatusExplanation('handleUnavailable')).toMatch(/doesn't let normal apps read this process/i);
+      expect(getStatusExplanation('exited')).toContain('ended');
     });
   });
 

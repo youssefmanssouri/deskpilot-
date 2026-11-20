@@ -138,18 +138,17 @@ describe('SystemMonitor Component', () => {
     render(<SystemMonitor initialData={mockSystemData} autoFetch={false} />);
 
     // CPU Card
-    expect(screen.getByText('Processor (CPU)')).toBeDefined();
+    expect(screen.getByText('Processor')).toBeDefined();
     expect(screen.getByText('24.5%')).toBeDefined();
-    expect(screen.getByText('16 Logical Cores')).toBeDefined();
+    expect(screen.getByText('16 logical cores')).toBeDefined();
     expect(screen.getByText('AMD Ryzen 7 5800X 8-Core Processor')).toBeDefined();
 
     // RAM Card
-    expect(screen.getByText('Memory (RAM)')).toBeDefined();
+    expect(screen.getByText('Memory')).toBeDefined();
     expect(screen.getByText('16.0 GB available for processes')).toBeDefined();
 
     // Storage Card
-    expect(screen.getByText('Local Storage')).toBeDefined();
-    expect(screen.getByText('2 Volumes')).toBeDefined();
+    expect(screen.getByText('2 drives')).toBeDefined();
 
     // Drive details
     expect(screen.getByText('C:\\')).toBeDefined();
@@ -159,7 +158,7 @@ describe('SystemMonitor Component', () => {
     expect(screen.getByText('Low Space')).toBeDefined(); // D: is 95% used
 
     // Uptime Card
-    expect(screen.getByText('System Uptime')).toBeDefined();
+    expect(screen.getByText('Uptime')).toBeDefined();
     expect(screen.getByText('1d 1h 1m')).toBeDefined();
   });
 
@@ -217,7 +216,7 @@ describe('SystemMonitor Component', () => {
   it('allows changing refresh interval mode in dropdown', () => {
     render(<SystemMonitor initialData={mockSystemData} autoFetch={false} />);
 
-    const select = screen.getByLabelText('Select auto-refresh interval') as HTMLSelectElement;
+    const select = screen.getByLabelText('Update every') as HTMLSelectElement;
     expect(select.value).toBe('manual');
 
     fireEvent.change(select, { target: { value: '3s' } });
@@ -235,7 +234,7 @@ describe('SystemMonitor Component', () => {
 
     render(<SystemMonitor initialData={dataNoDrives} autoFetch={false} />);
 
-    expect(screen.getByText('No fixed storage volumes detected.')).toBeDefined();
+    expect(screen.getByText('No drives found.')).toBeDefined();
     expect(screen.queryByRole('table')).toBeNull();
   });
 
@@ -253,11 +252,11 @@ describe('SystemMonitor Component', () => {
     render(<SystemMonitor initialData={mockSystemData} autoFetch={false} />);
 
     // System uptime: 90061s -> 1d 1h 1m
-    expect(screen.getByText('System OS Uptime')).toBeDefined();
+    expect(screen.getByText('PC running for')).toBeDefined();
     expect(screen.getByText('1d 1h 1m')).toBeDefined();
 
     // App uptime: 125s -> 2m 5s
-    expect(screen.getByText('DeskPilot Session Uptime')).toBeDefined();
+    expect(screen.getByText('DeskPilot running for')).toBeDefined();
     expect(screen.getByText('2m 5s')).toBeDefined();
   });
 });

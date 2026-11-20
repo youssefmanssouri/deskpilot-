@@ -182,9 +182,9 @@ export function getStatusBadge(status: ProcessQueryStatusDto): { label: string; 
     case 'full':
       return { label: 'Full', className: 'status-badge status-badge-full' };
     case 'partial':
-      return { label: 'Partial', className: 'status-badge status-badge-partial' };
+      return { label: 'Limited', className: 'status-badge status-badge-partial' };
     case 'handleUnavailable':
-      return { label: 'Handle Unavailable', className: 'status-badge status-badge-unavailable' };
+      return { label: 'Protected', className: 'status-badge status-badge-unavailable' };
     case 'exited':
       return { label: 'Exited', className: 'status-badge status-badge-exited' };
     default:
@@ -419,7 +419,7 @@ export function ProcessMonitor({
               id="process-search-input"
               className="process-search-input"
               type="search"
-              placeholder="Filter by process name, PID, or executable path..."
+              placeholder="Search by name, PID or location"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -449,7 +449,7 @@ export function ProcessMonitor({
             >
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
             </svg>
-            <span>{isLoading ? 'Scanning...' : 'Refresh Processes'}</span>
+            <span>{isLoading ? 'Updating…' : 'Refresh'}</span>
           </button>
         </div>
       </div>
@@ -462,7 +462,7 @@ export function ProcessMonitor({
           onClick={() => setQuickFilter('all')}
           aria-pressed={quickFilter === 'all'}
         >
-          All Processes
+          All
           <span className="process-filter-badge">{quickFilterCounts.all}</span>
         </button>
         <button
@@ -472,7 +472,7 @@ export function ProcessMonitor({
           aria-pressed={quickFilter === 'highMemory'}
           title="Processes using strictly greater than 100 MiB of working set memory"
         >
-          High Memory (&gt; 100 MiB)
+          Over 100 MiB
           <span className="process-filter-badge">{quickFilterCounts.highMemory}</span>
         </button>
         <button
@@ -523,7 +523,7 @@ export function ProcessMonitor({
           </div>
           {formattedCaptureTime && (
             <div className="process-summary-item">
-              Snapshot Captured: <strong>{formattedCaptureTime}</strong>
+              Updated: <strong>{formattedCaptureTime}</strong>
             </div>
           )}
           {(searchQuery.trim() || quickFilter !== 'all') && (
@@ -541,7 +541,7 @@ export function ProcessMonitor({
           {isLoading && !hasLoaded ? (
             <div className="process-loading-state" role="status">
               <div className="process-spinner" aria-hidden="true" />
-              <p>Scanning active processes...</p>
+              <p>Reading running processes…</p>
             </div>
           ) : processes.length === 0 && hasLoaded && !errorMsg ? (
             <div className="process-empty-state" role="status">

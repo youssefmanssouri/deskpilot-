@@ -2,6 +2,7 @@ pub mod applications;
 pub mod history;
 pub mod launcher;
 pub mod processes;
+pub mod settings;
 pub mod status;
 pub mod system;
 

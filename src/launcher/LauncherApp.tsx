@@ -7,7 +7,14 @@ import {
   type NavigableView,
   type ShortcutStatusDto,
 } from '../lib/ipc';
-import { LAUNCHER_SHOWN_EVENT, onTauriEvent, onWindowFocusChange } from '../lib/tauriEnv';
+import {
+  LAUNCHER_SHOWN_EVENT,
+  SETTINGS_CHANGED_EVENT,
+  onTauriEvent,
+  onWindowFocusChange,
+} from '../lib/tauriEnv';
+import { applyAppearance } from '../lib/appearance';
+import type { SettingsDto } from '../lib/ipc';
 import { filterApplications } from '../components/ApplicationCatalog';
 import { getAppInitials, getAvailabilityLabel } from '../components/ApplicationCard';
 import { canLaunchWithClick, canLaunchWithKeyboard } from '../components/launchPolicy';
@@ -125,6 +132,10 @@ export function LauncherApp() {
       .getLauncherShortcut()
       .then(setShortcut)
       .catch(() => {});
+    deskpilotApi
+      .getSettings()
+      .then((s) => s && applyAppearance({ theme: s.theme, glassActive: false }))
+      .catch(() => {});
   }, []);
 
   const reset = useCallback(() => {
@@ -142,12 +153,18 @@ export function LauncherApp() {
       reset();
       void refresh();
     });
+    // Theme changes made in Settings apply to the launcher right away. (The launcher is
+    // never transparent, so glass is always off here.)
+    const offSettings = onTauriEvent<SettingsDto>(SETTINGS_CHANGED_EVENT, (s) =>
+      applyAppearance({ theme: s.theme, glassActive: false })
+    );
     // Like other launchers, clicking anywhere else closes it.
     const offFocus = onWindowFocusChange((focused) => {
       if (!focused) hideLauncher();
     });
     return () => {
       offShown();
+      offSettings();
       offFocus();
     };
   }, [refresh, reset]);

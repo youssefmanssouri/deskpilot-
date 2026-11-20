@@ -23,15 +23,15 @@ export interface ProcessInspectorProps {
 export function getStatusExplanation(status: ProcessDto['status']): string {
   switch (status) {
     case 'full':
-      return 'Standard limited inspection handle acquired (PROCESS_QUERY_LIMITED_INFORMATION). Full telemetry available.';
+      return 'DeskPilot can read all of the details below.';
     case 'partial':
-      return 'Process queried with restricted rights. Some telemetry fields may not be reported by the operating system.';
+      return 'Windows only shares some details for this process, so a few fields may be empty.';
     case 'handleUnavailable':
-      return 'Protected system service or elevated security boundary. The operating system denied process query access.';
+      return "Windows doesn't let normal apps read this process. That's expected for system services and apps running as administrator.";
     case 'exited':
-      return 'Process terminated or transitioned out of existence during snapshot acquisition.';
+      return 'This process ended while DeskPilot was reading the list.';
     default:
-      return 'Operating system status code not classified.';
+      return 'Windows reported a status DeskPilot does not recognise.';
   }
 }
 
@@ -72,11 +72,11 @@ export function ProcessInspector({
     return (
       <aside
         className={`process-inspector ${className}`.trim()}
-        aria-label="Process Inspector"
+        aria-label="Process details"
         data-testid="process-inspector-empty"
       >
         <div className="process-inspector-header">
-          <h3 className="process-inspector-title">Process Inspector</h3>
+          <h3 className="process-inspector-title">Details</h3>
         </div>
         <div className="process-inspector-body">
           <div className="process-inspector-empty">
@@ -94,9 +94,9 @@ export function ProcessInspector({
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
             </svg>
-            <h4 className="process-inspector-empty-title">No Process Selected</h4>
+            <h4 className="process-inspector-empty-title">No process selected</h4>
             <p className="process-inspector-empty-text">
-              Select a process from the ledger to inspect detailed telemetry, memory usage, and execution duration.
+              Select a process in the list to see its memory use, CPU time and location.
             </p>
           </div>
         </div>
@@ -113,12 +113,12 @@ export function ProcessInspector({
   return (
     <aside
       className={`process-inspector ${className}`.trim()}
-      aria-label={`Process Inspector for ${process.name} (PID ${process.pid})`}
+      aria-label={`Details for ${process.name} (PID ${process.pid})`}
       data-testid="process-inspector"
     >
       <div className="process-inspector-header">
         <div className="process-inspector-header-left">
-          <h3 className="process-inspector-title">Process Inspector</h3>
+          <h3 className="process-inspector-title">Details</h3>
           <span className={`process-inspector-badge ${statusBadge.className}`} role="status">
             {statusBadge.label}
           </span>
