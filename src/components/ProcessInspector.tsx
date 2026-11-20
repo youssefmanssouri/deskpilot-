@@ -204,7 +204,7 @@ export function ProcessInspector({
             </div>
 
             <div className="process-metric-tile">
-              <span className="process-metric-tile-label">Cumulative CPU Time</span>
+              <span className="process-metric-tile-label">Total CPU time</span>
               <span className="process-metric-tile-value" data-testid="inspector-cpu-formatted">
                 {formatCpuTime(process.cpuTimeMs)}
               </span>

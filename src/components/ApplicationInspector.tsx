@@ -1,6 +1,6 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
-import { getAvailabilityBadgeClass } from './ApplicationCard';
+import { getAvailabilityBadgeClass, getAvailabilityLabel } from './ApplicationCard';
 import { canLaunchWithClick, canLaunchWithKeyboard } from './launchPolicy';
 import { describeLaunchError } from './launchErrorDescription';
 import './ApplicationInspector.css';
@@ -40,11 +40,11 @@ export function ApplicationInspector({
     return (
       <aside
         className={`app-inspector ${className}`.trim()}
-        aria-label="Application Inspector"
+        aria-label="Details"
         data-testid="application-inspector-empty"
       >
         <div className="app-inspector-header">
-          <h3 className="app-inspector-title">Application Inspector</h3>
+          <h3 className="app-inspector-title">Details</h3>
         </div>
         <div className="app-inspector-body">
           <div className="app-inspector-empty">
@@ -62,9 +62,9 @@ export function ApplicationInspector({
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
             </svg>
-            <h4 className="app-inspector-empty-title">No Application Selected</h4>
+            <h4 className="app-inspector-empty-title">No app selected</h4>
             <p className="app-inspector-empty-text">
-              Select an application from the catalog on the left to inspect metadata or launch.
+              Select an app on the left to see its details and open it.
             </p>
           </div>
         </div>
@@ -79,13 +79,13 @@ export function ApplicationInspector({
   return (
     <aside
       className={`app-inspector ${className}`.trim()}
-      aria-label={`Application Inspector for ${application.displayName}`}
+      aria-label={`Details for ${application.displayName}`}
       data-testid="application-inspector"
     >
       <div className="app-inspector-header">
-        <h3 className="app-inspector-title">Application Inspector</h3>
+        <h3 className="app-inspector-title">Details</h3>
         <span className={`badge ${badgeClass}`} role="status">
-          {application.availability}
+          {getAvailabilityLabel(application.availability)}
         </span>
       </div>
 
@@ -145,7 +145,7 @@ export function ApplicationInspector({
           <div className="app-inspector-ledger-row">
             <span className="app-inspector-ledger-key">Availability:</span>
             <span className="app-inspector-ledger-value">
-              {application.availability}
+              {getAvailabilityLabel(application.availability)}
             </span>
           </div>
 
@@ -171,7 +171,7 @@ export function ApplicationInspector({
             status={launchStatus}
             launchedPid={launchedPid}
             errorMessage={launchErrorMessage}
-            ariaLabel={`Launch ${application.displayName}`}
+            ariaLabel={`Open ${application.displayName}`}
             onLaunch={onLaunchRequest}
             onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
             onError={(err) => onLaunchError?.(application.id, err)}
@@ -191,7 +191,7 @@ export function ApplicationInspector({
                 type="button"
                 className="retry-button"
                 onClick={() => onLaunchRequest?.()}
-                aria-label={`Try launching ${application.displayName} again`}
+                aria-label={`Try opening ${application.displayName} again`}
               >
                 Try again
               </button>
@@ -200,14 +200,14 @@ export function ApplicationInspector({
           <p className="app-inspector-shortcut-hint">
             {canLaunchWithKeyboard(application) ? (
               <>
-                Press <kbd>Enter</kbd> to launch selected application
+                Press <kbd>Enter</kbd> to open the selected app
               </>
             ) : isLaunchDisabled ? (
-              'This application cannot be launched because its target is missing.'
+              "This app can't be opened because its program file is missing."
             ) : (
               <>
-                <kbd>Enter</kbd> only launches verified applications. Use the button to launch
-                this one.
+                <kbd>Enter</kbd> only opens verified apps. Use the button to open this
+                one.
               </>
             )}
           </p>

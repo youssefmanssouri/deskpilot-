@@ -98,7 +98,7 @@ describe('ApplicationCatalog launch behaviour', () => {
     fireEvent.keyDown(search, { key: 'Enter' });
 
     expect(launchCalls()).toHaveLength(0);
-    expect(screen.getByText(/only launches verified applications/i)).toBeDefined();
+    expect(screen.getByText(/only opens verified apps/i)).toBeDefined();
   });
 
   it('does not launch an unverified app when Enter is pressed on its focused card', () => {
@@ -117,7 +117,7 @@ describe('ApplicationCatalog launch behaviour', () => {
     });
     render(<ApplicationCatalog initialApplications={apps} autoDiscover={false} />);
 
-    fireEvent.click(screen.getByRole('button', { name: `Launch ${apps[0].displayName}` }));
+    fireEvent.click(screen.getByRole('button', { name: `Open ${apps[0].displayName}` }));
 
     await waitFor(() => {
       expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
@@ -158,7 +158,7 @@ describe('ApplicationCatalog launch behaviour', () => {
       processId: 5151,
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /try launching visual studio code again/i }));
+      fireEvent.click(screen.getByRole('button', { name: /try opening visual studio code again/i }));
     });
     expect(launchCalls()).toHaveLength(2);
     expect(launchCalls()[1][1]).toEqual({ applicationId: apps[1].id });

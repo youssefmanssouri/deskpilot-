@@ -259,7 +259,7 @@
 /* Summary bar values (replaces former inline colours).
    Scoped under .summary-item to beat App.css's `.summary-item strong` rule. */
 .summary-item .summary-value-available {
-  color: var(--dp-accent-primary);
+  color: var(--dp-status-available);
 }
 
 .summary-item .summary-value-unverified {
