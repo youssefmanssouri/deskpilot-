@@ -1,4 +1,4 @@
-use crate::core::ApplicationLauncherService;
+use crate::core::{ApplicationLauncherService, LaunchHistoryStore};
 use crate::error::IpcErrorDto;
 use crate::models::{ApplicationDto, DiscoveryResultDto, LaunchResultDto};
 use crate::security::InputGuard;
@@ -45,9 +45,38 @@ pub fn discover_applications(
 #[tauri::command]
 pub fn launch_application(
     state: State<'_, AppState>,
+    history: State<'_, LaunchHistoryStore>,
     application_id: String,
 ) -> Result<LaunchResultDto, IpcErrorDto> {
-    launch_application_impl(&state, &application_id)
+    let result = launch_application_impl(&state, &application_id)?;
+    record_launch(&state, &history, &result.application_id, now_unix_ms());
+    Ok(result)
+}
+
+/// Records a successful launch in the local history, using the display name from the
+/// in-memory catalog (never a name supplied by the frontend).
+///
+/// Best effort: returns `false` instead of failing when the app is no longer in the
+/// catalog or the history cannot be saved, because the launch itself already succeeded.
+pub fn record_launch(
+    state: &AppState,
+    history: &LaunchHistoryStore,
+    application_id: &str,
+    launched_at_ms: u64,
+) -> bool {
+    match state.get_application(application_id) {
+        Ok(Some(app)) => history
+            .record(application_id, &app.display_name, launched_at_ms)
+            .is_ok(),
+        _ => false,
+    }
+}
+
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0)
 }
 
 /// Internal implementation of `launch_application` separated from `State` extraction
@@ -126,6 +155,40 @@ mod tests {
         assert!(!serialized.contains("args"));
         assert!(!serialized.contains("cwd"));
         assert!(!serialized.contains("env"));
+    }
+
+    #[test]
+    fn test_record_launch_uses_catalog_display_name() {
+        let state = AppState::new("DeskPilotTest", "1.0.0");
+        let history = LaunchHistoryStore::in_memory();
+        let id = "app_0000000000000000000000000000abcd";
+        state
+            .update_catalog(vec![create_test_app(
+                id,
+                None,
+                AvailabilityState::Available,
+            )])
+            .unwrap();
+
+        assert!(record_launch(&state, &history, id, 1234));
+        let entries = history.entries().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].application_id, id);
+        assert_eq!(entries[0].display_name, "Test App");
+        assert_eq!(entries[0].launched_at_ms, 1234);
+    }
+
+    #[test]
+    fn test_record_launch_skips_apps_missing_from_catalog() {
+        let state = AppState::new("DeskPilotTest", "1.0.0");
+        let history = LaunchHistoryStore::in_memory();
+        assert!(!record_launch(
+            &state,
+            &history,
+            "app_0000000000000000000000000000ffff",
+            1
+        ));
+        assert!(history.entries().unwrap().is_empty());
     }
 
     #[test]
