@@ -194,3 +194,13 @@ export interface SystemMetricsDto {
   sampledAtMs: number;
 }
 
+/**
+ * One recent launch from the local history (most recent first).
+ * Holds only the application id, its display name and the launch time; never paths.
+ */
+export interface LaunchHistoryEntryDto {
+  applicationId: string;
+  displayName: string;
+  /** Milliseconds since the Unix epoch. */
+  launchedAtMs: number;
+}
