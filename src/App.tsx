@@ -30,19 +30,19 @@ export function getHeaderInfo(view: CatalogView): { title: string; subtitle: str
   switch (view) {
     case 'processes':
       return {
-        title: 'Process Monitor',
-        subtitle: 'Real-time Windows process inspection & diagnostic telemetry ledger',
+        title: 'Processes',
+        subtitle: 'What is running on this PC right now. Read-only.',
       };
     case 'system':
       return {
-        title: 'System Intelligence',
-        subtitle: 'Win32 hardware utilization, fixed disk storage & operating system telemetry',
+        title: 'System',
+        subtitle: 'Processor, memory, drives and uptime.',
       };
     case 'applications':
     default:
       return {
-        title: 'Application Discovery',
-        subtitle: 'Local-first Windows application metadata catalog & deterministic identity engine',
+        title: 'Apps',
+        subtitle: 'Search, filter and open the apps installed on this PC.',
       };
   }
 }
@@ -53,10 +53,10 @@ function SidebarTelemetryPulse() {
   const cpuStr = shared?.metrics ? `${shared.metrics.cpu.utilizationPercent.toFixed(1)}%` : null;
 
   return (
-    <div className="sidebar-pulse-card" role="region" aria-label="Live Telemetry Pulse">
+    <div className="sidebar-pulse-card" role="region" aria-label="System summary">
       <div className="sidebar-pulse-header">
         <span className="sidebar-pulse-dot" aria-hidden="true" />
-        <span>Live Telemetry</span>
+        <span>System</span>
       </div>
       <div className="sidebar-pulse-metrics">
         <div className="sidebar-pulse-item">
@@ -162,7 +162,7 @@ function AppContent() {
               className={`app-nav-button ${activeView === 'applications' ? 'active' : ''}`}
               onClick={() => setActiveView('applications')}
               aria-current={activeView === 'applications' ? 'page' : undefined}
-              aria-label="Applications"
+              aria-label="Apps"
             >
               <svg
                 className="app-nav-icon"
@@ -178,7 +178,7 @@ function AppContent() {
                 <line x1="3" y1="9" x2="21" y2="9" />
                 <line x1="9" y1="21" x2="9" y2="9" />
               </svg>
-              <span className="app-nav-label">Applications</span>
+              <span className="app-nav-label">Apps</span>
             </button>
 
             <button
@@ -186,7 +186,7 @@ function AppContent() {
               className={`app-nav-button ${activeView === 'processes' ? 'active' : ''}`}
               onClick={() => setActiveView('processes')}
               aria-current={activeView === 'processes' ? 'page' : undefined}
-              aria-label="Active Processes"
+              aria-label="Processes"
             >
               <svg
                 className="app-nav-icon"
@@ -209,7 +209,7 @@ function AppContent() {
               className={`app-nav-button ${activeView === 'system' ? 'active' : ''}`}
               onClick={() => setActiveView('system')}
               aria-current={activeView === 'system' ? 'page' : undefined}
-              aria-label="System Intelligence"
+              aria-label="System"
             >
               <svg
                 className="app-nav-icon"
@@ -223,7 +223,7 @@ function AppContent() {
               >
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
-              <span className="app-nav-label">System Intelligence</span>
+              <span className="app-nav-label">System</span>
             </button>
           </nav>
         </div>
@@ -257,7 +257,7 @@ function AppContent() {
                 activeView === 'processes'
                   ? 'Search processes (Ctrl+K)'
                   : activeView === 'system'
-                    ? 'System Intelligence'
+                    ? 'System'
                     : 'Search applications (Ctrl+K)'
               }
             >
@@ -278,7 +278,7 @@ function AppContent() {
                 {activeView === 'processes'
                   ? 'Search processes...'
                   : activeView === 'system'
-                    ? 'System Intelligence'
+                    ? 'System'
                     : 'Search applications...'}
               </span>
               {activeView !== 'system' && <kbd className="global-search-hotkey">Ctrl+K</kbd>}

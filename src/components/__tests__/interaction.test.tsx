@@ -317,15 +317,15 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       render(<LaunchButton applicationId="app_1111" />);
 
-      const launchBtn = screen.getByRole('button', { name: /launch application app_1111/i });
-      expect(launchBtn.textContent).toBe('Launch');
+      const launchBtn = screen.getByRole('button', { name: /open application app_1111/i });
+      expect(launchBtn.textContent).toBe('Open');
 
       // First click
       fireEvent.click(launchBtn);
 
       // In-flight state
       await waitFor(() => {
-        expect(launchBtn.textContent).toBe('Launching...');
+        expect(launchBtn.textContent).toBe('Opening…');
       });
       expect((launchBtn as HTMLButtonElement).disabled).toBe(true);
       expect(launchBtn.getAttribute('aria-busy')).toBe('true');
@@ -340,7 +340,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       resolveLaunch({ applicationId: 'app_1111', processId: 6543 });
 
       await waitFor(() => {
-        expect(launchBtn.textContent).toBe('Launched (PID 6543)');
+        expect(launchBtn.textContent).toBe('Opened (PID 6543)');
       });
       expect((launchBtn as HTMLButtonElement).disabled).toBe(false);
     });
@@ -353,12 +353,12 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       render(<LaunchButton applicationId="app_2222" />);
 
-      const launchBtn = screen.getByRole('button', { name: /launch application app_2222/i });
+      const launchBtn = screen.getByRole('button', { name: /open application app_2222/i });
 
       fireEvent.click(launchBtn);
 
       await waitFor(() => {
-        expect(launchBtn.textContent).toBe('Launch Failed');
+        expect(launchBtn.textContent).toBe("Couldn't open");
       });
 
       expect(launchBtn.getAttribute('title')).toContain('Process could not be spawned');
@@ -373,7 +373,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.click(launchBtn);
 
       await waitFor(() => {
-        expect(launchBtn.textContent).toBe('Launched (PID 1122)');
+        expect(launchBtn.textContent).toBe('Opened (PID 1122)');
       });
       expect(tauriCore.invoke).toHaveBeenCalledTimes(2);
     });
@@ -396,10 +396,10 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       const btn1 = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[0].id}`,
+        name: `Open application ${sampleApps[0].id}`,
       });
       const btn2 = screen.getByRole('button', {
-        name: `Launch application ${sampleApps[1].id}`,
+        name: `Open application ${sampleApps[1].id}`,
       });
 
       // Launch app 1
@@ -407,17 +407,17 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // Button 1 is in-flight
       await waitFor(() => {
-        expect(btn1.textContent).toBe('Launching...');
+        expect(btn1.textContent).toBe('Opening…');
       });
       expect((btn1 as HTMLButtonElement).disabled).toBe(true);
 
       // Button 2 remains completely idle and clickable
-      expect(btn2.textContent).toBe('Launch');
+      expect(btn2.textContent).toBe('Open');
       expect((btn2 as HTMLButtonElement).disabled).toBe(false);
 
       resolveApp1({ applicationId: sampleApps[0].id, processId: 1001 });
       await waitFor(() => {
-        expect(btn1.textContent).toBe('Launched (PID 1001)');
+        expect(btn1.textContent).toBe('Opened (PID 1001)');
       });
     });
   });
@@ -448,7 +448,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       render(<App />);
 
       // Verifies root header is present with dynamic view title
-      expect(screen.getByRole('heading', { level: 1, name: /application discovery/i })).toBeDefined();
+      expect(screen.getByRole('heading', { level: 1, name: /^apps$/i })).toBeDefined();
 
       // Verifies AppStatus header subtitle loads with synchronized v0.1.1
       await waitFor(() => {
@@ -463,16 +463,16 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       // Verifies primary launch button is rendered in inspector for selected application
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: `Launch ${sampleApps[0].displayName}` })).toBeDefined();
+        expect(screen.getByRole('button', { name: `Open ${sampleApps[0].displayName}` })).toBeDefined();
       });
 
       // Verifies persistent sidebar navigation is present
       const nav = screen.getByRole('navigation', { name: /views/i });
       expect(nav).toBeDefined();
 
-      const appNavBtn = screen.getByRole('button', { name: 'Applications' });
-      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
-      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+      const appNavBtn = screen.getByRole('button', { name: 'Apps' });
+      const procNavBtn = screen.getByRole('button', { name: 'Processes' });
+      const sysNavBtn = screen.getByRole('button', { name: 'System' });
 
       expect(appNavBtn.getAttribute('aria-current')).toBe('page');
       expect(procNavBtn.getAttribute('aria-current')).toBeNull();
@@ -524,22 +524,22 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       render(<App />);
 
-      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
+      const procNavBtn = screen.getByRole('button', { name: 'Processes' });
       fireEvent.click(procNavBtn);
 
       await waitFor(() => {
         expect(procNavBtn.getAttribute('aria-current')).toBe('page');
-        expect(screen.getByRole('region', { name: /process monitor/i })).toBeDefined();
-        expect(screen.getByRole('heading', { level: 1, name: /process monitor/i })).toBeDefined();
+        expect(screen.getByRole('region', { name: /^processes$/i })).toBeDefined();
+        expect(screen.getByRole('heading', { level: 1, name: /^processes$/i })).toBeDefined();
       });
 
-      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+      const sysNavBtn = screen.getByRole('button', { name: 'System' });
       fireEvent.click(sysNavBtn);
 
       await waitFor(() => {
         expect(sysNavBtn.getAttribute('aria-current')).toBe('page');
-        expect(screen.getAllByRole('region', { name: /system intelligence/i }).length).toBeGreaterThanOrEqual(1);
-        expect(screen.getByRole('heading', { level: 1, name: /system intelligence/i })).toBeDefined();
+        expect(screen.getAllByRole('region', { name: /^system/i }).length).toBeGreaterThanOrEqual(1);
+        expect(screen.getByRole('heading', { level: 1, name: /^system$/i })).toBeDefined();
       });
     });
 
@@ -577,9 +577,9 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(document.querySelector('.sidebar-footer-actions')).toBeNull();
 
       // Authentic functional navigation controls must be present and accessible
-      expect(screen.getByRole('button', { name: 'Applications' })).toBeDefined();
-      expect(screen.getByRole('button', { name: 'Active Processes' })).toBeDefined();
-      expect(screen.getByRole('button', { name: 'System Intelligence' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Apps' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Processes' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'System' })).toBeDefined();
 
       // Sidebar telemetry pulse remains present in app-sidebar-bottom
       expect(document.querySelector('.sidebar-pulse-card')).not.toBeNull();
@@ -813,11 +813,11 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.keyDown(searchInput, { key: 'Enter' });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch ${sampleApps[1].displayName}`,
+        name: `Open ${sampleApps[1].displayName}`,
       });
 
       await waitFor(() => {
-        expect(chromeBtn.textContent).toBe('Launching...');
+        expect(chromeBtn.textContent).toBe('Opening…');
       });
       expect(chromeBtn.classList.contains('launching')).toBe(true);
       expect((chromeBtn as HTMLButtonElement).disabled).toBe(true);
@@ -825,7 +825,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
 
       resolveLaunch({ applicationId: sampleApps[1].id, processId: 4444 });
       await waitFor(() => {
-        expect(chromeBtn.textContent).toBe('Launched (PID 4444)');
+        expect(chromeBtn.textContent).toBe('Opened (PID 4444)');
       });
     });
 
@@ -851,10 +851,10 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch ${sampleApps[1].displayName}`,
+        name: `Open ${sampleApps[1].displayName}`,
       });
 
-      expect(chromeBtn.textContent).toBe('Launched (PID 5555)');
+      expect(chromeBtn.textContent).toBe('Opened (PID 5555)');
       expect(chromeBtn.classList.contains('launched')).toBe(true);
 
       // Fast-forward past 3000ms auto-reset
@@ -862,7 +862,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
         vi.advanceTimersByTime(3000);
       });
 
-      expect(chromeBtn.textContent).toBe('Launch');
+      expect(chromeBtn.textContent).toBe('Open');
       expect(chromeBtn.classList.contains('idle')).toBe(true);
     });
 
@@ -884,11 +884,11 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.keyDown(searchInput, { key: 'Enter' });
 
       const chromeBtn = screen.getByRole('button', {
-        name: `Launch ${sampleApps[1].displayName}`,
+        name: `Open ${sampleApps[1].displayName}`,
       });
 
       await waitFor(() => {
-        expect(chromeBtn.textContent).toBe('Launch Failed');
+        expect(chromeBtn.textContent).toBe("Couldn't open");
       });
       expect(chromeBtn.classList.contains('failed')).toBe(true);
       expect(chromeBtn.getAttribute('title')).toContain('Executable spawn failed in test environment');
@@ -908,13 +908,13 @@ describe('Frontend Component Interaction & Root Integration', () => {
       );
 
       const vscodeBtn = screen.getByRole('button', {
-        name: `Launch ${sampleApps[0].displayName}`,
+        name: `Open ${sampleApps[0].displayName}`,
       });
 
       fireEvent.click(vscodeBtn);
 
       await waitFor(() => {
-        expect(vscodeBtn.textContent).toBe('Launched (PID 3333)');
+        expect(vscodeBtn.textContent).toBe('Opened (PID 3333)');
       });
       expect(tauriCore.invoke).toHaveBeenCalledWith('launch_application', {
         applicationId: sampleApps[0].id,
@@ -1172,7 +1172,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       fireEvent.click(cards[1]);
 
       // Launch from inspector button
-      const inspectorLaunchBtn = screen.getByRole('button', { name: 'Launch Google Chrome' });
+      const inspectorLaunchBtn = screen.getByRole('button', { name: 'Open Google Chrome' });
       fireEvent.click(inspectorLaunchBtn);
 
       await waitFor(() => {
@@ -1265,7 +1265,7 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(document.activeElement).toBe(catalogSearch);
 
       // 2. In Processes view: Ctrl+K focuses #process-search-input
-      const procNavBtn = screen.getByRole('button', { name: 'Active Processes' });
+      const procNavBtn = screen.getByRole('button', { name: 'Processes' });
       fireEvent.click(procNavBtn);
 
       await waitFor(() => {
@@ -1281,11 +1281,11 @@ describe('Frontend Component Interaction & Root Integration', () => {
       expect(document.activeElement).toBe(procSearch);
 
       // 3. In System view: search trigger button is disabled and Ctrl+K does nothing
-      const sysNavBtn = screen.getByRole('button', { name: 'System Intelligence' });
+      const sysNavBtn = screen.getByRole('button', { name: 'System' });
       fireEvent.click(sysNavBtn);
 
       await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 1, name: /system intelligence/i })).toBeDefined();
+        expect(screen.getByRole('heading', { level: 1, name: /^system$/i })).toBeDefined();
       });
       const headerSearchBtn = document.querySelector('button.global-search-trigger') as HTMLButtonElement;
       expect(headerSearchBtn).toBeDefined();

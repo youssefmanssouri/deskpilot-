@@ -165,7 +165,7 @@
   padding: 0.45rem 1rem;
   font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: var(--dp-radius-pill);
   cursor: pointer;
   transition: background-color 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
   border: 1px solid transparent;
@@ -208,7 +208,7 @@
   background-color: var(--dp-surface-card);
   color: var(--dp-text-secondary);
   border: 1px solid var(--dp-border-medium);
-  border-radius: 6px;
+  border-radius: var(--dp-radius-pill);
   padding: 0.35rem 0.85rem;
   font-size: 0.85rem;
   cursor: pointer;
@@ -259,7 +259,7 @@
 /* Summary bar values (replaces former inline colours).
    Scoped under .summary-item to beat App.css's `.summary-item strong` rule. */
 .summary-item .summary-value-available {
-  color: var(--dp-accent-primary);
+  color: var(--dp-status-available);
 }
 
 .summary-item .summary-value-unverified {

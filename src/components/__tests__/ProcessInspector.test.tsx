@@ -70,8 +70,8 @@ describe('ProcessInspector Component & Security Invariants', () => {
       expect(screen.getByTestId('inspector-memory-formatted').textContent).toBe('200.0 MB');
       expect(screen.getByTestId('inspector-memory-bytes').textContent).toBe('209,715,200 bytes');
 
-      // Cumulative CPU Time (Must not be CPU %)
-      expect(screen.getByText('Cumulative CPU Time')).toBeDefined();
+      // Total CPU time (Must not be CPU %)
+      expect(screen.getByText('Total CPU time')).toBeDefined();
       expect(screen.getByTestId('inspector-cpu-formatted').textContent).toBe('15.0 s');
       expect(screen.getByTestId('inspector-cpu-ms').textContent).toBe('15,000 ms');
 

@@ -43,15 +43,15 @@ describe('ApplicationInspector Component', () => {
       render(<ApplicationInspector application={null} />);
 
       expect(screen.getByTestId('application-inspector-empty')).toBeDefined();
-      expect(screen.getByText('No Application Selected')).toBeDefined();
+      expect(screen.getByText('No app selected')).toBeDefined();
       expect(
-        screen.getByText(/Select an application from the catalog on the left/i)
+        screen.getByText(/Select an app on the left/i)
       ).toBeDefined();
     });
 
     it('renders empty state via SSR cleanly', () => {
       const html = ReactDOMServer.renderToString(<ApplicationInspector application={null} />);
-      expect(html).toContain('No Application Selected');
+      expect(html).toContain('No app selected');
       expect(html).toContain('application-inspector-empty');
     });
   });
@@ -66,7 +66,7 @@ describe('ApplicationInspector Component', () => {
       expect(screen.getByText('ID: app_sample_1234567890abcdef')).toBeDefined();
       expect(screen.getByText('v1.18.3181.0')).toBeDefined();
       expect(screen.getByText('Installed Application')).toBeDefined();
-      expect(screen.getAllByText('Available').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Ready').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Registry (HKLM 64-bit)')).toBeDefined();
       expect(screen.getByText('Start Menu (Common)')).toBeDefined();
     });
@@ -91,7 +91,7 @@ describe('ApplicationInspector Component', () => {
     it('renders launch button enabled for Available application', () => {
       render(<ApplicationInspector application={sampleApp} />);
 
-      const launchBtn = screen.getByRole('button', { name: 'Launch Windows Terminal' });
+      const launchBtn = screen.getByRole('button', { name: 'Open Windows Terminal' });
       expect((launchBtn as HTMLButtonElement).disabled).toBe(false);
       expect(screen.getByText(/Press/i)).toBeDefined();
       expect(screen.getByText('Enter')).toBeDefined();
@@ -100,9 +100,9 @@ describe('ApplicationInspector Component', () => {
     it('disables launch button when availability is MissingTarget', () => {
       render(<ApplicationInspector application={missingTargetApp} />);
 
-      const launchBtn = screen.getByRole('button', { name: 'Launch Orphaned App' });
+      const launchBtn = screen.getByRole('button', { name: 'Open Orphaned App' });
       expect((launchBtn as HTMLButtonElement).disabled).toBe(true);
-      expect(screen.getAllByText('MissingTarget').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('Missing').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Unregistered')).toBeDefined();
     });
 
@@ -115,7 +115,7 @@ describe('ApplicationInspector Component', () => {
         />
       );
 
-      const launchBtn = screen.getByRole('button', { name: 'Launch Windows Terminal' });
+      const launchBtn = screen.getByRole('button', { name: 'Open Windows Terminal' });
       fireEvent.click(launchBtn);
 
       expect(handleLaunchRequest).toHaveBeenCalledTimes(1);

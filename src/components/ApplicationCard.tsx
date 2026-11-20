@@ -22,6 +22,25 @@ export interface ApplicationCardProps {
 }
 
 /**
+ * Returns the user-facing label for an availability state.
+ * The DTO values stay as they are; only the displayed words change.
+ */
+export function getAvailabilityLabel(availability: ApplicationDto['availability']): string {
+  switch (availability) {
+    case 'Available':
+      return 'Ready';
+    case 'Unverified':
+      return 'Unverified';
+    case 'IncompleteMetadata':
+      return 'Limited info';
+    case 'MissingTarget':
+      return 'Missing';
+    default:
+      return availability;
+  }
+}
+
+/**
  * Returns the CSS modifier class for the availability badge.
  * Preserves the exact ternary logic and formatting from DeskPilot Phase 3.
  */
@@ -94,7 +113,7 @@ export function ApplicationCard({
             {application.displayName}
           </h3>
           <span className={`badge ${badgeClass}`} role="status">
-            {application.availability}
+            {getAvailabilityLabel(application.availability)}
           </span>
         </div>
       </div>
