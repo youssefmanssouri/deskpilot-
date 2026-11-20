@@ -1,12 +1,14 @@
 use crate::commands::launcher::{register_launcher_shortcut, unregister_launcher_shortcut};
 use crate::core::LaunchHistoryStore;
 use crate::core::launcher::LauncherShortcutState;
-use crate::core::settings::{SettingsStore, ThemePreference, normalize_shortcut, shortcut_label};
+use crate::core::settings::{
+    SettingsStore, ThemePreference, normalize_shortcut, shortcut_label, startup_command,
+};
 use crate::error::IpcErrorDto;
+use crate::platform;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_autostart::ManagerExt;
 
 /// Event broadcast to all windows after a setting changes (e.g. the launcher re-applies the theme).
 pub const SETTINGS_CHANGED_EVENT: &str = "deskpilot://settings-changed";
@@ -66,7 +68,7 @@ fn build_dto<R: Runtime>(app: &AppHandle<R>) -> Result<SettingsDto, IpcErrorDto>
         launcher_shortcut: settings.launcher_shortcut,
         shortcut_registered: shortcut.registered,
         shortcut_message: shortcut.message,
-        start_with_windows: app.autolaunch().is_enabled().ok(),
+        start_with_windows: platform::is_start_with_windows_enabled().ok(),
         glass_effect: settings.glass_effect,
         glass_supported: glass.supported.load(Ordering::Relaxed),
         glass_active: glass.active.load(Ordering::Relaxed),
@@ -153,7 +155,8 @@ pub fn set_launcher_shortcut<R: Runtime>(
     notify(&app)
 }
 
-/// Adds or removes DeskPilot's entry in the Windows startup list (HKCU Run key).
+/// Adds or removes DeskPilot's entry in the current user's Windows startup list
+/// (HKCU Run key, never the machine-wide key).
 /// When Windows starts DeskPilot, it opens in the tray instead of showing the window.
 #[tauri::command]
 pub fn set_start_with_windows<R: Runtime>(
@@ -161,9 +164,11 @@ pub fn set_start_with_windows<R: Runtime>(
     enabled: bool,
 ) -> Result<SettingsDto, IpcErrorDto> {
     let result = if enabled {
-        app.autolaunch().enable()
+        std::env::current_exe().and_then(|exe| {
+            platform::enable_start_with_windows(&startup_command(&exe, crate::AUTOSTART_ARG))
+        })
     } else {
-        app.autolaunch().disable()
+        platform::disable_start_with_windows()
     };
     result.map_err(|_| {
         internal(if enabled {

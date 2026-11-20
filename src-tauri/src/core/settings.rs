@@ -1,8 +1,8 @@
 //! User settings, stored in `settings.json` in DeskPilot's app-data folder.
 //!
 //! - Only preferences are stored: theme, launch-history switch, launcher shortcut and the
-//!   glass effect. "Start with Windows" is not stored here: Windows itself (the HKCU Run
-//!   key managed by the autostart plugin) is the source of truth.
+//!   glass effect. "Start with Windows" is not stored here: Windows itself (DeskPilot's
+//!   value in the current user's Run key) is the source of truth.
 //! - The file is treated as untrusted: each field is read on its own, and a missing or
 //!   invalid field falls back to its default instead of discarding the whole file.
 //! - No Tauri or Windows dependencies, so it is unit-testable on any platform.
@@ -174,6 +174,12 @@ pub fn shortcut_label(canonical: &str) -> String {
         .join("+")
 }
 
+/// Command stored in the Windows startup entry: the executable path in quotes (paths
+/// under "Program Files" contain spaces) followed by the argument.
+pub fn startup_command(executable: &Path, argument: &str) -> String {
+    format!("\"{}\" {}", executable.display(), argument)
+}
+
 /// Mica is only available on Windows 11 (build 22000 and later). Unknown build = no.
 pub fn supports_glass(windows_build: Option<u32>) -> bool {
     windows_build.is_some_and(|b| b >= WINDOWS_11_FIRST_BUILD)
@@ -317,6 +323,15 @@ mod tests {
     fn label_shows_win_for_super() {
         assert_eq!(shortcut_label("Ctrl+Super+K"), "Ctrl+Win+K");
         assert_eq!(shortcut_label("Ctrl+Alt+Space"), "Ctrl+Alt+Space");
+    }
+
+    #[test]
+    fn startup_command_quotes_the_path() {
+        let exe = Path::new(r"C:\Program Files\DeskPilot\deskpilot.exe");
+        assert_eq!(
+            startup_command(exe, "--autostart"),
+            r#""C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#
+        );
     }
 
     #[test]

@@ -17,8 +17,8 @@ use std::sync::atomic::Ordering;
 use tauri::window::{Effect, EffectsBuilder};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-/// Argument the autostart entry passes, so DeskPilot can start in the tray at login.
-const AUTOSTART_ARG: &str = "--autostart";
+/// Argument the "Start with Windows" entry passes, so DeskPilot can start in the tray at login.
+pub const AUTOSTART_ARG: &str = "--autostart";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,11 +29,6 @@ pub fn run() {
             let _ = tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .args([AUTOSTART_ARG])
-                .build(),
-        )
         .manage(app_state)
         .manage(LauncherShortcutState::new())
         // State that commands use is registered up front so a command can never hit
