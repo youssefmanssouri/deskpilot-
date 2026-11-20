@@ -302,8 +302,10 @@ describe('ApplicationCatalog Component & Pure Helpers', () => {
 
       // Metric summary bar rendered
       expect(html).toContain('Total Discovered: <strong>4</strong>');
-      expect(html).toContain('Available: <strong style="color:#58a6ff">2</strong>');
-      expect(html).toContain('Missing Target: <strong style="color:#f85149">1</strong>');
+      expect(html).toContain('Available: <strong class="summary-value-available">2</strong>');
+      expect(html).toContain('Missing Target: <strong class="summary-value-missing">1</strong>');
+      // Colours come from token classes, never inline styles
+      expect(html).not.toMatch(/style="color:#/);
 
       // Scanned sources pills rendered
       expect(html).toContain('Registry (HKLM 64-bit)');

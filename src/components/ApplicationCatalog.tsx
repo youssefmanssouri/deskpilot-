@@ -10,6 +10,7 @@ import { ApplicationInspector } from './ApplicationInspector';
 import { ProcessMonitor } from './ProcessMonitor';
 import { SystemMonitor } from './SystemMonitor';
 import { useApplicationLauncher } from './useApplicationLauncher';
+import { canLaunchWithKeyboard } from './launchPolicy';
 import './ApplicationCatalog.css';
 
 export type CatalogView = 'applications' | 'processes' | 'system';
@@ -289,12 +290,10 @@ export function ApplicationCatalog({
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      // Launch the selected application if available, or first available application in filtered results
-      const target = selectedApp && selectedApp.availability === 'Available'
-        ? selectedApp
-        : filteredApps.find((app) => app.availability === 'Available');
-      if (target) {
-        void launch(target.id);
+      // Enter launches exactly the selected application, and only when it is verified.
+      // It never falls back to a different application.
+      if (selectedApp && canLaunchWithKeyboard(selectedApp)) {
+        void launch(selectedApp.id);
       }
     } else if (e.key === 'ArrowDown') {
       if (filteredApps.length > 0) {
@@ -340,9 +339,11 @@ export function ApplicationCatalog({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const app = filteredApps[index];
-      if (app && app.availability !== 'MissingTarget') {
+      if (app) {
         setSelectedAppId(app.id);
-        void launch(app.id);
+        if (canLaunchWithKeyboard(app)) {
+          void launch(app.id);
+        }
       }
     }
   };
@@ -456,19 +457,19 @@ export function ApplicationCatalog({
                 Total Discovered: <strong>{counts.total}</strong>
               </div>
               <div className="summary-item">
-                Available: <strong style={{ color: '#58a6ff' }}>{counts.available}</strong>
+                Available: <strong className="summary-value-available">{counts.available}</strong>
               </div>
               <div className="summary-item">
-                Unverified: <strong style={{ color: '#d29922' }}>{counts.unverified}</strong>
+                Unverified: <strong className="summary-value-unverified">{counts.unverified}</strong>
               </div>
               {counts.incomplete > 0 && (
                 <div className="summary-item">
-                  Incomplete: <strong style={{ color: '#8b949e' }}>{counts.incomplete}</strong>
+                  Incomplete: <strong className="summary-value-incomplete">{counts.incomplete}</strong>
                 </div>
               )}
               {counts.missing > 0 && (
                 <div className="summary-item">
-                  Missing Target: <strong style={{ color: '#f85149' }}>{counts.missing}</strong>
+                  Missing Target: <strong className="summary-value-missing">{counts.missing}</strong>
                 </div>
               )}
             </div>
@@ -546,6 +547,7 @@ export function ApplicationCatalog({
                   launchStatus={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.status : undefined}
                   launchedPid={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.launchedPid : undefined}
                   launchErrorMessage={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.errorMessage : undefined}
+                  launchErrorCode={activeLaunch && selectedApp && activeLaunch.applicationId === selectedApp.id ? activeLaunch.errorCode : undefined}
                   onLaunchRequest={() => selectedApp && launch(selectedApp.id)}
                   onLaunchSuccess={onLaunchSuccess}
                   onLaunchError={onLaunchError}

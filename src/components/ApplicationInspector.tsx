@@ -1,6 +1,8 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
 import { getAvailabilityBadgeClass } from './ApplicationCard';
+import { canLaunchWithClick, canLaunchWithKeyboard } from './launchPolicy';
+import { describeLaunchError } from './launchErrorDescription';
 import './ApplicationInspector.css';
 
 export interface ApplicationInspectorProps {
@@ -8,6 +10,7 @@ export interface ApplicationInspectorProps {
   launchStatus?: LaunchStatus;
   launchedPid?: number | null;
   launchErrorMessage?: string | null;
+  launchErrorCode?: string | null;
   onLaunchRequest?: () => void;
   onLaunchSuccess?: (applicationId: string, processId: number) => void;
   onLaunchError?: (applicationId: string, error: IpcError) => void;
@@ -27,6 +30,7 @@ export function ApplicationInspector({
   launchStatus,
   launchedPid,
   launchErrorMessage,
+  launchErrorCode,
   onLaunchRequest,
   onLaunchSuccess,
   onLaunchError,
@@ -68,8 +72,9 @@ export function ApplicationInspector({
     );
   }
 
-  const isLaunchDisabled = application.availability === 'MissingTarget';
+  const isLaunchDisabled = !canLaunchWithClick(application);
   const badgeClass = getAvailabilityBadgeClass(application.availability);
+  const launchError = launchStatus === 'failed' ? describeLaunchError(launchErrorCode) : null;
 
   return (
     <aside
@@ -171,8 +176,40 @@ export function ApplicationInspector({
             onSuccess={(pid) => onLaunchSuccess?.(application.id, pid)}
             onError={(err) => onLaunchError?.(application.id, err)}
           />
+          {launchError && (
+            <div
+              className="app-inspector-launch-error"
+              role="alert"
+              data-testid="launch-error-panel"
+            >
+              <p className="app-inspector-launch-error-title">{launchError.title}</p>
+              {launchErrorMessage && (
+                <p className="app-inspector-launch-error-detail">{launchErrorMessage}</p>
+              )}
+              <p className="app-inspector-launch-error-hint">{launchError.hint}</p>
+              <button
+                type="button"
+                className="retry-button"
+                onClick={() => onLaunchRequest?.()}
+                aria-label={`Try launching ${application.displayName} again`}
+              >
+                Try again
+              </button>
+            </div>
+          )}
           <p className="app-inspector-shortcut-hint">
-            Press <kbd>Enter</kbd> to launch selected application
+            {canLaunchWithKeyboard(application) ? (
+              <>
+                Press <kbd>Enter</kbd> to launch selected application
+              </>
+            ) : isLaunchDisabled ? (
+              'This application cannot be launched because its target is missing.'
+            ) : (
+              <>
+                <kbd>Enter</kbd> only launches verified applications. Use the button to launch
+                this one.
+              </>
+            )}
           </p>
         </div>
       </div>
