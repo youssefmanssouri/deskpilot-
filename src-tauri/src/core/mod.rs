@@ -2,6 +2,7 @@ pub mod application_discovery;
 pub mod application_identity;
 pub mod application_launcher;
 pub mod launch_history;
+pub mod launcher;
 pub mod process_service;
 pub mod status_service;
 pub mod system_service;

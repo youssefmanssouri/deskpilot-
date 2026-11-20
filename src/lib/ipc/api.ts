@@ -1,9 +1,12 @@
 import { invokeSafe } from './client';
 import type {
   AppStatusDto,
+  ApplicationDto,
   CommandIntentDto,
   DiscoveryResultDto,
   LaunchHistoryEntryDto,
+  NavigableView,
+  ShortcutStatusDto,
   LaunchResult,
   LaunchResultDto,
   ProcessListResultDto,
@@ -71,6 +74,29 @@ export const deskpilotApi = {
   /** Deletes the local launch history (memory and file). */
   clearLaunchHistory(): Promise<void> {
     return invokeSafe<void>('clear_launch_history');
+  },
+
+  /** Current catalog without rescanning (empty until discovery has run once). */
+  listApplications(): Promise<ApplicationDto[]> {
+    return invokeSafe<ApplicationDto[]>('list_applications');
+  },
+
+  /** Hides the quick launcher window. */
+  hideLauncher(): Promise<void> {
+    return invokeSafe<void>('hide_launcher');
+  },
+
+  /** Shows the main window on a view, optionally with an app selected; hides the launcher. */
+  showMainWindow(view: NavigableView, applicationId?: string): Promise<void> {
+    return invokeSafe<void>('show_main_window', {
+      view,
+      applicationId: applicationId ?? null,
+    });
+  },
+
+  /** Whether the quick launcher's global shortcut is registered. */
+  getLauncherShortcut(): Promise<ShortcutStatusDto> {
+    return invokeSafe<ShortcutStatusDto>('get_launcher_shortcut');
   },
 };
 
