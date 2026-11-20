@@ -445,12 +445,20 @@ describe('Frontend Component Interaction & Root Integration', () => {
       vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
         if (cmd === 'get_app_status') return mockStatus;
         if (cmd === 'discover_applications') return mockDiscovery;
+        if (cmd === 'get_launch_history') return [];
         throw new Error(`Unexpected command ${cmd}`);
       });
 
       render(<App />);
 
-      // Verifies root header is present with dynamic view title
+      // The app opens on Home, greeting the user without using their name
+      expect(
+        screen.getByRole('heading', { level: 1, name: /^good (morning|afternoon|evening)$/i })
+      ).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Home' }).getAttribute('aria-current')).toBe('page');
+
+      // Navigate to Apps; header title follows the view
+      fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
       expect(screen.getByRole('heading', { level: 1, name: /^apps$/i })).toBeDefined();
 
       // Verifies AppStatus header subtitle loads with synchronized v0.1.1
@@ -611,6 +619,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       render(<App />);
+      // App opens on Home; these checks are about the Apps view
+      fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
 
       await waitFor(() => {
         expect(screen.getByText('Visual Studio Code')).toBeDefined();
@@ -653,6 +663,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       render(<App />);
+      // App opens on Home; these checks are about the Apps view
+      fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
 
       await waitFor(() => {
         expect(screen.getByText('Visual Studio Code')).toBeDefined();
@@ -1254,6 +1266,8 @@ describe('Frontend Component Interaction & Root Integration', () => {
       });
 
       render(<App />);
+      // App opens on Home; these checks are about the Apps view
+      fireEvent.click(screen.getByRole('button', { name: 'Apps' }));
 
       // 1. In Applications view: Ctrl+K focuses #catalog-search-input
       await waitFor(() => {

@@ -3,6 +3,7 @@ import type {
   AppStatusDto,
   CommandIntentDto,
   DiscoveryResultDto,
+  LaunchHistoryEntryDto,
   LaunchResult,
   LaunchResultDto,
   ProcessListResultDto,
@@ -60,6 +61,16 @@ export const deskpilotApi = {
    */
   getSystemMetrics(): Promise<SystemMetricsDto> {
     return invokeSafe<SystemMetricsDto>('get_system_metrics');
+  },
+
+  /** Recent launches recorded by the backend after successful launches. */
+  getLaunchHistory(): Promise<LaunchHistoryEntryDto[]> {
+    return invokeSafe<LaunchHistoryEntryDto[]>('get_launch_history');
+  },
+
+  /** Deletes the local launch history (memory and file). */
+  clearLaunchHistory(): Promise<void> {
+    return invokeSafe<void>('clear_launch_history');
   },
 };
 
