@@ -1,6 +1,6 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
-import { getAvailabilityBadgeClass, getAvailabilityLabel } from './ApplicationCard';
+import { getAppInitials, getAvailabilityBadgeClass, getAvailabilityLabel } from './ApplicationCard';
 import { canLaunchWithClick, canLaunchWithKeyboard } from './launchPolicy';
 import { describeLaunchError } from './launchErrorDescription';
 import './ApplicationInspector.css';
@@ -93,77 +93,17 @@ export function ApplicationInspector({
         {/* App Hero */}
         <div className="app-inspector-hero">
           <div className="app-inspector-icon-wrapper" aria-hidden="true">
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <line x1="3" y1="9" x2="21" y2="9" />
-              <line x1="9" y1="21" x2="9" y2="9" />
-            </svg>
+            {getAppInitials(application.displayName)}
           </div>
           <div className="app-inspector-hero-info">
             <h4 className="app-inspector-app-name">{application.displayName}</h4>
             <span className="app-inspector-publisher">
               {application.publisher ?? 'Unknown Publisher'}
             </span>
-            <span className="app-inspector-id-pill" title={application.id}>
-              ID: {application.id}
-            </span>
           </div>
         </div>
 
-        {/* Metadata Ledger */}
-        <div className="app-inspector-ledger" role="region" aria-label="Metadata Details">
-          <div className="app-inspector-ledger-row">
-            <span className="app-inspector-ledger-key">Publisher:</span>
-            <span className="app-inspector-ledger-value">
-              {application.publisher ?? 'Unknown Publisher'}
-            </span>
-          </div>
-
-          <div className="app-inspector-ledger-row">
-            <span className="app-inspector-ledger-key">Version:</span>
-            <span className="app-inspector-ledger-value">
-              {application.version ? `v${application.version}` : 'Unspecified'}
-            </span>
-          </div>
-
-          <div className="app-inspector-ledger-row">
-            <span className="app-inspector-ledger-key">Status:</span>
-            <span className="app-inspector-ledger-value">
-              {application.isInstalled ? 'Installed Application' : 'Unregistered'}
-            </span>
-          </div>
-
-          <div className="app-inspector-ledger-row">
-            <span className="app-inspector-ledger-key">Availability:</span>
-            <span className="app-inspector-ledger-value">
-              {getAvailabilityLabel(application.availability)}
-            </span>
-          </div>
-
-          {application.sources && application.sources.length > 0 && (
-            <div className="app-inspector-ledger-row">
-              <span className="app-inspector-ledger-key">Sources:</span>
-              <div className="app-inspector-sources-tags" aria-label="Discovery Sources">
-                {application.sources.map((src, idx) => (
-                  <span key={idx} className="app-inspector-source-pill">
-                    {src}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Actions Footer */}
+        {/* Primary action: Open, with the inline launch error under it */}
         <div className="app-inspector-actions">
           <LaunchButton
             applicationId={application.id}
@@ -212,6 +152,57 @@ export function ApplicationInspector({
             )}
           </p>
         </div>
+
+        {/* Metadata Ledger */}
+        <div className="app-inspector-ledger" role="region" aria-label="Metadata Details">
+          <div className="app-inspector-ledger-row">
+            <span className="app-inspector-ledger-key">Publisher:</span>
+            <span className="app-inspector-ledger-value">
+              {application.publisher ?? 'Unknown Publisher'}
+            </span>
+          </div>
+
+          <div className="app-inspector-ledger-row">
+            <span className="app-inspector-ledger-key">Version:</span>
+            <span className="app-inspector-ledger-value">
+              {application.version ? `v${application.version}` : 'Unspecified'}
+            </span>
+          </div>
+
+          <div className="app-inspector-ledger-row">
+            <span className="app-inspector-ledger-key">Status:</span>
+            <span className="app-inspector-ledger-value">
+              {application.isInstalled ? 'Installed Application' : 'Unregistered'}
+            </span>
+          </div>
+
+          <div className="app-inspector-ledger-row">
+            <span className="app-inspector-ledger-key">Availability:</span>
+            <span className="app-inspector-ledger-value">
+              {getAvailabilityLabel(application.availability)}
+            </span>
+          </div>
+
+        </div>
+
+        {/* Provenance: where the app was found, plus its internal id. Collapsed by default. */}
+        <details className="app-inspector-provenance">
+          <summary>Where DeskPilot found it</summary>
+          {application.sources && application.sources.length > 0 && (
+            <div className="app-inspector-sources-tags" aria-label="Discovery Sources">
+              {application.sources.map((src, idx) => (
+                <span key={idx} className="app-inspector-source-pill">
+                  {src}
+                </span>
+              ))}
+            </div>
+          )}
+          <span className="app-inspector-id-pill" title={application.id}>
+            ID: {application.id}
+          </span>
+        </details>
+
+
       </div>
     </aside>
   );

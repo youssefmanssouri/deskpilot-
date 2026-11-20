@@ -23,12 +23,29 @@ export interface SourceFilterDef {
 }
 
 export const SOURCE_FILTERS: SourceFilterDef[] = [
-  { id: 'all', label: 'All' },
-  { id: 'hklm-64', label: 'HKLM 64-bit' },
-  { id: 'hklm-32', label: 'HKLM 32-bit' },
-  { id: 'hkcu', label: 'HKCU User' },
-  { id: 'start-menu', label: 'Start Menu' },
+  { id: 'all', label: 'All sources' },
+  { id: 'start-menu', label: 'Start menu' },
+  { id: 'hklm-64', label: 'Registry, all users (64-bit)' },
+  { id: 'hklm-32', label: 'Registry, all users (32-bit)' },
+  { id: 'hkcu', label: 'Registry, this user' },
 ];
+
+export type StatusFilterId = 'all' | 'ready' | 'attention';
+
+export const STATUS_FILTERS: { id: StatusFilterId; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'attention', label: 'Needs attention' },
+];
+
+/**
+ * Status chip predicate: "Ready" = verified (Available); "Needs attention" = everything else.
+ */
+export function matchesStatusFilter(app: ApplicationDto, filter: StatusFilterId): boolean {
+  if (filter === 'all') return true;
+  const ready = app.availability === 'Available';
+  return filter === 'ready' ? ready : !ready;
+}
 
 export interface ApplicationCatalogProps {
   initialApplications?: ApplicationDto[];
@@ -196,6 +213,7 @@ export function ApplicationCatalog({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [activeSourceFilter, setActiveSourceFilter] = useState<SourceFilterId>('all');
+  const [activeStatusFilter, setActiveStatusFilter] = useState<StatusFilterId>('all');
   const [selectedAppId, setSelectedAppId] = useState<string | null>(() => {
     return initialApplications && initialApplications.length > 0 ? initialApplications[0].id : null;
   });
@@ -259,10 +277,22 @@ export function ApplicationCatalog({
     return applications.filter((app) => matchesSourceFilter(app, activeSourceFilter));
   }, [applications, activeSourceFilter]);
 
-  // Step 2: Apply 4-tier search ranking over source-filtered applications
+  // Step 2: status chip (Ready / Needs attention)
+  const statusFilteredApps = useMemo(() => {
+    if (activeStatusFilter === 'all') return sourceFilteredApps;
+    return sourceFilteredApps.filter((app) => matchesStatusFilter(app, activeStatusFilter));
+  }, [sourceFilteredApps, activeStatusFilter]);
+
+  // Step 3: Apply 4-tier search ranking over the filtered applications
   const filteredApps = useMemo(() => {
-    return filterApplications(sourceFilteredApps, searchFilter);
-  }, [sourceFilteredApps, searchFilter]);
+    return filterApplications(statusFilteredApps, searchFilter);
+  }, [statusFilteredApps, searchFilter]);
+
+  // Chip counts reflect the source filter, so the numbers match what each chip will show.
+  const statusCounts = useMemo(() => {
+    const ready = sourceFilteredApps.filter((a) => a.availability === 'Available').length;
+    return { all: sourceFilteredApps.length, ready, attention: sourceFilteredApps.length - ready };
+  }, [sourceFilteredApps]);
 
   // Selection reconciliation: ensure valid selection whenever filtered list changes
   useEffect(() => {
@@ -359,41 +389,14 @@ export function ApplicationCatalog({
           <ProcessMonitor />
         </div>
       ) : (
-        <div id="panel-applications" role="region" aria-label="Applications" className="catalog-tab-content">
+        <div id="panel-applications" role="region" aria-label="Apps" className="catalog-tab-content">
           <div className="catalog-toolbar">
             <div className="catalog-search-wrapper">
-              <label htmlFor="catalog-search-input" className="catalog-search-label">
-                Search Applications
+              <label htmlFor="catalog-search-input" className="visually-hidden">
+                Search applications
               </label>
-              <input
-                ref={searchInputRef}
-                id="catalog-search-input"
-                className="catalog-search-input"
-                type="search"
-                placeholder={
-                  applications.length > 0
-                    ? `Filter ${applications.length} discovered applications... (Ctrl+K)`
-                    : 'Search applications by name or publisher...'
-                }
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                disabled={isLoading && !hasDiscovered}
-                aria-label="Search applications"
-              />
-            </div>
-
-            <button
-              type="button"
-              className="refresh-button"
-              onClick={fetchDiscovery}
-              disabled={isLoading}
-              aria-label="Refresh catalog"
-              title="Refresh application catalog"
-            >
               <svg
-                width="14"
-                height="14"
+                className="catalog-search-icon"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -402,26 +405,96 @@ export function ApplicationCatalog({
                 strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                <circle cx="11" cy="11" r="7" />
+                <line x1="20" y1="20" x2="16.5" y2="16.5" />
               </svg>
-              <span>{isLoading ? 'Scanning...' : 'Refresh Catalog'}</span>
+              <input
+                ref={searchInputRef}
+                id="catalog-search-input"
+                className="catalog-search-input"
+                type="search"
+                placeholder={
+                  applications.length > 0
+                    ? `Search ${applications.length} apps by name or publisher`
+                    : 'Search apps by name or publisher'
+                }
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                disabled={isLoading && !hasDiscovered}
+                aria-label="Search applications"
+                aria-controls="catalog-app-list"
+              />
+              <kbd className="catalog-search-hotkey" aria-hidden="true">Ctrl K</kbd>
+            </div>
+
+            <button
+              type="button"
+              className="refresh-button"
+              onClick={fetchDiscovery}
+              disabled={isLoading}
+              aria-label="Refresh catalog"
+              aria-busy={isLoading}
+              title="Scan the Start menu and registry again"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className={isLoading ? 'spinning' : undefined}
+              >
+                <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
             </button>
           </div>
 
-          {/* Source Filter Pills */}
-          <div className="catalog-source-filters" role="group" aria-label="Source filters">
-            {SOURCE_FILTERS.map((filter) => (
-              <button
-                key={filter.id}
-                type="button"
-                className={`source-filter-pill ${activeSourceFilter === filter.id ? 'active' : ''}`}
-                onClick={() => setActiveSourceFilter(filter.id)}
-                aria-pressed={activeSourceFilter === filter.id}
+          {hasDiscovered && !errorMsg && (
+            <div className="catalog-filters">
+              <div className="catalog-status-filters" role="group" aria-label="Filter by status">
+                {STATUS_FILTERS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    className={`filter-chip ${activeStatusFilter === f.id ? 'active' : ''}`}
+                    onClick={() => setActiveStatusFilter(f.id)}
+                    aria-pressed={activeStatusFilter === f.id}
+                  >
+                    {f.label}
+                    <span className="filter-chip-count" aria-hidden="true">
+                      {statusCounts[f.id]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <label htmlFor="catalog-source-select" className="visually-hidden">
+                Where the app was found
+              </label>
+              <select
+                id="catalog-source-select"
+                className="catalog-source-select"
+                value={activeSourceFilter}
+                onChange={(e) => setActiveSourceFilter(e.target.value as SourceFilterId)}
               >
-                {filter.label}
-              </button>
-            ))}
-          </div>
+                {SOURCE_FILTERS.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <span className="catalog-count-indicator" aria-live="polite">
+                {applications.length === filteredApps.length
+                  ? `Showing ${filteredApps.length} ${filteredApps.length === 1 ? 'app' : 'apps'}`
+                  : `Showing ${filteredApps.length} of ${applications.length} apps`}
+              </span>
+            </div>
+          )}
 
           {errorMsg && (
             <div className="error-banner" role="alert">
@@ -451,50 +524,6 @@ export function ApplicationCatalog({
             </div>
           )}
 
-          {hasDiscovered && !errorMsg && (
-            <div className="summary-bar" role="region" aria-label="Catalog summary metrics">
-              <div className="summary-item">
-                Found: <strong>{counts.total}</strong>
-              </div>
-              <div className="summary-item">
-                Ready: <strong className="summary-value-available">{counts.available}</strong>
-              </div>
-              <div className="summary-item">
-                Unverified: <strong className="summary-value-unverified">{counts.unverified}</strong>
-              </div>
-              {counts.incomplete > 0 && (
-                <div className="summary-item">
-                  Limited info: <strong className="summary-value-incomplete">{counts.incomplete}</strong>
-                </div>
-              )}
-              {counts.missing > 0 && (
-                <div className="summary-item">
-                  Missing: <strong className="summary-value-missing">{counts.missing}</strong>
-                </div>
-              )}
-            </div>
-          )}
-
-          {scannedSources.length > 0 && (
-            <div className="sources-list" aria-label="Scanned sources">
-              {scannedSources.map((source, idx) => (
-                <span key={idx} className="source-pill">
-                  ✓ {source}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Dynamic count indicator */}
-          {hasDiscovered && !errorMsg && (
-            <div className="catalog-count-row">
-              <span className="catalog-count-indicator" aria-live="polite">
-                {`Showing ${filteredApps.length} ${filteredApps.length === 1 ? 'application' : 'applications'}`}
-                {applications.length !== filteredApps.length && ` (filtered from ${applications.length} total)`}
-              </span>
-            </div>
-          )}
-
           {isLoading && !hasDiscovered ? (
             <div className="loading-state" role="status">
               <p>Loading applications...</p>
@@ -512,9 +541,13 @@ export function ApplicationCatalog({
                     <p>No applications match your filter.</p>
                   </div>
                 ) : (
-                  <div className="catalog-grid" role="region" aria-label="Discovered applications list">
+                  <div
+                    id="catalog-app-list"
+                    className="catalog-list"
+                    role="listbox"
+                    aria-label="Apps"
+                  >
                     {filteredApps.map((app, index) => {
-                      const isAppActive = activeLaunch?.applicationId === app.id;
                       const isSelected = selectedAppId === app.id;
                       return (
                         <ApplicationCard
@@ -522,22 +555,53 @@ export function ApplicationCatalog({
                           cardRef={(el) => {
                             cardRefs.current[index] = el;
                           }}
-                          tabIndex={0}
+                          // Roving tab stop: only the selected row is in the Tab order.
+                          tabIndex={isSelected ? 0 : -1}
                           isSelected={isSelected}
                           onClick={() => setSelectedAppId(app.id)}
                           onKeyDown={handleCardKeyDown(index)}
                           application={app}
                           showLaunchButton={false}
-                          launchStatus={isAppActive ? activeLaunch.status : undefined}
-                          launchedPid={isAppActive ? activeLaunch.launchedPid : undefined}
-                          launchErrorMessage={isAppActive ? activeLaunch.errorMessage : undefined}
-                          onLaunchRequest={() => launch(app.id)}
-                          onLaunchSuccess={onLaunchSuccess}
-                          onLaunchError={onLaunchError}
                         />
                       );
                     })}
                   </div>
+                )}
+
+                {hasDiscovered && !errorMsg && (
+                  <details className="catalog-discovery-details">
+                    <summary>Discovery details</summary>
+                    <div className="summary-bar" role="region" aria-label="Catalog summary metrics">
+                      <div className="summary-item">
+                        Found: <strong>{counts.total}</strong>
+                      </div>
+                      <div className="summary-item">
+                        Ready: <strong className="summary-value-available">{counts.available}</strong>
+                      </div>
+                      <div className="summary-item">
+                        Unverified: <strong className="summary-value-unverified">{counts.unverified}</strong>
+                      </div>
+                      {counts.incomplete > 0 && (
+                        <div className="summary-item">
+                          Limited info: <strong className="summary-value-incomplete">{counts.incomplete}</strong>
+                        </div>
+                      )}
+                      {counts.missing > 0 && (
+                        <div className="summary-item">
+                          Missing: <strong className="summary-value-missing">{counts.missing}</strong>
+                        </div>
+                      )}
+                    </div>
+                    {scannedSources.length > 0 && (
+                      <div className="sources-list" aria-label="Scanned sources">
+                        {scannedSources.map((source, idx) => (
+                          <span key={idx} className="source-pill">
+                            ✓ {source}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </details>
                 )}
               </div>
 

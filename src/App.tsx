@@ -151,7 +151,10 @@ function AppContent() {
               <polyline points="2 12 12 17 22 12" />
             </svg>
             <span className="app-brand-title">DeskPilot</span>
-            <span className="app-brand-badge">
+            <span
+              className="app-brand-badge"
+              title={appStatus ? `Core v${appStatus.version} (${appStatus.environment})` : undefined}
+            >
               {appStatus ? `v${appStatus.version}` : 'v0.1.1'}
             </span>
           </div>
@@ -243,46 +246,7 @@ function AppContent() {
             </div>
             <p className="app-header-subtitle">
               {headerInfo.subtitle}
-              {appStatus && ` • Core v${appStatus.version} (${appStatus.environment})`}
             </p>
-          </div>
-
-          <div className="app-header-right">
-            <button
-              type="button"
-              className="global-search-trigger"
-              onClick={focusSearchInput}
-              disabled={activeView === 'system'}
-              aria-label={
-                activeView === 'processes'
-                  ? 'Search processes (Ctrl+K)'
-                  : activeView === 'system'
-                    ? 'System'
-                    : 'Search applications (Ctrl+K)'
-              }
-            >
-              <svg
-                className="global-search-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <span className="global-search-placeholder">
-                {activeView === 'processes'
-                  ? 'Search processes...'
-                  : activeView === 'system'
-                    ? 'System'
-                    : 'Search applications...'}
-              </span>
-              {activeView !== 'system' && <kbd className="global-search-hotkey">Ctrl+K</kbd>}
-            </button>
           </div>
         </header>
 
