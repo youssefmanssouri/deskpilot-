@@ -12,14 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "main",
-        "title": "DeskPilot",
-        "width": 960,
-        "height": 680,
-        "minWidth": 520,
-        "minHeight": 450
-      },
-      {
         "label": "launcher",
         "title": "DeskPilot Launcher",
         "url": "index.html?window=launcher",
