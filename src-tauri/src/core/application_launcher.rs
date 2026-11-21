@@ -394,7 +394,7 @@ impl ApplicationLauncherService {
         match canonical.to_str() {
             Some(s)
                 if s.starts_with(r"\\?\")
-                    && s.len() >= 6
+                    && s.len() >= 7
                     && s.as_bytes()[4].is_ascii_alphabetic()
                     && s.as_bytes()[5] == b':'
                     && (s.as_bytes()[6] == b'\\' || s.as_bytes()[6] == b'/') =>
@@ -610,6 +610,21 @@ mod tests {
             availability,
             discovered_at: 1000,
         }
+    }
+
+    #[test]
+    fn test_normalize_verbatim_path_short_inputs_do_not_panic() {
+        // Byte index 6 is read, so a 6-byte "\\?\C:" used to index out of bounds.
+        for raw in [r"\\?\C:", r"\\?\", r"\\?\C", ""] {
+            assert_eq!(
+                ApplicationLauncherService::normalize_verbatim_path(PathBuf::from(raw)),
+                PathBuf::from(raw)
+            );
+        }
+        assert_eq!(
+            ApplicationLauncherService::normalize_verbatim_path(PathBuf::from(r"\\?\C:\App\a.exe")),
+            PathBuf::from(r"C:\App\a.exe")
+        );
     }
 
     #[test]
