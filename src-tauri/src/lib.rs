@@ -36,6 +36,7 @@ pub fn run() {
         .manage(LaunchHistoryStore::in_memory())
         .manage(SettingsStore::in_memory())
         .manage(GlassState::default())
+        .manage(crate::core::AppIconCache::new())
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 let state = window.state::<AppState>();
@@ -128,6 +129,7 @@ pub fn run() {
             commands::status::is_running_elevated,
             commands::applications::discover_applications,
             commands::applications::launch_application,
+            commands::icons::get_application_icon,
             commands::history::get_launch_history,
             commands::history::clear_launch_history,
             commands::launcher::list_applications,
