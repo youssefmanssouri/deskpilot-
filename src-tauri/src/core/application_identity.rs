@@ -161,7 +161,10 @@ impl ApplicationIdentity {
             }
         } else {
             // If unquoted, check if common executable extensions exist followed by a delimiter
-            let lowered = trimmed.to_lowercase();
+            // ASCII-only lowercasing keeps byte offsets identical to `trimmed`, so the
+            // index found below is safe to use on `trimmed`. Full Unicode lowercasing can
+            // change byte lengths (e.g. "İ" is 2 bytes, its lowercase is 3) and panic.
+            let lowered = trimmed.to_ascii_lowercase();
             let mut cut_idx = None;
 
             for ext in &[".exe", ".cmd", ".bat", ".msi"] {
@@ -213,7 +216,10 @@ impl ApplicationIdentity {
                 trimmed.trim_matches('"')
             }
         } else {
-            let lowered = trimmed.to_lowercase();
+            // ASCII-only lowercasing keeps byte offsets identical to `trimmed`, so the
+            // index found below is safe to use on `trimmed`. Full Unicode lowercasing can
+            // change byte lengths (e.g. "İ" is 2 bytes, its lowercase is 3) and panic.
+            let lowered = trimmed.to_ascii_lowercase();
             let mut cut_idx = None;
 
             for ext in &[".exe", ".cmd", ".bat", ".msi"] {
@@ -341,6 +347,30 @@ mod tests {
             Some(r#"C:\Program Files\Microsoft VS Code\code.exe"#),
         );
         assert_eq!(id1, id2);
+    }
+
+    #[test]
+    fn test_non_ascii_before_extension_does_not_panic() {
+        // Registry values are controlled by installers. "İ" is 2 bytes in UTF-8 but its
+        // Unicode lowercase is 3, which used to shift offsets and panic on slicing.
+        for raw in [
+            r"C:\İİİİ.exe",
+            r"C:\İİİİ\app.exe -x",
+            r"C:\Ünïcødé İ\tool.exe,0",
+        ] {
+            let _ = ApplicationIdentity::extract_target_basename(raw);
+            let _ = ApplicationIdentity::extract_parent_stem(raw);
+            let _ = ApplicationIdentity::generate_id("App", Some("Pub"), Some(raw));
+        }
+        // Forward slashes are path separators on every platform this test runs on.
+        assert_eq!(
+            ApplicationIdentity::extract_target_basename("C:/İİİİ/App.exe -x").as_deref(),
+            Some("app.exe")
+        );
+        assert_eq!(
+            ApplicationIdentity::extract_parent_stem("C:/İİİİ/App.exe -x").as_deref(),
+            Some("i̇i̇i̇i̇")
+        );
     }
 
     #[test]
