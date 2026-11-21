@@ -57,6 +57,21 @@ jobs:
       - name: Capture screenshots
         run: node scripts/capture-screenshots.mjs "${{ github.workspace }}/target/debug/deskpilot.exe" "${{ github.workspace }}/real-screenshots"
 
+      # The artifact store is not reachable from every place that reads these results,
+      # so the images are also printed to the log as base64, between marker lines.
+      - name: Print screenshots to the log (base64)
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem "${{ github.workspace }}/real-screenshots" -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Output "=== BEGIN $($_.Name) ==="
+            $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName))
+            for ($i = 0; $i -lt $b64.Length; $i += 4000) {
+              Write-Output $b64.Substring($i, [Math]::Min(4000, $b64.Length - $i))
+            }
+            Write-Output "=== END $($_.Name) ==="
+          }
+
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1

@@ -62,7 +62,27 @@ async function prepare(page, scheme) {
   await sleep(600);
 }
 
+// Icons load a few at a time; wait until the number drawn stops changing.
+async function waitForIcons(page, quietMs = 2500, maxMs = 45_000) {
+  const start = Date.now();
+  let last = -1;
+  let stableSince = Date.now();
+  while (Date.now() - start < maxMs) {
+    const n = await page.locator('canvas.app-icon-canvas').count();
+    if (n !== last) {
+      last = n;
+      stableSince = Date.now();
+    } else if (Date.now() - stableSince >= quietMs) {
+      break;
+    }
+    await sleep(250);
+  }
+  return last;
+}
+
 async function shot(page, name) {
+  const icons = await waitForIcons(page);
+  console.log(`${name}: ${icons} real icons on screen`);
   const path = join(outDir, name);
   await page.screenshot({ path });
   console.log('saved', path);
