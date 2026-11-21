@@ -1,0 +1,67 @@
+name: Real screenshots
+
+# Builds DeskPilot on a Windows runner, starts the real app, drives it with Playwright
+# through WebView2's debugging port, and uploads the screenshots as an artifact. The
+# icons and apps shown are the ones installed on the GitHub runner image.
+# Runs on demand, and on pull requests that change this workflow or its script.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/screenshots.yml'
+      - 'scripts/capture-screenshots.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture real screenshots (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      CARGO_TARGET_DIR: "${{ github.workspace }}/target"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: '24.15.0'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright client (no browser download)
+        run: npm install --no-save playwright-core@1.48.2
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: '1.99.1'
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Build app (debug, no installer)
+        run: npm run tauri -- build --debug --no-bundle -- --locked
+
+      - name: Capture screenshots
+        run: node scripts/capture-screenshots.mjs "${{ github.workspace }}/target/debug/deskpilot.exe" "${{ github.workspace }}/real-screenshots"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: real-screenshots
+          path: ${{ github.workspace }}/real-screenshots
+          retention-days: 14
+          if-no-files-found: warn
