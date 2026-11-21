@@ -132,6 +132,15 @@ function AppContent() {
     deskpilotApi.getAppStatus().then(setAppStatus).catch(() => null);
   }, []);
 
+  // Apps launched from an elevated DeskPilot inherit administrator rights.
+  const [isElevated, setIsElevated] = useState(false);
+  useEffect(() => {
+    deskpilotApi
+      .isRunningElevated()
+      .then((elevated) => setIsElevated(elevated === true))
+      .catch(() => {});
+  }, []);
+
   // Set when Ctrl+K is pressed on Home: switch to Apps, then focus its search once rendered.
   const [pendingSearchFocus, setPendingSearchFocus] = useState(false);
 
@@ -379,6 +388,13 @@ function AppContent() {
         {/* Main Workspace */}
         <main className="app-workspace" id="app-workspace-content">
           <div className="container">
+            {isElevated && (
+              <div className="app-elevation-banner" role="alert">
+                <strong>DeskPilot is running as administrator.</strong> Apps you launch from it
+                also get administrator rights. For everyday use, close DeskPilot and open it
+                normally.
+              </div>
+            )}
             <ApplicationCatalog
               activeView={activeView}
               onViewChange={setActiveView}

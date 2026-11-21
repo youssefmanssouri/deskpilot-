@@ -485,6 +485,17 @@ h1, h2, h3, h4,
 /* ==========================================================================
    Main Layout & Header
    ========================================================================== */
+.app-elevation-banner {
+  margin: 0 0 var(--dp-space-4);
+  padding: var(--dp-space-2) var(--dp-space-3);
+  background-color: var(--dp-status-unverified-bg);
+  border: 1px solid var(--dp-status-unverified-border);
+  border-radius: var(--dp-radius-md);
+  color: var(--dp-status-unverified);
+  font-size: var(--dp-font-size-sm);
+  line-height: 1.45;
+}
+
 .app-main-layout {
   flex: 1;
   min-width: 0;

@@ -1,5 +1,6 @@
 pub mod application_discovery;
 pub mod autostart;
+pub mod elevation;
 pub mod os_version;
 pub mod process_provider;
 pub mod system_provider;
@@ -8,6 +9,7 @@ pub use application_discovery::{RawDiscoveredEntry, WindowsApplicationScanner};
 pub use autostart::{
     disable_start_with_windows, enable_start_with_windows, is_start_with_windows_enabled,
 };
+pub use elevation::is_process_elevated;
 pub use os_version::windows_build_number;
 pub use process_provider::{
     RawProcessCandidate, WindowsProcessProvider, filetime_ticks_to_iso8601,

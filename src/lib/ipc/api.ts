@@ -29,6 +29,11 @@ export const deskpilotApi = {
     return invokeSafe<AppStatusDto>('get_app_status');
   },
 
+  /** True when DeskPilot runs as administrator, so apps it launches do too. */
+  isRunningElevated(): Promise<boolean> {
+    return invokeSafe<boolean>('is_running_elevated');
+  },
+
   /**
    * Validates a high-level command intent against Rust security boundaries.
    */

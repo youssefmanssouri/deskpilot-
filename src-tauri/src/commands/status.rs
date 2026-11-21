@@ -14,6 +14,13 @@ pub fn get_app_status(state: State<'_, AppState>) -> Result<AppStatusDto, IpcErr
         .map_err(IpcErrorDto::from)
 }
 
+/// Reports whether DeskPilot runs as administrator. Apps it launches inherit that
+/// token, so the UI warns the user. Unknown is reported as `false` (no warning).
+#[tauri::command]
+pub fn is_running_elevated() -> bool {
+    crate::platform::is_process_elevated().unwrap_or(false)
+}
+
 /// Thin Tauri command controller for validating frontend command intents.
 ///
 /// Validates the structure and policy conformance of incoming intent DTOs.
