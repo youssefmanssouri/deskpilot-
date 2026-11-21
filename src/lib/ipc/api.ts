@@ -1,4 +1,7 @@
 import { invokeSafe } from './client';
+
+/** Edge length in pixels of icons returned by `getApplicationIcon` (matches the Rust side). */
+export const APP_ICON_SIZE = 64;
 import type {
   AppStatusDto,
   ApplicationDto,
@@ -27,6 +30,19 @@ export const deskpilotApi = {
    */
   getAppStatus(): Promise<AppStatusDto> {
     return invokeSafe<AppStatusDto>('get_app_status');
+  },
+
+  /**
+   * Real icon of a catalog application as raw RGBA bytes (64 x 64, top row first),
+   * or `null` when it has none. Looked up by catalog ID only.
+   */
+  async getApplicationIcon(applicationId: string): Promise<Uint8ClampedArray<ArrayBuffer> | null> {
+    const raw = await invokeSafe<ArrayBuffer | number[] | null>('get_application_icon', {
+      applicationId,
+    });
+    if (!raw) return null;
+    const bytes = raw instanceof ArrayBuffer ? new Uint8ClampedArray(raw) : Uint8ClampedArray.from(raw);
+    return bytes.length === APP_ICON_SIZE * APP_ICON_SIZE * 4 ? bytes : null;
   },
 
   /** True when DeskPilot runs as administrator, so apps it launches do too. */

@@ -67,9 +67,10 @@ The `main` branch contains a UI redesign that is **not part of the v0.1.1 releas
   - start with Windows (one per-user startup entry)
   - recent apps on/off
   - glass effect (Windows 11 only, applied after restart)
+- **Real app icons:** Apps, Home and the quick launcher show each program's own Windows icon, read from its `.exe` without running it. Apps without a readable icon keep a two-letter badge.
 - **Local data:** unlike v0.1.1, the redesign writes two small files (launch history and settings) and, only if you turn it on, one startup entry. See [PRIVACY.md](PRIVACY.md).
 
-> The screenshots below were rendered from the app's real frontend code with **sample data** in a browser. They are not captures from a Windows installation and will be replaced after Windows testing.
+> The screenshots below were rendered from the app's real frontend code with **sample data** in a browser. App names, publishers and icons are placeholders (the icons are simple generated shapes, not the real programs' icons). They are not captures from a Windows installation and will be replaced after Windows testing.
 
 ![DeskPilot Home with sample data](docs/screenshots/redesign_home.png)
 

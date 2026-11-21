@@ -1,6 +1,7 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
 import { canLaunchWithClick } from './launchPolicy';
+import { AppIcon } from './AppIcon';
 
 export interface ApplicationCardProps {
   application: ApplicationDto;
@@ -54,15 +55,7 @@ export function getAvailabilityBadgeClass(availability: ApplicationDto['availabi
         : 'badge-incomplete';
 }
 
-/**
- * Two-letter monogram shown in place of an app icon (real icons would need a new
- * backend command, which is out of scope). Example: "Visual Studio Code" -> "VS".
- */
-export function getAppInitials(displayName: string): string {
-  const words = displayName.split(/[\s\-_.]+/).filter((w) => /[A-Za-z0-9]/.test(w));
-  const letters = words.slice(0, 2).map((w) => w.match(/[A-Za-z0-9]/)![0]);
-  return (letters.join('') || '?').toUpperCase();
-}
+export { getAppInitials } from './appInitials';
 
 /**
  * ApplicationCard renders presentation metadata for a single discovered application.
@@ -121,9 +114,11 @@ export function ApplicationCard({
         onClick={onClick}
         onKeyDown={onKeyDown}
       >
-        <span className="app-row-tile" aria-hidden="true">
-          {getAppInitials(application.displayName)}
-        </span>
+        <AppIcon
+          applicationId={application.id}
+          displayName={application.displayName}
+          className="app-row-tile"
+        />
         <span id={cardTitleId} className="app-card-title">
           {application.displayName}
         </span>

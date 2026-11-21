@@ -1,6 +1,7 @@
 import type { ApplicationDto, IpcError } from '../lib/ipc';
 import { LaunchButton, type LaunchStatus } from './LaunchButton';
-import { getAppInitials, getAvailabilityBadgeClass, getAvailabilityLabel } from './ApplicationCard';
+import { AppIcon } from './AppIcon';
+import { getAvailabilityBadgeClass, getAvailabilityLabel } from './ApplicationCard';
 import { canLaunchWithClick, canLaunchWithKeyboard } from './launchPolicy';
 import { describeLaunchError } from './launchErrorDescription';
 import './ApplicationInspector.css';
@@ -92,9 +93,11 @@ export function ApplicationInspector({
       <div className="app-inspector-body">
         {/* App Hero */}
         <div className="app-inspector-hero">
-          <div className="app-inspector-icon-wrapper" aria-hidden="true">
-            {getAppInitials(application.displayName)}
-          </div>
+          <AppIcon
+            applicationId={application.id}
+            displayName={application.displayName}
+            className="app-inspector-icon-wrapper"
+          />
           <div className="app-inspector-hero-info">
             <h4 className="app-inspector-app-name">{application.displayName}</h4>
             <span className="app-inspector-publisher">

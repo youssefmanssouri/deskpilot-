@@ -1,5 +1,6 @@
 pub mod applications;
 pub mod history;
+pub mod icons;
 pub mod launcher;
 pub mod processes;
 pub mod settings;

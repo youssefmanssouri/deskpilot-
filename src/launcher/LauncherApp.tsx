@@ -16,7 +16,8 @@ import {
 import { applyAppearance } from '../lib/appearance';
 import type { SettingsDto } from '../lib/ipc';
 import { filterApplications } from '../components/ApplicationCatalog';
-import { getAppInitials, getAvailabilityLabel } from '../components/ApplicationCard';
+import { getAvailabilityLabel } from '../components/ApplicationCard';
+import { AppIcon } from '../components/AppIcon';
 import { canLaunchWithClick, canLaunchWithKeyboard } from '../components/launchPolicy';
 import { describeLaunchError } from '../components/launchErrorDescription';
 import './Launcher.css';
@@ -318,9 +319,11 @@ export function LauncherApp() {
                   >
                     {item.kind === 'app' ? (
                       <>
-                        <span className="launcher-tile" aria-hidden="true">
-                          {getAppInitials(item.app.displayName)}
-                        </span>
+                        <AppIcon
+                          applicationId={item.app.id}
+                          displayName={item.app.displayName}
+                          className="launcher-tile"
+                        />
                         <span className="launcher-item-text">
                           <span className="launcher-item-name">{item.app.displayName}</span>
                           <span className="launcher-item-meta">

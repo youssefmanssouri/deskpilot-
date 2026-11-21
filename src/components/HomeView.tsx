@@ -1,5 +1,5 @@
 import type { ApplicationDto, LaunchHistoryEntryDto } from '../lib/ipc';
-import { getAppInitials } from './ApplicationCard';
+import { AppIcon } from './AppIcon';
 import { CpuSparkline } from './CpuSparkline';
 import { canLaunchWithClick } from './launchPolicy';
 import { formatBytes, formatUptime } from './SystemMonitor';
@@ -293,9 +293,11 @@ export function HomeView({
                 const canOpen = hasDiscovered && !!app && canLaunchWithClick(app);
                 return (
                   <li key={entry.applicationId} className="home-recent-card">
-                    <span className="home-recent-tile" aria-hidden="true">
-                      {getAppInitials(entry.displayName)}
-                    </span>
+                    <AppIcon
+                      applicationId={entry.applicationId}
+                      displayName={entry.displayName}
+                      className="home-recent-tile"
+                    />
                     <span className="home-recent-name">{entry.displayName}</span>
                     <span className="home-recent-when">
                       {status === 'launching'

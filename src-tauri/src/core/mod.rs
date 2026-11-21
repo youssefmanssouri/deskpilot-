@@ -1,3 +1,4 @@
+pub mod app_icons;
 pub mod application_discovery;
 pub mod application_identity;
 pub mod application_launcher;
@@ -9,6 +10,7 @@ pub mod settings;
 pub mod status_service;
 pub mod system_service;
 
+pub use app_icons::AppIconCache;
 pub use application_discovery::{ApplicationDiscoveryService, DiscoveryResult};
 pub use application_identity::ApplicationIdentity;
 pub use application_launcher::{ApplicationLauncherService, LaunchResult, ValidatedLaunchTarget};

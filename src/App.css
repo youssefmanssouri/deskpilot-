@@ -485,6 +485,19 @@ h1, h2, h3, h4,
 /* ==========================================================================
    Main Layout & Header
    ========================================================================== */
+/* Real application icons replace the initials tile background (see AppIcon). */
+.has-icon {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-icon-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .app-elevation-banner {
   margin: 0 0 var(--dp-space-4);
   padding: var(--dp-space-2) var(--dp-space-3);
