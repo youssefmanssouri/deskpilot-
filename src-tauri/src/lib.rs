@@ -125,6 +125,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::status::get_app_status,
             commands::status::validate_command_intent,
+            commands::status::is_running_elevated,
             commands::applications::discover_applications,
             commands::applications::launch_application,
             commands::history::get_launch_history,
