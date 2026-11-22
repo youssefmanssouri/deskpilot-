@@ -109,6 +109,8 @@ export function LauncherApp() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [shortcut, setShortcut] = useState<ShortcutStatusDto | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shownAtRef = useRef<number>(0);
+  const hasGainedFocusRef = useRef<boolean>(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -151,6 +153,8 @@ export function LauncherApp() {
     void refresh();
     reset();
     const offShown = onTauriEvent(LAUNCHER_SHOWN_EVENT, () => {
+      shownAtRef.current = Date.now();
+      hasGainedFocusRef.current = false;
       reset();
       void refresh();
     });
@@ -160,8 +164,19 @@ export function LauncherApp() {
       applyAppearance({ theme: s.theme, glassActive: false })
     );
     // Like other launchers, clicking anywhere else closes it.
+    // Ignores transient blur events that occur during initial window creation or within
+    // 400ms of being shown before the window has acquired active focus.
     const offFocus = onWindowFocusChange((focused) => {
-      if (!focused) hideLauncher();
+      if (focused) {
+        hasGainedFocusRef.current = true;
+        inputRef.current?.focus();
+      } else {
+        const elapsed = Date.now() - shownAtRef.current;
+        if (elapsed < 400 && !hasGainedFocusRef.current) {
+          return;
+        }
+        hideLauncher();
+      }
     });
     return () => {
       offShown();

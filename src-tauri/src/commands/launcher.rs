@@ -19,8 +19,17 @@ pub fn toggle_launcher<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         window.hide()?;
     } else {
         window.center()?;
+        let _ = window.unminimize();
         window.show()?;
-        window.set_focus()?;
+        let _ = window.set_focus();
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::SetForegroundWindow(hwnd.0 as _);
+                }
+            }
+        }
         // Lets the page reset its query and refresh data each time it opens.
         window.emit(LAUNCHER_SHOWN_EVENT, ())?;
     }
@@ -35,8 +44,10 @@ pub fn register_launcher_shortcut<R: Runtime>(
 ) -> Result<(), String> {
     app.global_shortcut()
         .on_shortcut(canonical, |app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                let _ = toggle_launcher(app);
+            if event.state == ShortcutState::Pressed
+                && let Err(err) = toggle_launcher(app)
+            {
+                eprintln!("[DeskPilot] Failed to toggle quick launcher: {err}");
             }
         })
         .map_err(|e| e.to_string())
