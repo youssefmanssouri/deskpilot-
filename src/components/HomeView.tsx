@@ -1,5 +1,6 @@
 import type { ApplicationDto, LaunchHistoryEntryDto } from '../lib/ipc';
 import { AppIcon } from './AppIcon';
+import { getAppInitials } from './appInitials';
 import { CpuSparkline } from './CpuSparkline';
 import { canLaunchWithClick } from './launchPolicy';
 import { formatBytes, formatUptime } from './SystemMonitor';
@@ -293,11 +294,19 @@ export function HomeView({
                 const canOpen = hasDiscovered && !!app && canLaunchWithClick(app);
                 return (
                   <li key={entry.applicationId} className="home-recent-card">
-                    <AppIcon
-                      applicationId={entry.applicationId}
-                      displayName={entry.displayName}
-                      className="home-recent-tile"
-                    />
+                    {/* Ask for the real icon only once the app is in the catalog: before
+                        discovery finishes the backend cannot know its executable yet. */}
+                    {app ? (
+                      <AppIcon
+                        applicationId={entry.applicationId}
+                        displayName={entry.displayName}
+                        className="home-recent-tile"
+                      />
+                    ) : (
+                      <span className="home-recent-tile" aria-hidden="true">
+                        {getAppInitials(entry.displayName)}
+                      </span>
+                    )}
                     <span className="home-recent-name">{entry.displayName}</span>
                     <span className="home-recent-when">
                       {status === 'launching'
