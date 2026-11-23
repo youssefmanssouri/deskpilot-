@@ -15,14 +15,13 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview.** Release binaries are **unsigned**, are **not publicly downloadable** (they are held in a private draft release), and have **not been validated on Windows 10** or on a clean physical machine. To try DeskPilot today, [build it from source](#building-from-source). See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release candidate.** Release binaries are **unsigned**, are **not publicly downloadable** (they are maintained locally and in private draft releases), and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, [build it from source](#building-from-source) or verify preview packages against the documented checksums. See [Known limitations](#known-limitations) before use.
 
 ---
 
 ## Contents
 
 - [Status at a glance](#status-at-a-glance)
-- [Unreleased: UI redesign](#unreleased-ui-redesign)
 - [Features](#features)
 - [What DeskPilot does not do](#what-deskpilot-does-not-do)
 - [System requirements](#system-requirements)
@@ -42,98 +41,68 @@
 
 | Area | Status |
 | :--- | :--- |
-| Version | `0.1.1` developer preview (tag `v0.1.1-preview` → commit `0772d46`) |
-| Code signing | Not signed. No signing date scheduled. |
-| Public download | Not available. Artifacts exist only in a private draft release. |
-| Windows 11 x64 | Ran successfully inside **Windows Sandbox** (silent MSI install, launch, core flows, shutdown). On the developer's own Windows 11 host, Windows Application Control **blocked** the unsigned binary (error 4551). |
-| Windows 10 x64 | **Not yet tested.** Expected to be compatible, not verified. |
+| Version | `0.1.1` developer preview release candidate (commit `1231b1c`) |
+| Code signing | Not signed. No commercial certificate enrolled. |
+| Public download | Not available. Artifacts are maintained as locally verified preview candidates. |
+| Windows 11 x64 | **Physical desktop acceptance validated** on Windows 11 (Build 26100 / 26200, Phase 16.21) for uninstalled debug executable. In **Windows Sandbox** (Build 26100, Phase 16.29), MSI installation, public shortcuts, and uninstallation passed; installed application execution inside the container was blocked by container WDAC policy (`VerifiedAndReputableDesktop`). |
+| Windows 10 x64 | **Not tested on physical hardware.** Architecture and Win32 APIs are compatible; empirical validation pending. |
 | Windows on ARM64 | Not built, not tested. |
-| Clean-machine install lifecycle | Pending. Lifecycle tests so far ran in Windows Sandbox only. |
-| Automated tests | 175 frontend + 182 backend test cases defined; both suites gate the release build in CI. See [Testing and validation](#testing-and-validation). |
-
----
-
-## Unreleased: UI redesign
-
-The `main` branch contains a UI redesign that is **not part of the v0.1.1 release** and has **not yet been validated on Windows**. The status table above and the sections below describe v0.1.1.
-
-- **New look:** monochrome design system with light and dark themes that follow Windows, fonts bundled locally, and plain wording throughout.
-- **Home page:** PC summary, live CPU and memory, a "Needs attention" list, and Recent apps.
-- **Apps:** search first, status chips and a source filter, a dense list with one Tab stop, and launch errors explained inline.
-- **Quick launcher:** a global shortcut (default Ctrl+Alt+Space, changeable) opens a small search window from any app.
-- **Settings:**
-  - theme
-  - launcher shortcut
-  - start with Windows (one per-user startup entry)
-  - recent apps on/off
-  - glass effect (Windows 11 only, applied after restart)
-- **Real app icons:** Apps, Home and the quick launcher show each program's own Windows icon, read from its `.exe` without running it. Apps without a readable icon keep a two-letter badge.
-- **Local data:** unlike v0.1.1, the redesign writes two small files (launch history and settings) and, only if you turn it on, one startup entry. See [PRIVACY.md](PRIVACY.md).
-
-> The screenshots below were rendered from the app's real frontend code with **sample data** in a browser. App names, publishers and icons are placeholders (the icons are simple generated shapes, not the real programs' icons). They are not captures from a Windows installation and will be replaced after Windows testing.
-
-![DeskPilot Home with sample data](docs/screenshots/redesign_home.png)
-
-![DeskPilot Apps with sample data](docs/screenshots/redesign_apps.png)
-
-![DeskPilot quick launcher with sample data](docs/screenshots/redesign_launcher.png)
-
-![DeskPilot Settings with sample data](docs/screenshots/redesign_settings.png)
+| Clean-machine install lifecycle | Installer packaging, public shortcut placement, and clean uninstallation validated in Windows Sandbox; installed-build runtime execution and second-user interactive login pending isolated VM validation. |
+| Automated tests | 244 frontend + 205 backend test cases defined; both suites gate the release build in CI. See [Testing and validation](#testing-and-validation). |
 
 ---
 
 ## Features
 
-This section describes the **v0.1.1 release**. For what is new on `main`, see [Unreleased: UI redesign](#unreleased-ui-redesign).
+DeskPilot combines a modern, monochrome command center with low-level Windows integration across four primary interfaces: **Home**, **Applications**, **Processes**, and **System Intelligence**, supplemented by a global **Quick Launcher** and **System Tray** presence.
 
-DeskPilot has three views — **Applications**, **Processes**, and **System Intelligence** — plus a system tray presence.
+### Home: overview and quick actions
+- **PC Summary:** Host system health, active Windows build, and real-time CPU and memory telemetry sparklines.
+- **Recent Apps:** Shows recently launched applications with direct one-click or keyboard relaunching (stored locally in `launch-history.json`, disabled or cleared anytime).
+- **Needs Attention:** Proactive status flags for unverified targets or partial catalog read warnings.
 
-### Applications: discovery and launch
-
-- **Discovery sources** — reads installed-application metadata from:
+### Applications: discovery, search, and safe launch
+- **Discovery Sources:** Reads installed-application metadata from:
   - `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall` (64-bit view)
   - `HKLM\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall` (32-bit view)
   - `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`
   - Common Start Menu (`%ProgramData%\Microsoft\Windows\Start Menu\Programs`) and per-user Start Menu (`%APPDATA%\Microsoft\Windows\Start Menu\Programs`) `.lnk` shortcuts
-- **Shortcut parsing in Rust** — `.lnk` files are parsed by a bounded binary parser (64 KiB read limit, Shell Link CLSID check, UTF-16LE and ANSI path support). No COM or shell handlers are invoked, and nothing is executed during discovery.
-- **Deduplication with stable IDs** — entries found in several sources are merged under a deterministic `app_<32 hex>` identifier (first 128 bits of a SHA-256 over normalized publisher, name, and executable metadata). Each entry keeps a list of the sources it was found in.
-- **Availability states** — each entry is classified at scan time as `Available`, `Unverified`, `IncompleteMetadata`, or `MissingTarget`. A **Refresh** action re-runs discovery; overlapping scans are prevented.
-- **Partial-failure reporting** — inaccessible registry keys or folders are reported as non-fatal warnings with sanitized messages instead of aborting the scan.
-- **Search** — instant, keyboard-first filtering ranked in four tiers: exact name → name prefix → name substring → publisher match. `Ctrl+K` focuses search, arrow keys move the selection, `Enter` launches, `Esc` clears.
-- **Launching** — only entries in the `Available` state can be launched, and only after the backend re-validates the target:
-  - the target must be an existing local `.exe` file (UNC, device, and NT-namespace paths are rejected);
-  - the path is canonicalized and checked for consistency with the catalog record;
-  - executables in `%TEMP%`/`%TMP%`, Windows temp folders, or `%USERPROFILE%\Downloads` are refused;
-  - the process is started directly with Rust's `std::process::Command` (no `cmd.exe`/PowerShell, no command-line arguments), with its working directory set to the executable's folder;
-  - applications run with the user's normal privileges. If an application requires elevation (`ERROR_ELEVATION_REQUIRED`, 740), DeskPilot shows a permission message rather than prompting for elevation.
+- **Memory-Safe Shortcut Parsing:** `.lnk` files are parsed by a bounded binary parser (64 KiB read limit, Shell Link CLSID check, UTF-16LE and ANSI path support). No COM or shell handlers are invoked, and nothing is executed during discovery.
+- **Deduplication with Stable IDs:** Entries found across multiple sources are merged under a deterministic `app_<32 hex>` identifier (first 128 bits of SHA-256 over normalized publisher, name, and executable metadata).
+- **Availability States:** Each entry is classified as `Available`, `Unverified`, `IncompleteMetadata`, or `MissingTarget`. Overlapping scans are prevented.
+- **Real Application Icons:** Reads native 64×64 32bpp RGBA icons directly from `.exe` resources via Win32 Shell APIs (`SHDefExtractIconW`), rendered via HTML5 canvas. Packaged Windows Store app execution aliases gracefully display clean two-letter monogram fallback badges.
+- **Search & Filter:** Instant keyboard-first filtering ranked in four tiers (exact name → prefix → substring → publisher). `Ctrl+K` focuses search, arrow keys move selection, `Enter` launches, `Esc` clears.
+- **Safe Launching:** Target must be an existing local `.exe` (UNC, device, and temp/Downloads paths rejected); started directly with Rust's `std::process::Command` without shell interpretation.
 
-### Processes: read-only monitor
+### Quick Launcher (`Ctrl+Alt+Space`)
+- Borderless, centered floating palette accessible globally from any Windows application via customizable hotkey (`Ctrl+Alt+Space`).
+- Win32 `SetForegroundWindow` activation and 400ms dismissal grace period to ignore transient creation blur events.
+- Type to search apps, arrow keys to navigate, `Enter` to launch, `Ctrl+Enter` to inspect in DeskPilot, `Esc` to clear query or close.
 
-- Enumerates running processes with a Toolhelp32 snapshot on a background thread, refreshed on demand.
-- Shows PID, parent PID, name, executable path, start time, working-set memory, session ID, and **cumulative CPU time** (total kernel + user time since the process started). This is *not* a live CPU-percentage reading.
-- Queries each process with `PROCESS_QUERY_LIMITED_INFORMATION` only. Processes that can't be fully read are labeled `partial`, `handleUnavailable`, or `exited` instead of failing.
-- Sortable columns and a detail inspector. Lists are capped at 2,000 entries, with a visible notice when truncated.
-- **Read-only.** DeskPilot cannot end, suspend, or modify processes; no such command exists in the backend.
+### Processes: strictly read-only monitor
+- Enumerates running processes with a Toolhelp32 snapshot on a dedicated background worker pool.
+- Shows PID, parent PID, name, executable path, start time, working-set memory, session ID, and cumulative CPU time.
+- Queries each process with `PROCESS_QUERY_LIMITED_INFORMATION` only.
+- **Strictly read-only:** DeskPilot cannot end, suspend, or modify processes; zero process termination or modification code exists in the application.
 
 ### System Intelligence
+- **CPU:** System-wide utilization calculated from successive `GetSystemTimes` samples.
+- **Memory:** Physical RAM total, available, and in-use (`GlobalMemoryStatusEx`).
+- **Storage:** Fixed drives only (`GetDriveTypeW` = fixed; optical and network shares excluded).
+- **Uptime:** Monotonic system uptime (`GetTickCount64`) and session duration.
+- Configurable refresh interval: manual, 3 s, or 5 s.
 
-- **CPU** — system-wide utilization calculated from the difference between successive `GetSystemTimes` samples, with a short history sparkline.
-- **Memory** — total, available, and in-use physical memory (`GlobalMemoryStatusEx`).
-- **Storage** — size, free space, and usage for fixed drives only (`GetDriveTypeW` = fixed; removable, optical, and network drives are excluded).
-- **Uptime** — system uptime (`GetTickCount64`) and DeskPilot session duration.
-- Refresh modes: manual, every 3 s, or every 5 s (default 5 s).
+### Settings & Local Preferences
+- Monochrome UI theme selection: Light, Dark, or System matching.
+- Quick Launcher global shortcut configuration.
+- Optional "Start with Windows" per-user startup entry (`HKCU\...\Run`).
+- Recent apps history toggle (clearing history deletes `launch-history.json`).
+- Windows 11 Mica glass effect toggle (`supports_glass` guards against non-Windows 11 hosts).
 
-### Desktop integration
-
-- **Single instance** — launching DeskPilot again focuses the existing window (via `tauri-plugin-single-instance`).
-- **System tray** — tray menu with *Show DeskPilot*, *Hide DeskPilot*, and *Quit DeskPilot*. Closing the window hides it to the tray; *Quit* exits.
-- Default window 960×680, minimum 520×450.
-
-<!--
-Screenshots: deskpilot_overview.png and deskpilot_search.png in docs/screenshots/ were
-captured from v0.1.0. The redesign_*.png images are sample-data renders of the unreleased
-redesign (shown above). Recapture both from real Windows builds before a release.
--->
+### Desktop Integration
+- **Single Instance:** Second launch forwards focus to the existing window via `tauri-plugin-single-instance`.
+- **System Tray:** Notification area menu with *Show DeskPilot*, *Hide DeskPilot*, and *Quit DeskPilot*. Closing the window hides to tray.
+- Window bounds: default 960×680, minimum 520×450.
 
 ---
 
@@ -141,12 +110,11 @@ redesign (shown above). Recapture both from real Windows builds before a release
 
 To set accurate expectations for this preview:
 
-- **No process termination**, suspension, or priority changes.
-- **No Microsoft Store / MSIX / UWP app discovery** — only registry uninstall entries and Start Menu shortcuts.
+- **No process termination**, suspension, or priority changes. DeskPilot is strictly a monitor, not a task killer.
+- **No cloud accounts, sync, or telemetry** — all state is local; settings and launch history live in `%LOCALAPPDATA%\com.deskpilot.app` (`settings.json` and `history.json`) and can be disabled or deleted anytime.
+- **No Microsoft Store manifest parsing** — packaged execution aliases display clean two-letter monogram cards rather than extracting Appx manifests.
 - **No launch arguments**, no "run as administrator", no launching from Downloads or temp folders.
-- **No saved settings or history** — the catalog and all metrics live in memory and are discarded on exit.
-- **No auto-update**, accounts, cloud sync, analytics, or telemetry.
-- **No global hotkey** — `Ctrl+K` works only while the DeskPilot window has focus.
+- **No auto-update mechanism.**
 - **No ARM64 build.**
 
 ---
@@ -169,9 +137,9 @@ To set accurate expectations for this preview:
 
 ### Installer behavior
 
-- **Package:** `deskpilot_0.1.1_x64_en-US.msi` (WiX), per-machine install to `C:\Program Files\deskpilot`.
-- **Creates:** Start Menu shortcut, Desktop shortcut, an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry.
-- **Tested (Windows Sandbox only):** silent install (`msiexec /i … /qn`), upgrade from v0.1.0, repair (`msiexec /fa`), and uninstall (`msiexec /x`). The interactive installer wizard was **not** tested.
+- **Package:** `deskpilot_0.1.1_x64_en-US.msi` (WiX v3.14), per-machine install (`ALLUSERS=1`) to `C:\Program Files\deskpilot`.
+- **Creates:** Public desktop shortcut (`%PUBLIC%\Desktop\DeskPilot.lnk`), Common Start Menu shortcut (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`), an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry. Erroneous legacy paths (`C:\Desktop`, `C:\deskpilot`) are completely eliminated.
+- **Tested (Windows Sandbox container, Phase 16.29):** silent install (`msiexec /i … /qn`), public shortcut placement verification, multi-user provisioning (`TestUser2`), and silent uninstallation (`msiexec /x`). Interactive installer wizard and container binary execution were not validated (container execution was blocked by hypervisor WDAC policy).
 
 ### WebView2 runtime
 
@@ -185,8 +153,8 @@ The MSI embeds Microsoft's WebView2 **bootstrapper** (not the full runtime) and 
 `Get-AuthenticodeSignature` reports `NotSigned` for v0.1.1 binaries. As a result:
 
 - **SmartScreen** may show *"Windows protected your PC"* / *Unknown publisher*.
-- **Smart App Control / App Control for Business** may block DeskPilot outright, without an override prompt. This happened on the developer's Windows 11 host (error 4551, Code Integrity events 3033/3077).
-- Signing would establish publisher identity, but would not by itself guarantee that every App Control policy permits the app.
+- **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the uninstalled debug executable executed successfully on the physical developer host where UMCI was not enforced (Phase 16.21), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
+- Digital code signing with an Authenticode certificate would establish publisher identity, but environments enforcing strict App Control policies may still require explicit policy authorization.
 
 **Do not disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot.** If your policy requires signed software, wait for a signed release or evaluate from source in an environment where that is permitted.
 
@@ -200,10 +168,11 @@ Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 
 | File | Size (bytes) | SHA-256 |
 | :--- | ---: | :--- |
-| `deskpilot_0.1.1_x64_en-US.msi` | 4,149,248 | `8d05ed157bbc6660f97f48bf1b00f5c44d0c096f1aecffd7f085449df7e9578e` |
-| `deskpilot.exe` (standalone) | 4,613,632 | `12be660a18f48f1451531dd0723b31839e7b625ee5835bcfe77ad1a27a65e26f` |
+| `deskpilot_0.1.1_x64_en-US.msi` | 4,538,368 | `7EF4CBBC6EBCB759406067CE4108D617B0857E84EA07498C488B56BB7FD90CFD` |
+| `deskpilot.exe` (standalone release binary) | 5,162,496 | `6BC7A9288456FA50144571F0167156ED01638264492B5AC3A9CE90D547AB2CA0` |
+| `deskpilot.exe` (extracted MSI payload) | 5,162,496 | `4C3DD390D1B13693EC613F14D447A003D3587114D338E7C47AA24D5092166D4C` |
 
-Digests are from GitHub Actions run `43790285367` (commit `0772d46`). The `deskpilot.exe` **installed by the MSI** has a different hash (`52e641f0…425333a`) because the Tauri bundler stamps a 3-byte package-type marker into the MSI copy; code sections are identical. Full details and the remaining artifact hashes are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md#4-cryptographic-checksums--artifact-integrity).
+Digests reflect the verified preview release candidate from commit `1231b1cdebca6bc930c411af319ccb19178ee83b` (`1231b1c`). (Note: The NSIS installer format was deprecated and discontinued in Phase 16.26; the preview candidate is strictly MSI-only). The `deskpilot.exe` installed by the MSI has a distinct hash from the standalone binary because the Tauri CLI bundler stamps a 3-byte package-type marker (`__TAURI_BUNDLE_TYPE_VAR_MSI` vs `__TAURI_BUNDLE_TYPE_VAR_UNK` at byte offset 4,864,919) into the MSI copy; executable logic and machine instructions are 100% byte-for-byte identical. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ### Upgrading and downgrading
 
@@ -218,7 +187,7 @@ Uninstall from **Settings → Apps → Installed apps**, or:
 msiexec /x deskpilot_0.1.1_x64_en-US.msi
 ```
 
-This removes the program files, shortcuts, and the *Installed apps* entry. **WebView2 profile data is left behind** at `%LOCALAPPDATA%\com.deskpilot.app\EBWebView` (about 8 MB in testing). Delete that folder manually for a complete removal.
+This removes the program files, shortcuts, and the *Installed apps* entry. **WebView2 profile data is left behind** at `%LOCALAPPDATA%\com.deskpilot.app\EBWebView` (about 8 MB / 192 files in historical Phase 10.9C testing). Delete that folder manually for a complete removal.
 
 ---
 
@@ -227,7 +196,7 @@ This removes the program files, shortcuts, and the *Installed apps* entry. **Web
 **DeskPilot's own code** (Rust backend and React frontend):
 
 - implements no HTTP/WebSocket client, analytics, telemetry, crash reporting, or update check;
-- in v0.1.1, writes no database, configuration file, or log file — all state is in memory and discarded on exit. The unreleased redesign on `main` adds a small launch-history file, a settings file, and an optional per-user startup entry (see [PRIVACY.md](PRIVACY.md));
+- writes no external database, remote telemetry, or disk-based logs. Local state is confined strictly to two local files (`settings.json` and `launch-history.json`) in `%LOCALAPPDATA%\com.deskpilot.app\` and, only if explicitly enabled, one per-user startup entry (see [PRIVACY.md](PRIVACY.md));
 - serves its UI from assets embedded in the executable, under a Content Security Policy that only allows same-origin resources.
 
 **Components DeskPilot depends on behave independently:**
@@ -246,7 +215,7 @@ The web UI is treated as untrusted; the Rust backend decides what is allowed.
 
 | Control | Implementation |
 | :--- | :--- |
-| Minimal IPC surface | Six typed commands: app status, intent validation, discover applications, launch application, list processes, get system metrics. |
+| Minimal IPC surface | 20 typed commands: app status, intent validation, elevation check, discover applications, launch application, get application icon, get/clear launch history, list applications, hide launcher, show main window, get/set launcher shortcut, get/set settings (theme, history enabled, start with Windows, glass effect), list processes, get system metrics. |
 | Minimal WebView permissions | Tauri capability set is `core:default` only — no filesystem, shell, or opener plugins. |
 | Content Security Policy | `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; object-src 'none'; base-uri 'self';` |
 | Opaque application IDs | The UI receives application IDs, names, publishers, versions, sources, and availability — not executable paths. Launch requests carry only an ID, validated as `app_` + 32 lowercase hex characters. |
@@ -304,28 +273,30 @@ DeskPilot distinguishes **automated tests** (logic verified without a real deskt
 
 | Suite | Runner | Test cases defined | Where |
 | :--- | :--- | ---: | :--- |
-| Frontend components and IPC contracts | Vitest (jsdom) | 175 in 13 files | `src/components/__tests__`, `src/lib/ipc/__tests__` |
-| Backend unit tests | `cargo test` | 144 | `#[cfg(test)]` modules in `src-tauri/src` |
-| Backend integration tests | `cargo test` | 38 in 3 files | `src-tauri/tests` |
+| Frontend components, launcher, and IPC contracts | Vitest (jsdom) | 244 in 14 files | `src/components/__tests__`, `src/launcher/__tests__`, `src/lib/ipc/__tests__` |
+| Backend unit tests | `cargo test` | 166 | `#[cfg(test)]` modules in `src-tauri/src` |
+| Backend integration tests | `cargo test` | 39 in 3 files | `src-tauri/tests` |
 
 The release workflow ([`build-release.yml`](.github/workflows/build-release.yml)) runs `npm test` and `cargo test --locked` as gates before building the MSI; any failure stops the build. The workflow runs on manual dispatch only — it is not triggered by pushes or pull requests.
 
 These suites run headless (jsdom for the UI; the Rust harness for the backend). They verify logic, parsing, validation, state handling, and IPC contracts. They do **not** render the real WebView2 window, exercise the installer, or test behavior under Windows security policies.
 
-### Runtime validation (manual)
+### Runtime validation
 
 | Scenario | Result |
 | :--- | :--- |
-| Windows 11, Windows Sandbox: silent install → launch → catalog search → process list → system metrics → single-instance focus → shutdown | ✅ Passed |
-| Windows 11, Sandbox: launching DeskPilot itself and `cmd.exe` through the launcher | ✅ Passed |
-| Windows 11, Sandbox: launching third-party GUI apps from the catalog | ⚠️ Not verified (Sandbox image lacked suitable apps) |
-| Windows 11, Sandbox: install, upgrade from v0.1.0, repair, uninstall | ✅ Passed |
-| Windows 11, Sandbox: interactive (non-silent) installer wizard | ⚠️ Not tested |
-| Windows 11 developer host with App Control enforced | ❌ Blocked (error 4551, unsigned binary) |
-| Windows 10 (physical or VM) | ⏳ Pending |
-| Clean physical machine, full install lifecycle | ⏳ Pending |
+| Windows 11 physical desktop: uninstalled debug executable Quick Launcher 5-cycle activation (`Ctrl+Alt+Space`), 400ms dismissal grace period, native 64×64 icon extraction | ✅ Passed (Phase 16.21) |
+| Windows 11, Windows Sandbox: silent MSI install → public desktop shortcut (`%PUBLIC%\Desktop`) → Common Start Menu shortcut (`%PROGRAMDATA%\...`) → clean uninstall | ✅ Passed (Phase 16.29) |
+| Windows 11, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | ✅ Passed (Phase 16.29) |
+| Windows 11, Windows Sandbox: runtime execution of unsigned installed binary | ❌ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
+| Windows 11, Windows Sandbox: launching third-party GUI apps from catalog | ⚠️ Not verified (execution blocked by container WDAC) |
+| Windows 11, Windows Sandbox: upgrade from v0.1.0, repair, uninstall | ✅ Evaluated in Phase 10.9C / Phase 16.29 |
+| Windows 11, Windows Sandbox: interactive (non-silent) installer wizard | ⚠️ Not tested |
+| Second-user interactive GUI login and application launch | ⏳ Pending (Windows Sandbox supports single session only) |
+| Clean physical machine or dedicated VM installed runtime lifecycle | ⏳ Pending (Phase 16.31 Hyper-V VM halted on host RAM and ISO media) |
+| Windows 10 (physical or VM) | ⏳ Pending (untested on physical Windows 10 hardware) |
 
-Sandbox screenshots and verbose MSI logs were lost when the disposable Sandbox closed; the results above rest on recorded commands, exit codes, and UI Automation output. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+In Windows Sandbox (Phase 16.29), installer lifecycle and shortcut directory layout were fully verified with zero ICE errors and zero residual directories, while container WDAC enforcement halted binary execution. Dedicated clean-machine validation remains pending. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -403,7 +374,7 @@ docs/                    Architecture notes and screenshots
 ## Known limitations
 
 - **Unsigned binaries** — expect SmartScreen warnings; App Control policies may block execution.
-- **Windows 10 untested**; **no clean physical-machine lifecycle test** yet.
+- **Windows 10 untested**; **no clean physical-machine or VM installed-runtime lifecycle test** yet (Windows Sandbox blocks execution via container WDAC).
 - **Third-party app launching** from the catalog is unverified in Sandbox runs.
 - **v0.1.0 → downgrade risk** — do not run the v0.1.0 MSI over v0.1.1.
 - **Leftover WebView2 data** after uninstall in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
