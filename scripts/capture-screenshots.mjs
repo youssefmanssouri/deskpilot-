@@ -115,6 +115,10 @@ try {
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const main = await findPage(browser, (u) => !u.includes('window=launcher') && u !== 'about:blank');
   await prepare(main, 'light');
+  // GitHub's Windows runners have UAC turned off, so every process is elevated even when
+  // started with runas /trustlevel, and DeskPilot correctly shows its administrator warning.
+  // A normal PC does not show it, so it is hidden in these captures (and the README says so).
+  await main.addStyleTag({ content: '.app-elevation-banner { display: none !important; }' });
 
   // Apps: wait for discovery and for real icons to be drawn.
   await main.getByRole('button', { name: 'Apps', exact: true }).click();
@@ -146,7 +150,7 @@ try {
   await main.getByRole('button', { name: /^Ready\b/ }).first().click().catch(() => {});
   await sleep(600);
   const banner = await main.locator('.app-elevation-banner').count();
-  console.log(`administrator banner shown: ${banner > 0}`);
+  console.log(`administrator banner present (hidden in captures): ${banner > 0}`);
 
   // Select the first opened app (or the first row) for the Apps screenshot.
   const pick = opened[0]
@@ -174,6 +178,7 @@ try {
   try {
     const launcher = await findPage(browser, (u) => u.includes('window=launcher'));
     const cdp = await launcher.context().newCDPSession(launcher);
+    sessions.set(launcher, cdp); // reuse this session in shot(), so the 2x scale is kept
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 640, height: 440, deviceScaleFactor: 2, mobile: false });
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
     await launcher.reload();
