@@ -70,15 +70,15 @@ The `main` branch contains a UI redesign that is **not part of the v0.1.1 releas
 - **Real app icons:** Apps, Home and the quick launcher show each program's own Windows icon, read from its `.exe` without running it. Apps without a readable icon keep a two-letter badge.
 - **Local data:** unlike v0.1.1, the redesign writes two small files (launch history and settings) and, only if you turn it on, one startup entry. See [PRIVACY.md](PRIVACY.md).
 
-> The screenshots below were rendered from the app's real frontend code with **sample data** in a browser. App names, publishers and icons are placeholders (the icons are simple generated shapes, not the real programs' icons). They are not captures from a Windows installation and will be replaced after Windows testing.
+> The screenshots below are real captures of DeskPilot running on a Windows Server 2022 machine (a GitHub Actions runner), with that machine's installed apps and their real icons. They are taken by the [Real screenshots](.github/workflows/screenshots.yml) workflow. The runner has UAC turned off, so DeskPilot shows its "running as administrator" warning there; that banner does not appear on a normal PC and is hidden in these captures.
 
-![DeskPilot Home with sample data](docs/screenshots/redesign_home.png)
+![DeskPilot Home](docs/screenshots/redesign_home.png)
 
-![DeskPilot Apps with sample data](docs/screenshots/redesign_apps.png)
+![DeskPilot Apps, showing real app icons](docs/screenshots/redesign_apps.png)
 
-![DeskPilot quick launcher with sample data](docs/screenshots/redesign_launcher.png)
+![DeskPilot quick launcher](docs/screenshots/redesign_launcher.png)
 
-![DeskPilot Settings with sample data](docs/screenshots/redesign_settings.png)
+![DeskPilot Settings](docs/screenshots/redesign_settings.png)
 
 ---
 
@@ -131,8 +131,8 @@ DeskPilot has three views — **Applications**, **Processes**, and **System Inte
 
 <!--
 Screenshots: deskpilot_overview.png and deskpilot_search.png in docs/screenshots/ were
-captured from v0.1.0. The redesign_*.png images are sample-data renders of the unreleased
-redesign (shown above). Recapture both from real Windows builds before a release.
+captured from v0.1.0. The redesign_*.png images are real captures of the current build on a
+GitHub Actions Windows runner (see .github/workflows/screenshots.yml).
 -->
 
 ---

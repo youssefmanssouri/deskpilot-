@@ -54,6 +54,12 @@ jobs:
       - name: Build app (debug, no installer)
         run: npm run tauri -- build --debug --no-bundle -- --locked
 
+      # A normal Windows user profile has this key; the runner image does not, which makes
+      # DeskPilot show a "partial discovery" notice that real users would not see.
+      - name: Create the standard per-user Uninstall registry key
+        shell: pwsh
+        run: New-Item -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -Force | Out-Null
+
       - name: Capture screenshots
         run: node scripts/capture-screenshots.mjs "${{ github.workspace }}/target/debug/deskpilot.exe" "${{ github.workspace }}/real-screenshots"
 
