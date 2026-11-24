@@ -15,7 +15,7 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview release candidate.** Release binaries are **unsigned**, are **not publicly downloadable** (they are maintained locally and in private draft releases), and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, [build it from source](#building-from-source) or verify preview packages against the documented checksums. See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11, and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, verify preview packages against the documented checksums or [build from source](#building-from-source). See [Known limitations](#known-limitations) before use.
 
 ---
 
@@ -41,13 +41,13 @@
 
 | Area | Status |
 | :--- | :--- |
-| Version | `0.1.1` developer preview release candidate (commit `1231b1c`) |
+| Version | `0.1.1` developer preview release (commit `e99ccb8`) |
 | Code signing | Not signed. No commercial certificate enrolled. |
-| Public download | Not available. Artifacts are maintained as locally verified preview candidates. |
-| Windows 11 x64 | **Physical desktop acceptance validated** on Windows 11 (Build 26100 / 26200, Phase 16.21) for uninstalled debug executable. In **Windows Sandbox** (Build 26100, Phase 16.29), MSI installation, public shortcuts, and uninstallation passed; installed application execution inside the container was blocked by container WDAC policy (`VerifiedAndReputableDesktop`). |
+| Public download | Available as a Developer Preview release asset on GitHub Releases. |
+| Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (Phase 16.38). In-place elevated MSI upgrade, installed binary startup, WebView2 Evergreen runtime initialization, Quick Launcher (`Ctrl+Alt+Space`), application discovery (138 apps), safe Win32 launching, read-only Process Monitor (1,784 process entries), System Intelligence (1-to-1 host metric parity), system tray with hide-to-tray, single-instance mutex, and 86+ minute sustained soak observation passed 100%. (In isolated Windows Sandbox container testing, execution was previously blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
 | Windows 10 x64 | **Not tested on physical hardware.** Architecture and Win32 APIs are compatible; empirical validation pending. |
 | Windows on ARM64 | Not built, not tested. |
-| Clean-machine install lifecycle | Installer packaging, public shortcut placement, and clean uninstallation validated in Windows Sandbox; installed-build runtime execution and second-user interactive login pending isolated VM validation. |
+| Clean-machine install lifecycle | In-place elevated MSI upgrade, public shortcut placement (`%PUBLIC%\Desktop` and `%PROGRAMDATA%\...`), and clean user data preservation validated on physical Windows 11 host. Windows 10 physical validation remains outstanding. |
 | Automated tests | 244 frontend + 205 backend test cases defined; both suites gate the release build in CI. See [Testing and validation](#testing-and-validation). |
 
 ---
@@ -133,13 +133,13 @@ To set accurate expectations for this preview:
 ## Installation
 
 > [!NOTE]
-> Release artifacts are not currently published for public download. This section documents the behavior of the v0.1.1 MSI for evaluators who have been given access, and for anyone building the installer from source.
+> DeskPilot v0.1.1 is distributed as a Developer Preview release on GitHub Releases. This section documents the behavior of the v0.1.1 MSI for evaluators and for anyone building the installer from source.
 
 ### Installer behavior
 
 - **Package:** `deskpilot_0.1.1_x64_en-US.msi` (WiX v3.14), per-machine install (`ALLUSERS=1`) to `C:\Program Files\deskpilot`.
 - **Creates:** Public desktop shortcut (`%PUBLIC%\Desktop\DeskPilot.lnk`), Common Start Menu shortcut (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`), an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry. Erroneous legacy paths (`C:\Desktop`, `C:\deskpilot`) are completely eliminated.
-- **Tested (Windows Sandbox container, Phase 16.29):** silent install (`msiexec /i … /qn`), public shortcut placement verification, multi-user provisioning (`TestUser2`), and silent uninstallation (`msiexec /x`). Interactive installer wizard and container binary execution were not validated (container execution was blocked by hypervisor WDAC policy).
+- **Tested (Physical Windows 11 Host, Phase 16.38 & Sandbox Container, Phase 16.29):** Elevated in-place major upgrade (`msiexec /i …`), public shortcut creation, single ARP registration, installed executable execution, and clean user data preservation verified on Windows 11 Pro 25H2. (In earlier Windows Sandbox testing, installer lifecycle passed but container hypervisor WDAC policy blocked binary execution).
 
 ### WebView2 runtime
 
@@ -153,7 +153,7 @@ The MSI embeds Microsoft's WebView2 **bootstrapper** (not the full runtime) and 
 `Get-AuthenticodeSignature` reports `NotSigned` for v0.1.1 binaries. As a result:
 
 - **SmartScreen** may show *"Windows protected your PC"* / *Unknown publisher*.
-- **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the uninstalled debug executable executed successfully on the physical developer host where UMCI was not enforced (Phase 16.21), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
+- **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the installed binary executed successfully on the physical developer host where UMCI was not enforced (Phase 16.38), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
 - Digital code signing with an Authenticode certificate would establish publisher identity, but environments enforcing strict App Control policies may still require explicit policy authorization.
 
 **Do not disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot.** If your policy requires signed software, wait for a signed release or evaluate from source in an environment where that is permitted.
@@ -172,11 +172,11 @@ Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 | `deskpilot.exe` (standalone release binary) | 5,162,496 | `6BC7A9288456FA50144571F0167156ED01638264492B5AC3A9CE90D547AB2CA0` |
 | `deskpilot.exe` (extracted MSI payload) | 5,162,496 | `4C3DD390D1B13693EC613F14D447A003D3587114D338E7C47AA24D5092166D4C` |
 
-Digests reflect the verified preview release candidate from commit `1231b1cdebca6bc930c411af319ccb19178ee83b` (`1231b1c`). (Note: The NSIS installer format was deprecated and discontinued in Phase 16.26; the preview candidate is strictly MSI-only). The `deskpilot.exe` installed by the MSI has a distinct hash from the standalone binary because the Tauri CLI bundler stamps a 3-byte package-type marker (`__TAURI_BUNDLE_TYPE_VAR_MSI` vs `__TAURI_BUNDLE_TYPE_VAR_UNK` at byte offset 4,864,919) into the MSI copy; executable logic and machine instructions are 100% byte-for-byte identical. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+Digests reflect the verified preview release compiled from commit `e99ccb84b1883a6a844e6576f2141a62ee74518f` (`e99ccb8`). (Note: The NSIS installer format was deprecated and discontinued in Phase 16.26; the preview release is strictly MSI-only). The `deskpilot.exe` installed by the MSI has a distinct hash from the standalone binary because the Tauri CLI bundler stamps a 3-byte package-type marker (`__TAURI_BUNDLE_TYPE_VAR_MSI` vs `__TAURI_BUNDLE_TYPE_VAR_UNK` at byte offset 4,864,919) into the MSI copy; executable logic and machine instructions are 100% byte-for-byte identical. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ### Upgrading and downgrading
 
-- Installing v0.1.1 over v0.1.0 performs a standard major upgrade (tested in Sandbox).
+- Installing v0.1.1 over an existing installation performs a standard Windows Installer major upgrade (verified in Phase 16.38).
 - The v0.1.1 installer includes a downgrade guard, but **the older v0.1.0 MSI does not. Do not run the v0.1.0 MSI over v0.1.1** — in testing it downgraded the installation without warning.
 
 ### Uninstalling
@@ -285,18 +285,20 @@ These suites run headless (jsdom for the UI; the Rust harness for the backend). 
 
 | Scenario | Result |
 | :--- | :--- |
-| Windows 11 physical desktop: uninstalled debug executable Quick Launcher 5-cycle activation (`Ctrl+Alt+Space`), 400ms dismissal grace period, native 64×64 icon extraction | ✅ Passed (Phase 16.21) |
+| Windows 11 physical desktop: elevated MSI upgrade, installed binary execution, and full 15-point functional acceptance (Phase 16.38) | ✅ Passed (Phase 16.38) |
+| Windows 11 physical desktop: Quick Launcher 5-cycle activation (`Ctrl+Alt+Space`), 400ms dismissal grace period, native 64×64 icon extraction | ✅ Passed (Phase 16.21 & 16.38) |
+| Windows 11 physical desktop: live application discovery (138 apps), search filtering, and safe launch execution (`About Java` -> `javaw.exe`) | ✅ Passed (Phase 16.38) |
+| Windows 11 physical desktop: read-only Process Monitor (1,784 entries) and System Intelligence (exact host CIM metric parity) | ✅ Passed (Phase 16.38) |
+| Windows 11 physical desktop: system tray lifecycle, hide-to-tray on close, single-instance mutex, and 86+ minute sustained soak observation | ✅ Passed (Phase 16.38) |
 | Windows 11, Windows Sandbox: silent MSI install → public desktop shortcut (`%PUBLIC%\Desktop`) → Common Start Menu shortcut (`%PROGRAMDATA%\...`) → clean uninstall | ✅ Passed (Phase 16.29) |
 | Windows 11, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | ✅ Passed (Phase 16.29) |
 | Windows 11, Windows Sandbox: runtime execution of unsigned installed binary | ❌ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
-| Windows 11, Windows Sandbox: launching third-party GUI apps from catalog | ⚠️ Not verified (execution blocked by container WDAC) |
 | Windows 11, Windows Sandbox: upgrade from v0.1.0, repair, uninstall | ✅ Evaluated in Phase 10.9C / Phase 16.29 |
 | Windows 11, Windows Sandbox: interactive (non-silent) installer wizard | ⚠️ Not tested |
 | Second-user interactive GUI login and application launch | ⏳ Pending (Windows Sandbox supports single session only) |
-| Clean physical machine or dedicated VM installed runtime lifecycle | ⏳ Pending (Phase 16.31 Hyper-V VM halted on host RAM and ISO media) |
 | Windows 10 (physical or VM) | ⏳ Pending (untested on physical Windows 10 hardware) |
 
-In Windows Sandbox (Phase 16.29), installer lifecycle and shortcut directory layout were fully verified with zero ICE errors and zero residual directories, while container WDAC enforcement halted binary execution. Dedicated clean-machine validation remains pending. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+Physical host validation (Phase 16.38) demonstrated complete end-to-end functionality for the installed application on Windows 11 Pro 25H2 across an 86+ minute soak (~29.4 MB working set, zero runaway heap growth observed). In isolated Windows Sandbox container testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while hypervisor-enforced container WDAC policies halted unsigned execution. Physical Windows 10 validation remains outstanding. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -374,8 +376,8 @@ docs/                    Architecture notes and screenshots
 ## Known limitations
 
 - **Unsigned binaries** — expect SmartScreen warnings; App Control policies may block execution.
-- **Windows 10 untested**; **no clean physical-machine or VM installed-runtime lifecycle test** yet (Windows Sandbox blocks execution via container WDAC).
-- **Third-party app launching** from the catalog is unverified in Sandbox runs.
+- **Windows 10 untested on physical hardware**; Windows 11 installed-runtime validated in Phase 16.38 (Windows Sandbox container previously blocked execution via container WDAC).
+- **Third-party app launching** from the catalog was verified on physical host (`About Java` in Phase 16.38), but was blocked in Windows Sandbox by container WDAC.
 - **v0.1.0 → downgrade risk** — do not run the v0.1.0 MSI over v0.1.1.
 - **Leftover WebView2 data** after uninstall in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
 - **Store/MSIX apps not discovered.**
