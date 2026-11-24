@@ -8,7 +8,7 @@
 //   node scripts/capture-screenshots.mjs <path-to-deskpilot.exe> <output-dir>
 
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
@@ -31,7 +31,7 @@ const PREFERRED = [
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function waitForDebugger() {
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 80; i++) {
     try {
       const res = await fetch(`http://127.0.0.1:${PORT}/json/version`);
       if (res.ok) return;
@@ -51,8 +51,11 @@ async function findPage(browser, test) {
   throw new Error('page not found');
 }
 
+const sessions = new Map();
+
 async function prepare(page, scheme) {
-  const cdp = await page.context().newCDPSession(page);
+  const cdp = sessions.get(page) ?? (await page.context().newCDPSession(page));
+  sessions.set(page, cdp);
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: VIEW.width, height: VIEW.height, deviceScaleFactor: 2, mobile: false,
   });
@@ -84,21 +87,38 @@ async function shot(page, name) {
   const icons = await waitForIcons(page);
   console.log(`${name}: ${icons} real icons on screen`);
   const path = join(outDir, name);
-  await page.screenshot({ path });
+  // Capture through CDP so the 2x device scale from `prepare` is kept (Playwright's own
+  // screenshot of a connected WebView2 page renders at 1x).
+  const cdp = sessions.get(page) ?? (await page.context().newCDPSession(page));
+  const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+  writeFileSync(path, Buffer.from(data, 'base64'));
   console.log('saved', path);
 }
 
-const child = spawn(exe, [], {
-  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PORT}` },
-  stdio: 'inherit',
-});
+// Start DeskPilot as a standard user, like a normal double-click, so the administrator
+// banner does not appear just because the CI runner is elevated. `runas /trustlevel`
+// keeps the caller's environment, which carries the WebView2 debugging flag.
+const env = { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PORT}` };
+let child = spawn('runas', ['/trustlevel:0x20000', exe], { env, stdio: 'inherit' });
 
 let browser;
 try {
-  await waitForDebugger();
+  try {
+    await waitForDebugger();
+    console.log('started with standard-user rights (runas /trustlevel:0x20000)');
+  } catch {
+    console.log('standard-user start did not expose the debugger; starting directly (elevated)');
+    try { execFileSync('taskkill', ['/F', '/IM', 'deskpilot.exe'], { stdio: 'ignore' }); } catch {}
+    child = spawn(exe, [], { env, stdio: 'inherit' });
+    await waitForDebugger();
+  }
   browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const main = await findPage(browser, (u) => !u.includes('window=launcher') && u !== 'about:blank');
   await prepare(main, 'light');
+  // GitHub's Windows runners have UAC turned off, so every process is elevated even when
+  // started with runas /trustlevel, and DeskPilot correctly shows its administrator warning.
+  // A normal PC does not show it, so it is hidden in these captures (and the README says so).
+  await main.addStyleTag({ content: '.app-elevation-banner { display: none !important; }' });
 
   // Apps: wait for discovery and for real icons to be drawn.
   await main.getByRole('button', { name: 'Apps', exact: true }).click();
@@ -124,6 +144,13 @@ try {
     opened.push(name);
   }
   console.log('opened for recent apps:', opened.join(', ') || '(none)');
+
+  // Show the apps DeskPilot can open (the real "Ready" filter); server-only tools on the
+  // runner without a program file would otherwise fill the first rows.
+  await main.getByRole('button', { name: /^Ready\b/ }).first().click().catch(() => {});
+  await sleep(600);
+  const banner = await main.locator('.app-elevation-banner').count();
+  console.log(`administrator banner present (hidden in captures): ${banner > 0}`);
 
   // Select the first opened app (or the first row) for the Apps screenshot.
   const pick = opened[0]
@@ -151,6 +178,7 @@ try {
   try {
     const launcher = await findPage(browser, (u) => u.includes('window=launcher'));
     const cdp = await launcher.context().newCDPSession(launcher);
+    sessions.set(launcher, cdp); // reuse this session in shot(), so the 2x scale is kept
     await cdp.send('Emulation.setDeviceMetricsOverride', { width: 640, height: 440, deviceScaleFactor: 2, mobile: false });
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
     await launcher.reload();
