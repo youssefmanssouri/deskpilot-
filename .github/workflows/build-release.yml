@@ -70,7 +70,7 @@ jobs:
       - name: Assert Lockfile Baselines
         shell: powershell
         run: |
-          $expectedPkgLockBlob = "40cf9b1ac59b6f4487b4df40f0960f42008e4dae"
+          $expectedPkgLockBlob = "ef7eb39c03313bcd312206f0c3d7950f22f5c644"
           $pkgBlobRaw = & git rev-parse HEAD:package-lock.json
           $pkgBlobExit = $LASTEXITCODE
           if ($pkgBlobExit -ne 0) {
@@ -83,7 +83,7 @@ jobs:
             exit 1
           }
 
-          $expectedCargoLockBlob = "18c9a169b3dcb466971b2b969c067a3cc3b9eb84"
+          $expectedCargoLockBlob = "c82f33453d53eee0adc2471612969a18f62e3e4f"
           $cargoBlobRaw = & git rev-parse HEAD:src-tauri/Cargo.lock
           $cargoBlobExit = $LASTEXITCODE
           if ($cargoBlobExit -ne 0) {
@@ -407,7 +407,7 @@ jobs:
           }
 
           $postPkgLockSha = (Get-FileHash -Path "package-lock.json" -Algorithm SHA256).Hash
-          if ($postPkgLockSha -ne "A7F44E62C7A7842411AF16D95B44D02172DB0845900C000F9E8D7B229E30A9EB") {
+          if ($postPkgLockSha -ne "221A3120B03941BC57A73336E4536F5BA6AF8221B02D7D8841D2BA272CE0D16B") {
             Write-Error "CRITICAL: package-lock.json SHA-256 changed during npm ci! Got $postPkgLockSha"
             exit 1
           }
