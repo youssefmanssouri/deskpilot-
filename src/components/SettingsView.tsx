@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { deskpilotApi, IpcError, type SettingsDto, type ThemePreference } from '../lib/ipc';
+import {
+  deskpilotApi,
+  IpcError,
+  type SettingsDto,
+  type StartupStatusDto,
+  type ThemePreference,
+} from '../lib/ipc';
 import { applyAppearance } from '../lib/appearance';
 import './SettingsView.css';
 
@@ -42,6 +48,71 @@ const THEMES: { id: ThemePreference; label: string }[] = [
 
 type Section = 'appearance' | 'launcher' | 'startup' | 'privacy';
 
+interface StartupNotice {
+  kind: 'warning' | 'error';
+  message: string;
+}
+
+function getStartupNotice(status: StartupStatusDto): StartupNotice | null {
+  switch (status.state) {
+    case 'disabled':
+    case 'enabled':
+      return null;
+    case 'stale':
+      return {
+        kind: 'warning',
+        message:
+          'DeskPilot found a stale startup entry from a previous installation. Automatic changes are disabled to protect your startup configuration.',
+      };
+    case 'otherInstall':
+      return {
+        kind: 'warning',
+        message:
+          'Another DeskPilot installation is registered to start with Windows. Automatic changes are disabled here.',
+      };
+    case 'unrecognized':
+      return {
+        kind: 'warning',
+        message:
+          'The existing Windows startup entry is unrecognized. Automatic changes are disabled to avoid modifying it.',
+      };
+    case 'unavailable':
+      switch (status.errorCode) {
+        case 'PERMISSION_DENIED':
+          return {
+            kind: 'error',
+            message: 'Permission denied while checking the Windows startup list.',
+          };
+        case 'INVALID_STARTUP_STATE':
+          return {
+            kind: 'error',
+            message: "DeskPilot couldn't verify the Windows startup state.",
+          };
+        case 'OPERATION_FAILED':
+        default:
+          return {
+            kind: 'error',
+            message: "DeskPilot couldn't check the Windows startup list.",
+          };
+      }
+  }
+}
+
+function startupMutationErrorMessage(err: unknown): string {
+  const { code } = IpcError.fromResponse(err);
+  switch (code) {
+    case 'PERMISSION_DENIED':
+      return 'Permission denied while updating the Windows startup list.';
+    case 'STARTUP_CONFLICT':
+      return 'Another or stale DeskPilot startup entry already exists and was not modified.';
+    case 'INVALID_STARTUP_STATE':
+      return 'The current Windows startup state does not allow this change.';
+    case 'OPERATION_FAILED':
+    default:
+      return 'DeskPilot could not update the Windows startup list.';
+  }
+}
+
 export interface SettingsViewProps {
   /** Lets the rest of the app drop its copy of the history after it is cleared. */
   onHistoryCleared?: () => void;
@@ -57,6 +128,9 @@ export function SettingsView({ onHistoryCleared }: SettingsViewProps) {
   const [errors, setErrors] = useState<Partial<Record<Section, string>>>({});
   const [notice, setNotice] = useState<Partial<Record<Section, string>>>({});
   const [busy, setBusy] = useState<Section | null>(null);
+  const [startupBusy, setStartupBusy] = useState(false);
+  const [startupUnconfirmed, setStartupUnconfirmed] = useState(false);
+  const startupPendingRef = useRef(false);
   const [recording, setRecording] = useState(false);
   const [captured, setCaptured] = useState<string | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
@@ -66,6 +140,7 @@ export function SettingsView({ onHistoryCleared }: SettingsViewProps) {
       .getSettings()
       .then((s) => {
         setSettings(s);
+        setStartupUnconfirmed(false);
         applyAppearance(s);
       })
       .catch((err) => setLoadError(IpcError.fromResponse(err).message || 'Settings could not be loaded.'));
@@ -75,21 +150,57 @@ export function SettingsView({ onHistoryCleared }: SettingsViewProps) {
     if (recording) captureRef.current?.focus();
   }, [recording]);
 
-  const run = async (section: Section, action: () => Promise<SettingsDto>, done?: string) => {
+  const run = async (
+    section: Section,
+    action: () => Promise<SettingsDto>,
+    done?: string,
+    formatError?: (err: unknown) => string
+  ) => {
     setBusy(section);
     setErrors((e) => ({ ...e, [section]: undefined }));
     setNotice((n) => ({ ...n, [section]: undefined }));
     try {
       const next = await action();
       setSettings(next);
+      setStartupUnconfirmed(false);
       applyAppearance(next);
       if (done) setNotice((n) => ({ ...n, [section]: done }));
       return true;
     } catch (err) {
-      setErrors((e) => ({ ...e, [section]: IpcError.fromResponse(err).message || 'That change could not be saved.' }));
+      const message =
+        formatError?.(err) ?? (IpcError.fromResponse(err).message || 'That change could not be saved.');
+      setErrors((e) => ({ ...e, [section]: message }));
       return false;
     } finally {
       setBusy(null);
+    }
+  };
+
+  const toggleStartup = async (nextEnabled: boolean) => {
+    if (startupPendingRef.current) return;
+    startupPendingRef.current = true;
+    setStartupBusy(true);
+    setErrors((e) => ({ ...e, startup: undefined }));
+    setNotice((n) => ({ ...n, startup: undefined }));
+    try {
+      await deskpilotApi.setStartWithWindows(nextEnabled);
+    } catch (err) {
+      setErrors((e) => ({ ...e, startup: startupMutationErrorMessage(err) }));
+      startupPendingRef.current = false;
+      setStartupBusy(false);
+      return;
+    }
+
+    try {
+      const refreshed = await deskpilotApi.getSettings();
+      setSettings(refreshed);
+      setStartupUnconfirmed(false);
+      applyAppearance(refreshed);
+    } catch {
+      setStartupUnconfirmed(true);
+    } finally {
+      startupPendingRef.current = false;
+      setStartupBusy(false);
     }
   };
 
@@ -111,6 +222,16 @@ export function SettingsView({ onHistoryCleared }: SettingsViewProps) {
   }
 
   const glassPending = settings.glassSupported && settings.glassEffect !== settings.glassActive;
+  const startupState = settings.startupStatus.state;
+  const canToggleStartup =
+    !startupUnconfirmed && (startupState === 'disabled' || startupState === 'enabled');
+  const startupNotice: StartupNotice | null = startupUnconfirmed
+    ? {
+        kind: 'error',
+        message:
+          'The startup setting was updated, but its current status could not be confirmed. Automatic changes are paused until settings refresh.',
+      }
+    : getStartupNotice(settings.startupStatus);
 
   return (
     <div className="settings-view" role="region" aria-label="Settings">
@@ -281,22 +402,33 @@ export function SettingsView({ onHistoryCleared }: SettingsViewProps) {
             <span className="settings-row-label" id="settings-autostart-label">
               Start with Windows
             </span>
-            <span className="settings-row-help">
-              {settings.startWithWindows === null
-                ? "DeskPilot couldn't check the Windows startup list."
-                : 'Starts in the tray when you sign in, so the shortcut always works.'}
+            <span className="settings-row-help" id="settings-autostart-help">
+              Starts in the tray when you sign in, so the shortcut always works.
             </span>
           </div>
           <button
             type="button"
             role="switch"
             className="settings-switch"
-            aria-checked={settings.startWithWindows === true}
+            aria-checked={!startupUnconfirmed && startupState === 'enabled'}
             aria-labelledby="settings-autostart-label"
-            disabled={settings.startWithWindows === null || busy === 'startup'}
-            onClick={() => run('startup', () => deskpilotApi.setStartWithWindows(!settings.startWithWindows))}
+            aria-describedby={startupNotice ? 'settings-autostart-status' : 'settings-autostart-help'}
+            disabled={!canToggleStartup || startupBusy}
+            onClick={() => {
+              if (!canToggleStartup) return;
+              void toggleStartup(startupState === 'disabled');
+            }}
           />
         </div>
+        {startupNotice && (
+          <p
+            id="settings-autostart-status"
+            className={startupNotice.kind === 'error' ? 'settings-error' : 'settings-note'}
+            role={startupNotice.kind === 'error' ? 'alert' : 'status'}
+          >
+            {startupNotice.message}
+          </p>
+        )}
         {errors.startup && (
           <p className="settings-error" role="alert">
             {errors.startup}

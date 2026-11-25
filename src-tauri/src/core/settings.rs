@@ -7,12 +7,14 @@
 //!   invalid field falls back to its default instead of discarding the whole file.
 //! - No Tauri or Windows dependencies, so it is unit-testable on any platform.
 
+use crate::core::ApplicationLauncherService;
 use crate::core::persistence::write_atomic;
 use crate::error::DomainError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::{fmt, io};
 
 /// File name inside the app-data directory.
 pub const SETTINGS_FILE_NAME: &str = "settings.json";
@@ -178,6 +180,379 @@ pub fn shortcut_label(canonical: &str) -> String {
 /// under "Program Files" contain spaces) followed by the argument.
 pub fn startup_command(executable: &Path, argument: &str) -> String {
     format!("\"{}\" {}", executable.display(), argument)
+}
+
+/// Classification of DeskPilot's optional per-user startup entry (`HKCU\...\Run\DeskPilot`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupState {
+    /// Neither the `Run` subkey nor the `DeskPilot` value exists.
+    Disabled,
+    /// Registered with `"<current_exe>" --autostart` for the active executable.
+    Enabled,
+    /// Registered in DeskPilot's command format for a different DeskPilot executable path
+    /// whose target no longer exists on disk (such as a moved installation).
+    Stale,
+    /// Registered in DeskPilot's command format for another existing DeskPilot executable.
+    OtherInstall,
+    /// Entry is malformed, uses an unsupported registry value type, carries unexpected
+    /// arguments, or points to an unrelated or disallowed target.
+    Unrecognized,
+}
+
+/// Explicit future resolution operations on non-active DeskPilot registrations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartupResolutionAction {
+    UpdateStale,
+    ClearStale,
+    SwitchToCurrent,
+}
+
+/// Raw registry read outcome from a [`StartupRegistry`] store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartupRegistryValue {
+    /// Strict `REG_SZ` string value.
+    String(String),
+    /// Non-`REG_SZ` value type (such as `REG_DWORD`, `REG_EXPAND_SZ`, `REG_BINARY`) or invalid UTF-16.
+    UnsupportedType,
+}
+
+/// Errors produced when inspecting or mutating the startup registration.
+/// Messages never include registry key paths, raw command values, or executable file paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartupMutationError {
+    /// Underlying operating-system permission failure.
+    PermissionDenied,
+    /// An existing registration cannot be overwritten or deleted safely under the requested action.
+    Conflict(StartupState),
+    /// Internal path or command invariant failure.
+    InvalidState(&'static str),
+    /// Other genuine registry or I/O error.
+    IoFailure(io::ErrorKind),
+}
+
+impl fmt::Display for StartupMutationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PermissionDenied => {
+                write!(
+                    f,
+                    "Permission denied while accessing Windows startup settings."
+                )
+            }
+            Self::Conflict(StartupState::Stale) => write!(
+                f,
+                "A stale DeskPilot startup entry already exists and requires explicit repair."
+            ),
+            Self::Conflict(StartupState::OtherInstall) => write!(
+                f,
+                "Another DeskPilot installation is currently configured to start with Windows."
+            ),
+            Self::Conflict(StartupState::Unrecognized) => write!(
+                f,
+                "An unrecognized startup entry already exists and will not be modified."
+            ),
+            Self::Conflict(_) => {
+                write!(f, "The startup entry state does not permit that operation.")
+            }
+            Self::InvalidState(msg) => write!(f, "{msg}"),
+            Self::IoFailure(_) => write!(f, "Could not access Windows startup settings."),
+        }
+    }
+}
+
+impl std::error::Error for StartupMutationError {}
+
+impl From<io::Error> for StartupMutationError {
+    fn from(err: io::Error) -> Self {
+        match err.kind() {
+            io::ErrorKind::PermissionDenied => Self::PermissionDenied,
+            kind => Self::IoFailure(kind),
+        }
+    }
+}
+
+impl From<StartupMutationError> for io::Error {
+    fn from(err: StartupMutationError) -> Self {
+        let kind = match err {
+            StartupMutationError::PermissionDenied => io::ErrorKind::PermissionDenied,
+            StartupMutationError::Conflict(_) | StartupMutationError::InvalidState(_) => {
+                io::ErrorKind::InvalidInput
+            }
+            StartupMutationError::IoFailure(kind) => kind,
+        };
+        io::Error::new(kind, err.to_string())
+    }
+}
+
+/// Minimal testable registry abstraction covering only the `DeskPilot` startup value.
+pub trait StartupRegistry {
+    /// Reads the `DeskPilot` value. Must return `Ok(None)` when either the `Run` subkey or
+    /// the `DeskPilot` value does not exist.
+    fn read_value(&self) -> io::Result<Option<StartupRegistryValue>>;
+
+    /// Writes `command` as `REG_SZ` under the `DeskPilot` value.
+    fn write_value(&self, command: &str) -> io::Result<()>;
+
+    /// Deletes only the `DeskPilot` value (never the parent `Run` subkey).
+    /// Must return `Ok(())` when the key or value is already absent.
+    fn delete_value(&self) -> io::Result<()>;
+}
+
+/// Parses a stored startup command expecting `"<absolute_exe_path>" <expected_arg>`.
+///
+/// Handles quoted paths with spaces, accepts unambiguous spaceless unquoted paths, rejects
+/// unclosed/empty quotes, ambiguous unquoted paths with spaces, unexpected or missing arguments,
+/// relative paths, UNC paths, and device namespace paths. Never executes or shell-expands strings.
+pub fn parse_startup_command(raw: &str, expected_arg: &str) -> Option<PathBuf> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || expected_arg.trim().is_empty() {
+        return None;
+    }
+
+    let (exe_part, rest) = if let Some(after_open) = trimmed.strip_prefix('"') {
+        let close_idx = after_open.find('"')?;
+        let exe_part = &after_open[..close_idx];
+        let after_close = &after_open[close_idx + 1..];
+        if after_close.contains('"') {
+            return None;
+        }
+        if !after_close.is_empty() && !after_close.chars().next()?.is_whitespace() {
+            return None;
+        }
+        (exe_part, after_close.trim())
+    } else {
+        if trimmed.contains('"') {
+            return None;
+        }
+        let ws_idx = trimmed.find(char::is_whitespace)?;
+        (&trimmed[..ws_idx], trimmed[ws_idx..].trim())
+    };
+
+    let mut args = rest.split_whitespace();
+    if args.next() != Some(expected_arg) || args.next().is_some() {
+        return None;
+    }
+
+    validate_local_drive_exe_path(exe_part)
+}
+
+fn validate_local_drive_exe_path(raw: &str) -> Option<PathBuf> {
+    if raw.is_empty() || raw != raw.trim() || raw.contains('\0') {
+        return None;
+    }
+    ApplicationLauncherService::validate_lexical_path(raw).ok()?;
+    let normalized = ApplicationLauncherService::normalize_verbatim_path(PathBuf::from(raw));
+    let s = normalized.to_str()?;
+    let bytes = s.as_bytes();
+    if bytes.len() < 4
+        || !bytes[0].is_ascii_alphabetic()
+        || bytes[1] != b':'
+        || (bytes[2] != b'\\' && bytes[2] != b'/')
+    {
+        return None;
+    }
+    if s.split(['\\', '/']).any(|seg| seg == ".." || seg == ".") {
+        return None;
+    }
+    if !normalized.components().next().is_some_and(|c| {
+        matches!(
+            c,
+            Component::Prefix(_) | Component::RootDir | Component::Normal(_)
+        )
+    }) {
+        return None;
+    }
+    Some(PathBuf::from(raw))
+}
+
+/// Normalizes a local Windows executable path for case-insensitive and separator-insensitive
+/// comparison without requiring the path to exist on disk.
+pub fn normalize_windows_path(path: &Path) -> Option<String> {
+    let stripped = ApplicationLauncherService::normalize_verbatim_path(path.to_path_buf());
+    let raw = stripped.to_str()?.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let replaced = raw.replace('/', "\\");
+    let mut out = String::with_capacity(replaced.len());
+    let mut prev_sep = false;
+    for ch in replaced.chars() {
+        if ch == '\\' {
+            if !prev_sep {
+                out.push('\\');
+            }
+            prev_sep = true;
+        } else {
+            out.push(ch.to_ascii_lowercase());
+            prev_sep = false;
+        }
+    }
+    if out.len() > 3 {
+        while out.ends_with('\\') {
+            out.pop();
+        }
+    }
+    Some(out)
+}
+
+fn file_basename_ascii_lower(path: &Path) -> Option<String> {
+    let raw = path.to_str()?.trim();
+    let base = raw.rsplit(['\\', '/']).find(|part| !part.is_empty())?;
+    Some(base.to_ascii_lowercase())
+}
+
+fn paths_match(parsed_exe: &Path, current_exe: &Path, path_exists: &dyn Fn(&Path) -> bool) -> bool {
+    if normalize_windows_path(parsed_exe)
+        .zip(normalize_windows_path(current_exe))
+        .is_some_and(|(a, b)| a == b)
+    {
+        return true;
+    }
+    if path_exists(parsed_exe)
+        && path_exists(current_exe)
+        && let (Ok(canon_parsed), Ok(canon_current)) = (
+            std::fs::canonicalize(parsed_exe),
+            std::fs::canonicalize(current_exe),
+        )
+    {
+        return normalize_windows_path(&canon_parsed)
+            .zip(normalize_windows_path(&canon_current))
+            .is_some_and(|(a, b)| a == b);
+    }
+    false
+}
+
+/// Classifies an already-read registry value against `current_exe` and `expected_arg`.
+pub fn classify_startup_value(
+    raw_value: Option<&StartupRegistryValue>,
+    current_exe: &Path,
+    expected_arg: &str,
+    path_exists: &dyn Fn(&Path) -> bool,
+) -> StartupState {
+    let Some(value) = raw_value else {
+        return StartupState::Disabled;
+    };
+    let StartupRegistryValue::String(raw_command) = value else {
+        return StartupState::Unrecognized;
+    };
+    let Some(parsed_exe) = parse_startup_command(raw_command, expected_arg) else {
+        return StartupState::Unrecognized;
+    };
+    if paths_match(&parsed_exe, current_exe, path_exists) {
+        return StartupState::Enabled;
+    }
+    let expected_name = file_basename_ascii_lower(current_exe);
+    let parsed_name = file_basename_ascii_lower(&parsed_exe);
+    if expected_name.is_none() || parsed_name != expected_name {
+        return StartupState::Unrecognized;
+    }
+    if path_exists(&parsed_exe) {
+        StartupState::OtherInstall
+    } else {
+        StartupState::Stale
+    }
+}
+
+fn validated_current_exe_string(current_exe: &Path) -> Result<PathBuf, StartupMutationError> {
+    let raw = current_exe
+        .to_str()
+        .ok_or(StartupMutationError::InvalidState(
+            "Current executable path is not valid UTF-8.",
+        ))?;
+    validate_local_drive_exe_path(raw).ok_or(StartupMutationError::InvalidState(
+        "Current executable path is not a supported local executable.",
+    ))?;
+    Ok(ApplicationLauncherService::normalize_verbatim_path(
+        current_exe.to_path_buf(),
+    ))
+}
+
+/// Reads and classifies DeskPilot's startup registration from `registry`.
+pub fn inspect_startup_state(
+    registry: &dyn StartupRegistry,
+    current_exe: &Path,
+    expected_arg: &str,
+    path_exists: &dyn Fn(&Path) -> bool,
+) -> Result<StartupState, StartupMutationError> {
+    let normalized_current = validated_current_exe_string(current_exe)?;
+    let raw = registry.read_value()?;
+    Ok(classify_startup_value(
+        raw.as_ref(),
+        &normalized_current,
+        expected_arg,
+        path_exists,
+    ))
+}
+
+/// Enables startup idempotently when absent; refuses to overwrite stale, alternate-install,
+/// or unrecognized values.
+pub fn enable_startup_guarded(
+    registry: &dyn StartupRegistry,
+    current_exe: &Path,
+    expected_arg: &str,
+    path_exists: &dyn Fn(&Path) -> bool,
+) -> Result<(), StartupMutationError> {
+    let normalized_current = validated_current_exe_string(current_exe)?;
+    match inspect_startup_state(registry, &normalized_current, expected_arg, path_exists)? {
+        StartupState::Disabled => {
+            let cmd = startup_command(&normalized_current, expected_arg);
+            registry
+                .write_value(&cmd)
+                .map_err(StartupMutationError::from)
+        }
+        StartupState::Enabled => Ok(()),
+        other => Err(StartupMutationError::Conflict(other)),
+    }
+}
+
+/// Disables startup idempotently when absent or owned by `current_exe`; refuses to delete
+/// stale, alternate-install, or unrecognized values.
+pub fn disable_startup_guarded(
+    registry: &dyn StartupRegistry,
+    current_exe: &Path,
+    expected_arg: &str,
+    path_exists: &dyn Fn(&Path) -> bool,
+) -> Result<(), StartupMutationError> {
+    let normalized_current = validated_current_exe_string(current_exe)?;
+    match inspect_startup_state(registry, &normalized_current, expected_arg, path_exists)? {
+        StartupState::Enabled => registry.delete_value().map_err(StartupMutationError::from),
+        StartupState::Disabled => Ok(()),
+        other => Err(StartupMutationError::Conflict(other)),
+    }
+}
+
+/// Applies an explicit resolution action to a `Stale` or `OtherInstall` DeskPilot entry.
+/// Refuses to mutate `Unrecognized` entries.
+pub fn resolve_startup_guarded(
+    registry: &dyn StartupRegistry,
+    current_exe: &Path,
+    expected_arg: &str,
+    path_exists: &dyn Fn(&Path) -> bool,
+    action: StartupResolutionAction,
+) -> Result<(), StartupMutationError> {
+    let normalized_current = validated_current_exe_string(current_exe)?;
+    let state = inspect_startup_state(registry, &normalized_current, expected_arg, path_exists)?;
+    match (action, state) {
+        (StartupResolutionAction::UpdateStale, StartupState::Stale)
+        | (
+            StartupResolutionAction::SwitchToCurrent,
+            StartupState::OtherInstall | StartupState::Stale,
+        ) => {
+            let cmd = startup_command(&normalized_current, expected_arg);
+            registry
+                .write_value(&cmd)
+                .map_err(StartupMutationError::from)
+        }
+        (StartupResolutionAction::ClearStale, StartupState::Stale) => {
+            registry.delete_value().map_err(StartupMutationError::from)
+        }
+        (
+            StartupResolutionAction::UpdateStale | StartupResolutionAction::SwitchToCurrent,
+            StartupState::Enabled,
+        )
+        | (StartupResolutionAction::ClearStale, StartupState::Disabled) => Ok(()),
+        (_, other) => Err(StartupMutationError::Conflict(other)),
+    }
 }
 
 /// Mica is only available on Windows 11 (build 22000 and later). Unknown build = no.
@@ -411,5 +786,405 @@ mod tests {
         let s = store.update(|s| s.history_enabled = false).unwrap();
         assert!(!s.history_enabled);
         assert!(!store.get().unwrap().history_enabled);
+    }
+
+    #[derive(Debug, Default)]
+    struct FakeRegistryState {
+        subkey_exists: bool,
+        value: Option<StartupRegistryValue>,
+        read_error: Option<io::ErrorKind>,
+        write_error: Option<io::ErrorKind>,
+        delete_error: Option<io::ErrorKind>,
+        writes: usize,
+        deletes: usize,
+    }
+
+    #[derive(Debug, Default)]
+    struct FakeStartupRegistry {
+        inner: Mutex<FakeRegistryState>,
+    }
+
+    impl FakeStartupRegistry {
+        fn with_missing_key() -> Self {
+            Self::default()
+        }
+
+        fn with_empty_key() -> Self {
+            Self {
+                inner: Mutex::new(FakeRegistryState {
+                    subkey_exists: true,
+                    ..Default::default()
+                }),
+            }
+        }
+
+        fn with_str_value(val: &str) -> Self {
+            Self {
+                inner: Mutex::new(FakeRegistryState {
+                    subkey_exists: true,
+                    value: Some(StartupRegistryValue::String(val.to_string())),
+                    ..Default::default()
+                }),
+            }
+        }
+
+        fn with_unsupported_type() -> Self {
+            Self {
+                inner: Mutex::new(FakeRegistryState {
+                    subkey_exists: true,
+                    value: Some(StartupRegistryValue::UnsupportedType),
+                    ..Default::default()
+                }),
+            }
+        }
+
+        fn set_read_error(&self, kind: io::ErrorKind) {
+            self.inner.lock().unwrap().read_error = Some(kind);
+        }
+
+        fn set_write_error(&self, kind: io::ErrorKind) {
+            self.inner.lock().unwrap().write_error = Some(kind);
+        }
+
+        fn set_delete_error(&self, kind: io::ErrorKind) {
+            self.inner.lock().unwrap().delete_error = Some(kind);
+        }
+
+        fn snapshot(&self) -> (bool, Option<StartupRegistryValue>, usize, usize) {
+            let g = self.inner.lock().unwrap();
+            (g.subkey_exists, g.value.clone(), g.writes, g.deletes)
+        }
+    }
+
+    impl StartupRegistry for FakeStartupRegistry {
+        fn read_value(&self) -> io::Result<Option<StartupRegistryValue>> {
+            let g = self.inner.lock().unwrap();
+            if let Some(kind) = g.read_error {
+                return Err(io::Error::new(kind, "fake read error"));
+            }
+            if !g.subkey_exists {
+                return Ok(None);
+            }
+            Ok(g.value.clone())
+        }
+
+        fn write_value(&self, command: &str) -> io::Result<()> {
+            let mut g = self.inner.lock().unwrap();
+            if let Some(kind) = g.write_error {
+                return Err(io::Error::new(kind, "fake write error"));
+            }
+            g.subkey_exists = true;
+            g.value = Some(StartupRegistryValue::String(command.to_string()));
+            g.writes += 1;
+            Ok(())
+        }
+
+        fn delete_value(&self) -> io::Result<()> {
+            let mut g = self.inner.lock().unwrap();
+            if let Some(kind) = g.delete_error {
+                return Err(io::Error::new(kind, "fake delete error"));
+            }
+            if !g.subkey_exists {
+                return Ok(());
+            }
+            g.value = None;
+            g.deletes += 1;
+            Ok(())
+        }
+    }
+
+    fn current_exe() -> &'static Path {
+        Path::new(r"C:\Program Files\DeskPilot\deskpilot.exe")
+    }
+
+    #[test]
+    fn missing_run_key_and_empty_key_and_missing_value_report_disabled() {
+        let missing_key = FakeStartupRegistry::with_missing_key();
+        assert_eq!(
+            inspect_startup_state(&missing_key, current_exe(), "--autostart", &|_| false).unwrap(),
+            StartupState::Disabled
+        );
+
+        let empty_key = FakeStartupRegistry::with_empty_key();
+        assert_eq!(
+            inspect_startup_state(&empty_key, current_exe(), "--autostart", &|_| false).unwrap(),
+            StartupState::Disabled
+        );
+
+        assert_eq!(
+            classify_startup_value(None, current_exe(), "--autostart", &|_| false),
+            StartupState::Disabled
+        );
+    }
+
+    #[test]
+    fn recognizes_valid_current_executable_with_case_and_separator_differences() {
+        for cmd in [
+            r#""C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#,
+            r#""c:\program files\deskpilot\deskpilot.exe" --autostart"#,
+            r#""C:/Program Files/DeskPilot/deskpilot.exe" --autostart"#,
+            r#""\\?\C:\PROGRAM FILES\DeskPilot\\deskpilot.exe" --autostart"#,
+        ] {
+            let reg = FakeStartupRegistry::with_str_value(cmd);
+            assert_eq!(
+                inspect_startup_state(&reg, current_exe(), "--autostart", &|_| false).unwrap(),
+                StartupState::Enabled,
+                "expected Enabled for {cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn classifies_stale_and_alternate_installs_distinctly() {
+        let stale_reg = FakeStartupRegistry::with_str_value(
+            r#""C:\Legacy Dir\DeskPilot\deskpilot.exe" --autostart"#,
+        );
+        assert_eq!(
+            inspect_startup_state(&stale_reg, current_exe(), "--autostart", &|_| false).unwrap(),
+            StartupState::Stale
+        );
+
+        let alt_reg = FakeStartupRegistry::with_str_value(
+            r#""D:\Portable\DeskPilot\deskpilot.exe" --autostart"#,
+        );
+        assert_eq!(
+            inspect_startup_state(&alt_reg, current_exe(), "--autostart", &|p| {
+                p == Path::new(r"D:\Portable\DeskPilot\deskpilot.exe")
+            })
+            .unwrap(),
+            StartupState::OtherInstall
+        );
+    }
+
+    #[test]
+    fn rejects_foreign_malformed_ambiguous_extra_args_unc_device_and_non_string() {
+        let cases = [
+            // Foreign executables
+            r#""C:\Tools\other.exe" --autostart"#,
+            r#""C:\Windows\System32\notepad.exe" --autostart"#,
+            // Malformed quoted commands
+            r#""C:\Program Files\DeskPilot\deskpilot.exe --autostart"#,
+            r#""" --autostart"#,
+            r#""   " --autostart"#,
+            r#""C:\Program Files\DeskPilot\deskpilot.exe"--autostart"#,
+            r#"" C:\Program Files\DeskPilot\deskpilot.exe " --autostart"#,
+            r#""C:\DeskPilot\deskpilot.exe" "extra" --autostart"#,
+            "",
+            "   ",
+            // Ambiguous unquoted paths with spaces
+            r#"C:\Program Files\DeskPilot\deskpilot.exe --autostart"#,
+            // Missing or unexpected arguments
+            r#""C:\Program Files\DeskPilot\deskpilot.exe""#,
+            r#""C:\Program Files\DeskPilot\deskpilot.exe" --autostart --debug"#,
+            r#""C:\Program Files\DeskPilot\deskpilot.exe" --minimized"#,
+            r#"cmd.exe /c "C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#,
+            // Relative or traversal paths
+            r#""deskpilot.exe" --autostart"#,
+            r#""C:\Program Files\DeskPilot\..\Other\deskpilot.exe" --autostart"#,
+            // UNC paths
+            r#""\\server\share\deskpilot.exe" --autostart"#,
+            r#""//server/share/deskpilot.exe" --autostart"#,
+            r#""\\?\UNC\server\share\deskpilot.exe" --autostart"#,
+            // Device namespace paths
+            r#""\\.\C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#,
+            r#""\\?\GlobalRoot\Device\HarddiskVolume1\deskpilot.exe" --autostart"#,
+            r#""\\?\Volume{12345678-1234-1234-1234-123456789012}\deskpilot.exe" --autostart"#,
+            r#""\\?\PIPE\deskpilot.exe" --autostart"#,
+        ];
+
+        for raw in cases {
+            let reg = FakeStartupRegistry::with_str_value(raw);
+            assert_eq!(
+                inspect_startup_state(&reg, current_exe(), "--autostart", &|_| true).unwrap(),
+                StartupState::Unrecognized,
+                "expected Unrecognized for {raw:?}"
+            );
+        }
+
+        let non_str = FakeStartupRegistry::with_unsupported_type();
+        assert_eq!(
+            inspect_startup_state(&non_str, current_exe(), "--autostart", &|_| true).unwrap(),
+            StartupState::Unrecognized
+        );
+    }
+
+    #[test]
+    fn permission_denied_is_preserved_without_leaking_paths() {
+        let read_denied = FakeStartupRegistry::with_empty_key();
+        read_denied.set_read_error(io::ErrorKind::PermissionDenied);
+        let err = inspect_startup_state(&read_denied, current_exe(), "--autostart", &|_| false)
+            .unwrap_err();
+        assert_eq!(err, StartupMutationError::PermissionDenied);
+        assert!(!err.to_string().contains("CurrentVersion"));
+        assert!(!err.to_string().contains("Program Files"));
+        assert_eq!(io::Error::from(err).kind(), io::ErrorKind::PermissionDenied);
+
+        let write_denied = FakeStartupRegistry::with_empty_key();
+        write_denied.set_write_error(io::ErrorKind::PermissionDenied);
+        let err = enable_startup_guarded(&write_denied, current_exe(), "--autostart", &|_| false)
+            .unwrap_err();
+        assert_eq!(err, StartupMutationError::PermissionDenied);
+
+        let delete_denied = FakeStartupRegistry::with_str_value(
+            r#""C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#,
+        );
+        delete_denied.set_delete_error(io::ErrorKind::PermissionDenied);
+        let err = disable_startup_guarded(&delete_denied, current_exe(), "--autostart", &|_| false)
+            .unwrap_err();
+        assert_eq!(err, StartupMutationError::PermissionDenied);
+    }
+
+    #[test]
+    fn enable_and_disable_are_idempotent() {
+        let reg = FakeStartupRegistry::with_missing_key();
+        enable_startup_guarded(&reg, current_exe(), "--autostart", &|_| false).unwrap();
+        let (subkey_exists, value, writes, deletes) = reg.snapshot();
+        assert!(subkey_exists);
+        assert_eq!(
+            value,
+            Some(StartupRegistryValue::String(
+                r#""C:\Program Files\DeskPilot\deskpilot.exe" --autostart"#.to_string()
+            ))
+        );
+        assert_eq!((writes, deletes), (1, 0));
+
+        // Second enable is a no-op.
+        enable_startup_guarded(&reg, current_exe(), "--autostart", &|_| false).unwrap();
+        assert_eq!(reg.snapshot().2, 1);
+
+        // Disable removes the value cleanly; second disable is a no-op.
+        disable_startup_guarded(&reg, current_exe(), "--autostart", &|_| false).unwrap();
+        let (subkey_exists, value, writes, deletes) = reg.snapshot();
+        assert!(subkey_exists);
+        assert_eq!(value, None);
+        assert_eq!((writes, deletes), (1, 1));
+
+        disable_startup_guarded(&reg, current_exe(), "--autostart", &|_| false).unwrap();
+        assert_eq!(reg.snapshot().3, 1);
+    }
+
+    #[test]
+    fn refuses_to_overwrite_or_delete_stale_other_install_or_foreign_entries() {
+        let protected_cases = [
+            (
+                r#""C:\MissingOld\deskpilot.exe" --autostart"#,
+                false,
+                StartupState::Stale,
+            ),
+            (
+                r#""D:\ExistingOther\deskpilot.exe" --autostart"#,
+                true,
+                StartupState::OtherInstall,
+            ),
+            (
+                r#""C:\ThirdParty\other.exe" --autostart"#,
+                true,
+                StartupState::Unrecognized,
+            ),
+        ];
+
+        for (raw, exists_flag, expected_state) in protected_cases {
+            let reg = FakeStartupRegistry::with_str_value(raw);
+            let exists = |_: &Path| exists_flag;
+
+            let enable_err =
+                enable_startup_guarded(&reg, current_exe(), "--autostart", &exists).unwrap_err();
+            assert_eq!(enable_err, StartupMutationError::Conflict(expected_state));
+
+            let disable_err =
+                disable_startup_guarded(&reg, current_exe(), "--autostart", &exists).unwrap_err();
+            assert_eq!(disable_err, StartupMutationError::Conflict(expected_state));
+
+            let (_, value, writes, deletes) = reg.snapshot();
+            assert_eq!(value, Some(StartupRegistryValue::String(raw.to_string())));
+            assert_eq!((writes, deletes), (0, 0));
+        }
+
+        let non_str = FakeStartupRegistry::with_unsupported_type();
+        assert_eq!(
+            enable_startup_guarded(&non_str, current_exe(), "--autostart", &|_| false).unwrap_err(),
+            StartupMutationError::Conflict(StartupState::Unrecognized)
+        );
+        assert_eq!(
+            disable_startup_guarded(&non_str, current_exe(), "--autostart", &|_| false)
+                .unwrap_err(),
+            StartupMutationError::Conflict(StartupState::Unrecognized)
+        );
+        assert_eq!(
+            non_str.snapshot().1,
+            Some(StartupRegistryValue::UnsupportedType)
+        );
+    }
+
+    #[test]
+    fn resolve_actions_support_stale_and_other_install_and_refuse_unrecognized() {
+        // 1. UpdateStale replaces missing-target DeskPilot entry.
+        let stale =
+            FakeStartupRegistry::with_str_value(r#""C:\MissingOld\deskpilot.exe" --autostart"#);
+        resolve_startup_guarded(
+            &stale,
+            current_exe(),
+            "--autostart",
+            &|_| false,
+            StartupResolutionAction::UpdateStale,
+        )
+        .unwrap();
+        assert_eq!(
+            inspect_startup_state(&stale, current_exe(), "--autostart", &|_| false).unwrap(),
+            StartupState::Enabled
+        );
+
+        // 2. ClearStale deletes missing-target DeskPilot entry, refuses OtherInstall.
+        let stale2 =
+            FakeStartupRegistry::with_str_value(r#""C:\MissingOld\deskpilot.exe" --autostart"#);
+        resolve_startup_guarded(
+            &stale2,
+            current_exe(),
+            "--autostart",
+            &|_| false,
+            StartupResolutionAction::ClearStale,
+        )
+        .unwrap();
+        assert_eq!(stale2.snapshot().1, None);
+
+        let other =
+            FakeStartupRegistry::with_str_value(r#""D:\ExistingOther\deskpilot.exe" --autostart"#);
+        assert_eq!(
+            resolve_startup_guarded(
+                &other,
+                current_exe(),
+                "--autostart",
+                &|_| true,
+                StartupResolutionAction::UpdateStale,
+            )
+            .unwrap_err(),
+            StartupMutationError::Conflict(StartupState::OtherInstall)
+        );
+        resolve_startup_guarded(
+            &other,
+            current_exe(),
+            "--autostart",
+            &|_| true,
+            StartupResolutionAction::SwitchToCurrent,
+        )
+        .unwrap();
+        assert_eq!(
+            inspect_startup_state(&other, current_exe(), "--autostart", &|_| true).unwrap(),
+            StartupState::Enabled
+        );
+
+        // 3. All resolve actions strictly refuse Unrecognized entries.
+        let foreign = FakeStartupRegistry::with_str_value(r#""C:\Other\app.exe" --autostart"#);
+        for action in [
+            StartupResolutionAction::UpdateStale,
+            StartupResolutionAction::ClearStale,
+            StartupResolutionAction::SwitchToCurrent,
+        ] {
+            assert_eq!(
+                resolve_startup_guarded(&foreign, current_exe(), "--autostart", &|_| true, action)
+                    .unwrap_err(),
+                StartupMutationError::Conflict(StartupState::Unrecognized)
+            );
+        }
     }
 }

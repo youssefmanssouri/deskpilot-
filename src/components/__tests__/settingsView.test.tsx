@@ -18,6 +18,7 @@ const base: SettingsDto = {
   shortcutRegistered: true,
   shortcutMessage: null,
   startWithWindows: false,
+  startupStatus: { state: 'disabled' },
   glassEffect: false,
   glassSupported: true,
   glassActive: false,
@@ -26,11 +27,17 @@ const base: SettingsDto = {
 const calls = (cmd: string) => vi.mocked(tauriCore.invoke).mock.calls.filter(([c]) => c === cmd);
 
 /** Simple backend: applies each setter to a copy of `state`. */
-function backend(initial: Partial<SettingsDto> = {}, fail: Record<string, string> = {}) {
+function backend(
+  initial: Partial<SettingsDto> = {},
+  fail: Record<string, string | { code: string; message: string }> = {}
+) {
   let state: SettingsDto = { ...base, ...initial };
   vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string, args?: unknown) => {
     const a = (args ?? {}) as Record<string, unknown>;
-    if (fail[cmd]) throw { code: 'UNAVAILABLE', message: fail[cmd] };
+    if (fail[cmd]) {
+      const f = fail[cmd];
+      throw typeof f === 'string' ? { code: 'UNAVAILABLE', message: f } : f;
+    }
     switch (cmd) {
       case 'get_settings':
         return state;
@@ -43,9 +50,15 @@ function backend(initial: Partial<SettingsDto> = {}, fail: Record<string, string
       case 'set_launcher_shortcut':
         state = { ...state, launcherShortcut: a.shortcut as string, launcherShortcutLabel: a.shortcut as string };
         return state;
-      case 'set_start_with_windows':
-        state = { ...state, startWithWindows: a.enabled as boolean };
+      case 'set_start_with_windows': {
+        const enabled = a.enabled as boolean;
+        state = {
+          ...state,
+          startWithWindows: enabled,
+          startupStatus: { state: enabled ? 'enabled' : 'disabled' },
+        };
         return state;
+      }
       case 'set_glass_effect':
         state = { ...state, glassEffect: a.enabled as boolean };
         return state;
@@ -186,22 +199,277 @@ describe('SettingsView', () => {
     expect(screen.getByRole('status').textContent).toContain('the list was deleted');
   });
 
-  it('toggles start with Windows, and disables it when Windows cannot be checked', async () => {
+  it('toggles start with Windows, refreshes from backend, and disables it when Windows cannot be checked', async () => {
     backend();
     const { unmount } = render(<SettingsView />);
     const sw = await screen.findByRole('switch', { name: 'Start with Windows' });
+    expect((sw as HTMLButtonElement).disabled).toBe(false);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+
     await act(async () => {
       fireEvent.click(sw);
     });
     expect(calls('set_start_with_windows')[0][1]).toEqual({ enabled: true });
+    expect(calls('get_settings')).toHaveLength(2);
     expect(sw.getAttribute('aria-checked')).toBe('true');
+
+    await act(async () => {
+      fireEvent.click(sw);
+    });
+    expect(calls('set_start_with_windows')[1][1]).toEqual({ enabled: false });
+    expect(calls('get_settings')).toHaveLength(3);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
     unmount();
 
-    backend({ startWithWindows: null });
+    backend({ startWithWindows: null, startupStatus: { state: 'unavailable', errorCode: 'OPERATION_FAILED' } });
     render(<SettingsView />);
     const unknown = await screen.findByRole('switch', { name: 'Start with Windows' });
     expect((unknown as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/couldn't check the Windows startup list/)).toBeDefined();
+    expect(screen.getByRole('alert').textContent).toContain("couldn't check the Windows startup list");
+  });
+
+  it('shows warnings and disables startup toggle for stale, otherInstall, unrecognized, and unavailable states', async () => {
+    const cases: Array<{
+      startupStatus: SettingsDto['startupStatus'];
+      role: 'status' | 'alert';
+      expectedText: RegExp;
+    }> = [
+      {
+        startupStatus: { state: 'stale' },
+        role: 'status',
+        expectedText: /stale startup entry/i,
+      },
+      {
+        startupStatus: { state: 'otherInstall' },
+        role: 'status',
+        expectedText: /Another DeskPilot installation/i,
+      },
+      {
+        startupStatus: { state: 'unrecognized' },
+        role: 'status',
+        expectedText: /unrecognized/i,
+      },
+      {
+        startupStatus: { state: 'unavailable', errorCode: 'PERMISSION_DENIED' },
+        role: 'alert',
+        expectedText: /Permission denied/i,
+      },
+      {
+        startupStatus: { state: 'unavailable', errorCode: 'INVALID_STARTUP_STATE' },
+        role: 'alert',
+        expectedText: /couldn't verify the Windows startup state/i,
+      },
+    ];
+
+    for (const tc of cases) {
+      vi.clearAllMocks();
+      backend({ startWithWindows: null, startupStatus: tc.startupStatus });
+      const { unmount } = render(<SettingsView />);
+      const sw = await screen.findByRole('switch', { name: 'Start with Windows' });
+      expect((sw as HTMLButtonElement).disabled).toBe(true);
+      expect(sw.getAttribute('aria-checked')).toBe('false');
+      expect(screen.getByRole(tc.role).textContent).toMatch(tc.expectedText);
+
+      await act(async () => {
+        fireEvent.click(sw);
+      });
+      expect(calls('set_start_with_windows')).toHaveLength(0);
+      unmount();
+    }
+  });
+
+  it('maps startup mutation error codes to sanitized messages without leaking raw details', async () => {
+    const errorCases: Array<{ code: string; expectedText: RegExp }> = [
+      { code: 'PERMISSION_DENIED', expectedText: /Permission denied while updating/i },
+      { code: 'STARTUP_CONFLICT', expectedText: /Another or stale DeskPilot startup entry/i },
+      { code: 'INVALID_STARTUP_STATE', expectedText: /does not allow this change/i },
+      { code: 'OPERATION_FAILED', expectedText: /could not update the Windows startup list/i },
+    ];
+
+    for (const tc of errorCases) {
+      vi.clearAllMocks();
+      backend(
+        { startWithWindows: false, startupStatus: { state: 'disabled' } },
+        { set_start_with_windows: { code: tc.code, message: String.raw`C:\Users\secret\deskpilot.exe HKCU\Run` } }
+      );
+      const { unmount } = render(<SettingsView />);
+      const sw = await screen.findByRole('switch', { name: 'Start with Windows' });
+      await act(async () => {
+        fireEvent.click(sw);
+      });
+      const alertText = screen.getByRole('alert').textContent ?? '';
+      expect(alertText).toMatch(tc.expectedText);
+      expect(alertText).not.toContain('secret');
+      expect(alertText).not.toContain('HKCU');
+      expect(sw.getAttribute('aria-checked')).toBe('false');
+      unmount();
+    }
+  });
+
+  it('keeps startup switch disabled while pending even when another settings section runs, and prevents duplicate mutations', async () => {
+    let state: SettingsDto = { ...base };
+    let resolveStartup!: (val: SettingsDto) => void;
+    const pendingStartup = new Promise<SettingsDto>((resolve) => {
+      resolveStartup = resolve;
+    });
+
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'get_settings':
+          return state;
+        case 'set_theme':
+          state = { ...state, theme: a.theme as SettingsDto['theme'] };
+          return state;
+        case 'set_start_with_windows':
+          return pendingStartup;
+        default:
+          return state;
+      }
+    });
+
+    render(<SettingsView />);
+    const sw = (await screen.findByRole('switch', { name: 'Start with Windows' })) as HTMLButtonElement;
+    const dark = screen.getByRole('radio', { name: 'Dark' });
+
+    await act(async () => {
+      fireEvent.click(sw);
+    });
+    expect(sw.disabled).toBe(true);
+    expect(calls('set_start_with_windows')).toHaveLength(1);
+
+    // Repeated activation while pending must not issue a second mutation.
+    await act(async () => {
+      fireEvent.click(sw);
+    });
+    expect(calls('set_start_with_windows')).toHaveLength(1);
+
+    // Completing an unrelated section operation must not clear startupBusy.
+    await act(async () => {
+      fireEvent.click(dark);
+    });
+    expect(calls('set_theme')).toHaveLength(1);
+    expect(sw.disabled).toBe(true);
+
+    // Settle the pending startup mutation and verify refresh restores actionable state.
+    state = { ...state, startWithWindows: true, startupStatus: { state: 'enabled' } };
+    await act(async () => {
+      resolveStartup(state);
+    });
+    expect(sw.disabled).toBe(false);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('shows unconfirmed status and disables switch if settings refresh fails after successful startup mutation, then recovers on later refresh', async () => {
+    let state: SettingsDto = {
+      ...base,
+      startWithWindows: true,
+      startupStatus: { state: 'enabled' },
+    };
+    let failNextGetSettings = false;
+
+    vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string, args?: unknown) => {
+      const a = (args ?? {}) as Record<string, unknown>;
+      switch (cmd) {
+        case 'get_settings':
+          if (failNextGetSettings) {
+            failNextGetSettings = false;
+            throw {
+              code: 'OPERATION_FAILED',
+              message: String.raw`C:\Users\alice\deskpilot.exe HKCU\Run`,
+            };
+          }
+          return state;
+        case 'set_start_with_windows': {
+          const enabled = a.enabled as boolean;
+          state = {
+            ...state,
+            startWithWindows: enabled,
+            startupStatus: { state: enabled ? 'enabled' : 'disabled' },
+          };
+          failNextGetSettings = true;
+          return state;
+        }
+        case 'set_theme':
+          state = { ...state, theme: a.theme as SettingsDto['theme'] };
+          return state;
+        default:
+          return state;
+      }
+    });
+
+    render(<SettingsView />);
+    const sw = (await screen.findByRole('switch', { name: 'Start with Windows' })) as HTMLButtonElement;
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    expect(sw.disabled).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(sw);
+    });
+
+    expect(calls('set_start_with_windows')).toHaveLength(1);
+    expect(calls('get_settings')).toHaveLength(2);
+    const alertText = screen.getByRole('alert').textContent ?? '';
+    expect(alertText).toMatch(/startup setting was updated, but its current status could not be confirmed/i);
+    expect(alertText).not.toMatch(/could not update the Windows startup list/i);
+    expect(alertText).not.toContain('alice');
+    expect(alertText).not.toContain('HKCU');
+    expect(sw.disabled).toBe(true);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+
+    // Subsequent successful backend settings refresh restores confirmed state.
+    const dark = screen.getByRole('radio', { name: 'Dark' });
+    await act(async () => {
+      fireEvent.click(dark);
+    });
+    expect(sw.disabled).toBe(false);
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('handles unknown, missing, malformed, and non-IpcError startup rejections with sanitized fallback without leaking details', async () => {
+    const rejections: unknown[] = [
+      {
+        code: 'UNKNOWN_FUTURE_CODE',
+        message: String.raw`C:\Users\secret\deskpilot.exe HKCU\Software\Microsoft\Windows\CurrentVersion\Run`,
+      },
+      {
+        message: String.raw`Missing code: C:\Windows\System32\cmd.exe (0x80070005)`,
+      },
+      {
+        code: 42,
+        message: String.raw`Malformed code at C:\secret\path`,
+      },
+      new Error(String.raw`Access denied at C:\Program Files\DeskPilot\deskpilot.exe (0x80070005)`),
+      String.raw`HKCU\Run failure at C:\secret\deskpilot.exe`,
+      null,
+      undefined,
+    ];
+
+    for (const rejection of rejections) {
+      vi.clearAllMocks();
+      vi.mocked(tauriCore.invoke).mockImplementation(async (cmd: string) => {
+        if (cmd === 'get_settings') return base;
+        if (cmd === 'set_start_with_windows') throw rejection;
+        return base;
+      });
+
+      const { container, unmount } = render(<SettingsView />);
+      const sw = (await screen.findByRole('switch', { name: 'Start with Windows' })) as HTMLButtonElement;
+      await act(async () => {
+        fireEvent.click(sw);
+      });
+
+      const alertText = screen.getByRole('alert').textContent ?? '';
+      expect(alertText).toBe('DeskPilot could not update the Windows startup list.');
+      const domText = container.textContent ?? '';
+      for (const sensitive of ['secret', 'HKCU', 'CurrentVersion', 'deskpilot.exe', '0x80070005', 'System32']) {
+        expect(domText).not.toContain(sensitive);
+      }
+      expect(sw.disabled).toBe(false);
+      expect(sw.getAttribute('aria-checked')).toBe('false');
+      unmount();
+    }
   });
 
   it('glass: disabled without Windows 11, restart note when the choice differs from the session', async () => {

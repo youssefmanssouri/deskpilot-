@@ -226,6 +226,21 @@ export interface NavigateRequestDto {
 /** Theme preference: follow Windows, or force light/dark. */
 export type ThemePreference = 'system' | 'light' | 'dark';
 
+/** Sanitized startup registration state (see commands::settings::StartupStatusState). */
+export type StartupStatusState =
+  | 'disabled'
+  | 'enabled'
+  | 'stale'
+  | 'otherInstall'
+  | 'unrecognized'
+  | 'unavailable';
+
+/** Detailed startup registration status returned inside SettingsDto. */
+export interface StartupStatusDto {
+  state: StartupStatusState;
+  errorCode?: string;
+}
+
 /** Everything the Settings page shows (see commands::settings::SettingsDto). */
 export interface SettingsDto {
   theme: ThemePreference;
@@ -236,8 +251,13 @@ export interface SettingsDto {
   launcherShortcutLabel: string;
   shortcutRegistered: boolean;
   shortcutMessage: string | null;
-  /** Read from Windows; null if it could not be checked. */
+  /**
+   * Backward-compatible boolean view of startup status; null when stale,
+   * owned by another install, unrecognized, or unavailable.
+   */
   startWithWindows: boolean | null;
+  /** Detailed sanitized startup status. */
+  startupStatus: StartupStatusDto;
   /** Saved preference (applies after restart). */
   glassEffect: boolean;
   /** True on Windows 11. */

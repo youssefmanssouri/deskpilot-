@@ -8,7 +8,8 @@ pub mod system_provider;
 
 pub use application_discovery::{RawDiscoveredEntry, WindowsApplicationScanner};
 pub use autostart::{
-    disable_start_with_windows, enable_start_with_windows, is_start_with_windows_enabled,
+    WindowsRunKeyStore, disable_start_with_windows, enable_start_with_windows,
+    inspect_start_with_windows_state, is_start_with_windows_enabled,
 };
 pub use elevation::is_process_elevated;
 pub use icon_extractor::extract_icon_rgba;
