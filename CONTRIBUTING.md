@@ -9,9 +9,11 @@ DeskPilot is currently in **Developer Preview** (v0.1.1). At this stage, the pri
 ## 1. Project Status & Supported Environments
 
 - **Current Milestone:** `v0.1.1` Developer Preview (Revision 2, tag `v0.1.1-preview.2`).
-- **Validated Environment:** **Windows 11 x64** (tested and qualified on Windows 11 Pro 25H2, Build 26100/26200).
-- **Unverified Environment:** **Windows 10 x64** is architecturally compatible with Win32 APIs and WebView2, but empirical physical hardware qualification remains pending. Testing feedback from physical Windows 10 machines is welcome.
-- **ARM64:** Windows on ARM64 is not currently built or supported.
+- **Intended Scope:** Targets 64-bit Windows (`x86_64`). Windows on ARM64 is not built or supported, and Windows 7, 8, and 8.1 are outside the intended support scope.
+- **Validated Desktop Environment:** **Windows 11 Pro 25H2** (physical desktop validation completed in Phase 16.38).
+- **Installer Lifecycle Container:** **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29 MSI lifecycle tested; execution of the unsigned application was blocked by container WDAC).
+- **CI Automated Smoke Test:** **GitHub Actions Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence.
+- **Untested Environment:** **Windows 10 x64** has not been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is undetermined. Windows 10 is not claimed as validated or supported; evaluation reports from Windows 10 systems are welcome.
 - **Code Signing Status:** Release binaries and the MSI package are currently **unsigned** (`NotSigned`). Expect Windows Defender SmartScreen or application control warnings.
 - **Security Policy:** Do not bypass, override, or disable security warnings or application control policies. If your system or organizational security policy blocks execution, **stop installation immediately**.
 
@@ -50,7 +52,9 @@ If the calculated hash does not match, do not run the installer.
    - Public Desktop: `%PUBLIC%\Desktop\DeskPilot.lnk`
    - Common Start Menu: `%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`
 
-To cleanly uninstall, go to **Windows Settings → Apps → Installed apps**, select **DeskPilot**, and click **Uninstall**.
+- **Upgrading:** Normal MSI upgrades replace the application binaries without explicitly managing, migrating, or deleting `%APPDATA%\com.deskpilot.app\settings.json`, `%APPDATA%\com.deskpilot.app\launch-history.json`, the WebView2 profile at `%LOCALAPPDATA%\com.deskpilot.app\EBWebView\`, or the optional startup entry (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot`). Schema migration across arbitrary future versions is not guaranteed.
+- **Uninstalling:** Before uninstalling, disable **Start with Windows** in DeskPilot Settings so the optional `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot` entry (created only when enabled) is removed cleanly; otherwise it can remain pointing to the removed executable. Then go to **Windows Settings → Apps → Installed apps**, select **DeskPilot**, and click **Uninstall**. Uninstallation removes the binaries (`C:\Program Files\deskpilot`), shortcuts, and the *Installed apps* entry, but does **not** automatically delete `%APPDATA%\com.deskpilot.app\settings.json`, `%APPDATA%\com.deskpilot.app\launch-history.json`, or `%LOCALAPPDATA%\com.deskpilot.app\EBWebView\` (remove those `%APPDATA%` and `%LOCALAPPDATA%` directories manually if you want full profile cleanup).
+- **Reinstalling:** Data left outside the MSI removal scope may remain available after reinstalling, though recovery of corrupted or incompatible JSON data is not guaranteed.
 
 ---
 

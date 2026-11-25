@@ -15,7 +15,7 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11, and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, verify preview packages against the documented checksums. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software (locally compiled binaries remain unsigned and are subject to the same application-control policies). If your policy requires signed binaries or blocks unsigned code, wait for an appropriately signed release or consult your system administrator. See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11 Pro 25H2, and have **not been tested on physical or virtual Windows 10 desktop hardware** (the exact minimum supported Windows 10 build is undetermined). To evaluate DeskPilot, verify preview packages against the documented checksums. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software (locally compiled binaries remain unsigned and are subject to the same application-control policies). If your policy requires signed binaries or blocks unsigned code, wait for an appropriately signed release or consult your system administrator. See [Known limitations](#known-limitations) before use.
 
 ---
 
@@ -46,10 +46,11 @@
 | Version | `0.1.1` developer preview release (commit `e99ccb8`) |
 | Code signing | Not signed. No commercial certificate enrolled. |
 | Public download | Available as a Developer Preview release asset on GitHub Releases. |
-| Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (Phase 16.38). In-place elevated MSI upgrade, installed binary startup, WebView2 Evergreen runtime initialization, Quick Launcher (`Ctrl+Alt+Space`), application discovery (138 apps), safe Win32 launching, read-only Process Monitor (1,784 process entries), System Intelligence (1-to-1 host metric parity), system tray with hide-to-tray, single-instance mutex, and 86+ minute sustained soak observation passed 100%. (In isolated Windows Sandbox container testing, execution was previously blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
-| Windows 10 x64 | **Not tested on physical hardware.** Architecture and Win32 APIs are compatible; empirical validation pending. |
+| Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (Phase 16.38). In-place elevated MSI upgrade, installed binary startup, WebView2 Evergreen runtime initialization, Quick Launcher (`Ctrl+Alt+Space`), application discovery (138 apps), safe Win32 launching, read-only Process Monitor (1,784 process entries), System Intelligence (1-to-1 host metric parity), system tray with hide-to-tray, single-instance mutex, and 86+ minute sustained soak observation passed 100%. (In isolated Windows 11 Enterprise Build 26100 Windows Sandbox testing, execution was blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
+| Windows 10 x64 | **Untested on physical or virtual desktop hardware.** Exact minimum supported Windows 10 build is undetermined; empirical validation pending. (Windows 7, 8, and 8.1 are outside the intended support scope). |
+| Windows Server 2022 (`windows-2022`) | Automated CI smoke test only (`installer-smoke-test.yml`: silent MSI install, 20-second process launch check, uninstall). Provides CI installer smoke-test evidence only, not desktop Windows compatibility evidence. |
 | Windows on ARM64 | Not built, not tested. |
-| Clean-machine install lifecycle | In-place elevated MSI upgrade, public shortcut placement (%PUBLIC%\Desktop and %PROGRAMDATA%\...), and clean user data preservation validated on physical Windows 11 host. Windows 10 physical validation remains outstanding. |
+| Clean-machine install lifecycle | Elevated MSI upgrade, public shortcut placement (`%PUBLIC%\Desktop` and `%PROGRAMDATA%\...`), and retention of existing user data outside the MSI removal scope observed on physical Windows 11 Pro 25H2; silent install/20s-run/uninstall smoke-tested on CI Windows Server 2022. Windows 10 physical or virtual desktop validation remains pending. |
 | Automated tests | 244 frontend + 205 backend test cases defined; both suites gate the release build in CI. See [Testing and validation](#testing-and-validation). |
 
 ---
@@ -145,8 +146,8 @@ To set accurate expectations for this preview:
 
 | Requirement | Details |
 | :--- | :--- |
-| Operating system | Windows 11 x64. Windows 10 x64 is expected to work but is **untested**. |
-| WebView2 Runtime | Microsoft Edge WebView2 (Evergreen). Included with Windows 11; often, but not always, present on Windows 10. The installer adds it if missing â€” see below. |
+| Operating system | Intended target: 64-bit Windows (`x86_64`). Desktop runtime validated on **Windows 11 Pro 25H2**. **Windows 10 x64** has not been tested on physical or virtual desktop hardware (minimum supported Windows 10 build is undetermined). Windows 7, 8, 8.1, and Windows on ARM64 are outside scope. |
+| WebView2 Runtime | Microsoft Edge WebView2 (Evergreen). Included by default on Windows 11; if missing on a target system, the installer runs the embedded bootstrapper — see below. |
 | Install permissions | Administrator rights (the MSI installs per-machine). |
 | Security policy | Your system must permit running **unsigned** software. Hosts enforcing Smart App Control or App Control for Business may block DeskPilot. |
 
@@ -161,7 +162,7 @@ To set accurate expectations for this preview:
 
 - **Package:** `deskpilot_0.1.1_x64_en-US.msi` (WiX v3.14), per-machine install (`ALLUSERS=1`) to `C:\Program Files\deskpilot`.
 - **Creates:** Public desktop shortcut (`%PUBLIC%\Desktop\DeskPilot.lnk`), Common Start Menu shortcut (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`), an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry. Erroneous legacy paths (`C:\Desktop`, `C:\deskpilot`) are completely eliminated.
-- **Tested (Physical Windows 11 Host, Phase 16.38 & Sandbox Container, Phase 16.29):** Elevated in-place major upgrade (`msiexec /i â€¦`), public shortcut creation, single ARP registration, installed executable execution, and clean user data preservation verified on Windows 11 Pro 25H2. (In earlier Windows Sandbox testing, installer lifecycle passed but container hypervisor WDAC policy blocked binary execution).
+- **Tested (Physical Windows 11 Host, Phase 16.38; Windows Sandbox, Phase 16.29; CI, Windows Server 2022):** Elevated in-place major upgrade (`msiexec /i ...`), public shortcut creation, single ARP registration, installed executable execution, and retention of existing user data were observed on **Windows 11 Pro 25H2** (Phase 16.38). In **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29), MSI installer lifecycle passed while container WDAC policy blocked unsigned binary execution. GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence.
 
 ### Windows File Explorer installation walkthrough
 
@@ -219,18 +220,29 @@ Digests reflect the verified preview release compiled from commit `e99ccb84b1883
 
 ### Upgrading and downgrading
 
-- Installing v0.1.1 over an existing installation performs a standard Windows Installer major upgrade (verified in Phase 16.38).
-- The v0.1.1 installer includes a downgrade guard, but **the older v0.1.0 MSI does not. Do not run the v0.1.0 MSI over v0.1.1** â€” in testing it downgraded the installation without warning.
+- Installing v0.1.1 over an existing installation performs a standard Windows Installer major upgrade (`msiexec /i ...`, observed in Phase 16.38).
+- Normal MSI upgrades do **not** explicitly manage, migrate, or delete DeskPilot's persistent JSON data (`%APPDATA%\com.deskpilot.app\settings.json` and `%APPDATA%\com.deskpilot.app\launch-history.json`), the WebView2 profile (`%LOCALAPPDATA%\com.deskpilot.app\EBWebView\`), or the optional startup registry value (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot`); these items sit outside the MSI's upgrade-removal scope. Automatic migration across arbitrary future schema changes is not guaranteed.
+- The v0.1.1 installer includes a downgrade guard, but **the older v0.1.0 MSI does not. Do not run the v0.1.0 MSI over v0.1.1** — in testing it downgraded the installation without warning.
 
 ### Uninstalling
 
-Uninstall from **Settings â†’ Apps â†’ Installed apps**, or:
+If you enabled **Start with Windows**, disable it inside DeskPilot Settings **before** uninstalling so the optional startup registry value is removed cleanly. Uninstall from **Settings → Apps → Installed apps**, or:
 
 ```powershell
 msiexec /x deskpilot_0.1.1_x64_en-US.msi
 ```
 
-This removes the program files, shortcuts, and the *Installed apps* entry. **WebView2 profile data is left behind** at `%LOCALAPPDATA%\com.deskpilot.app\EBWebView` (about 8 MB / 192 files in historical Phase 10.9C testing). Delete that folder manually for a complete removal.
+Uninstallation removes the program binaries (`C:\Program Files\deskpilot`), Start Menu and Desktop shortcuts, and the *Installed apps* entry, but does **not** automatically remove:
+
+- **Application JSON data:** `%APPDATA%\com.deskpilot.app\settings.json` and `%APPDATA%\com.deskpilot.app\launch-history.json`
+- **WebView2 profile data:** `%LOCALAPPDATA%\com.deskpilot.app\EBWebView\` (managed by Microsoft Edge WebView2 via Tauri; about 8 MB / 192 files in historical Phase 10.9C testing)
+- **Optional startup registry value:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot` (present only if *Start with Windows* was enabled), which remains pointing to the removed executable if not disabled in Settings prior to uninstalling
+
+To remove leftover local data after uninstalling, manually delete `%APPDATA%\com.deskpilot.app\` and `%LOCALAPPDATA%\com.deskpilot.app\`.
+
+### Reinstalling
+
+Any data left outside the MSI removal scope (`%APPDATA%\com.deskpilot.app\` JSON files, `%LOCALAPPDATA%\com.deskpilot.app\EBWebView\`, and an enabled `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot` entry) may remain available when DeskPilot is reinstalled, provided the stored JSON files remain valid and compatible. Recovery of corrupted or incompatible application data is not guaranteed.
 
 ---
 
@@ -240,9 +252,11 @@ DeskPilot v0.1.1 Developer Preview is structured for empirical evaluation, compa
 
 ### Testing scope and supported environments
 
-- **Windows 11 x64 (Validated):** Validated on physical Windows 11 Pro 25H2 hardware (Phase 16.38). In-place MSI upgrades, installed executable startup, WebView2 Evergreen runtime initialization, Quick Launcher, application discovery, safe launching, process monitoring, system intelligence telemetry, and single-instance mutex enforcement were empirically qualified.
-- **Windows 10 x64 (Untested Hardware):** DeskPilot uses standard Win32 APIs and WebView2 Evergreen, which are architecturally compatible with Windows 10 (Version 21H2 or newer). However, physical hardware testing has not yet been conducted. Evaluator feedback from physical Windows 10 systems is actively requested.
-- **Windows on ARM64:** Not compiled or supported for this preview.
+- **Intended Scope:** Targets 64-bit Windows (`x86_64`). Windows on ARM64 is not compiled or supported, and Windows 7, 8, and 8.1 are outside the intended support scope.
+- **Windows 11 Pro 25H2 (Empirically Validated Desktop):** Validated on physical Windows 11 Pro 25H2 hardware (Phase 16.38). Elevated in-place MSI upgrade, installed executable startup, WebView2 Evergreen runtime initialization, Quick Launcher, application discovery, safe launching, read-only Process Monitor, System Intelligence telemetry, system tray lifecycle, and single-instance mutex enforcement passed.
+- **Windows 11 Enterprise Build 26100 Windows Sandbox (Installer Lifecycle Tested):** Used for container MSI lifecycle testing (Phase 16.29: install, shortcuts, multi-user provisioning, repair, uninstall), while execution of the unsigned binary was blocked by container WDAC policy.
+- **GitHub Actions Windows Server 2022 (`windows-2022`):** `installer-smoke-test.yml` provides automated CI installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence.
+- **Windows 10 x64 (Untested Environment):** Windows 10 has **not** been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is **undetermined**. Windows 10 is not claimed as validated or supported in this preview; evaluator reports from Windows 10 environments are welcome.
 
 ### Core feature validation checklist
 
@@ -369,15 +383,16 @@ These suites run headless (jsdom for the UI; the Rust harness for the backend). 
 | Windows 11 physical desktop: live application discovery (138 apps), search filtering, and safe launch execution (`About Java` -> `javaw.exe`) | âœ… Passed (Phase 16.38) |
 | Windows 11 physical desktop: read-only Process Monitor (1,784 entries) and System Intelligence (exact host CIM metric parity) | âœ… Passed (Phase 16.38) |
 | Windows 11 physical desktop: system tray lifecycle, hide-to-tray on close, single-instance mutex, and 86+ minute sustained soak observation | âœ… Passed (Phase 16.38) |
-| Windows 11, Windows Sandbox: silent MSI install â†’ public desktop shortcut (`%PUBLIC%\Desktop`) â†’ Common Start Menu shortcut (`%PROGRAMDATA%\...`) â†’ clean uninstall | âœ… Passed (Phase 16.29) |
-| Windows 11, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | âœ… Passed (Phase 16.29) |
-| Windows 11, Windows Sandbox: runtime execution of unsigned installed binary | âŒ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
-| Windows 11, Windows Sandbox: upgrade from v0.1.0, repair, uninstall | âœ… Evaluated in Phase 10.9C / Phase 16.29 |
-| Windows 11, Windows Sandbox: interactive (non-silent) installer wizard | âš ï¸ Not tested |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: silent MSI install → public desktop shortcut (`%PUBLIC%\Desktop`) → Common Start Menu shortcut (`%PROGRAMDATA%\...`) → clean uninstall | âœ… Passed (Phase 16.29) |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | âœ… Passed (Phase 16.29) |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: runtime execution of unsigned installed binary | âŒ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: upgrade from v0.1.0, repair, uninstall | âœ… Evaluated in Phase 10.9C / Phase 16.29 |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: interactive (non-silent) installer wizard | âš ï¸ Not tested |
 | Second-user interactive GUI login and application launch | â³ Pending (Windows Sandbox supports single session only) |
-| Windows 10 (physical or VM) | â³ Pending (untested on physical Windows 10 hardware) |
+| Windows 10 (physical or virtual desktop hardware) | â³ Untested (no physical or VM desktop runs; minimum supported Windows 10 build is undetermined) |
+| Windows Server 2022 (`windows-2022`), GitHub Actions CI (`installer-smoke-test.yml`): silent install, 20-second startup check, and uninstall | Passed (automated CI installer smoke-test evidence only; not desktop compatibility evidence) |
 
-Physical host validation (Phase 16.38) demonstrated complete end-to-end functionality for the installed application on Windows 11 Pro 25H2 across an 86+ minute soak (~29.4 MB working set, zero runaway heap growth observed). In isolated Windows Sandbox container testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while hypervisor-enforced container WDAC policies halted unsigned execution. Physical Windows 10 validation remains outstanding. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+Physical host validation (Phase 16.38) demonstrated complete end-to-end functionality for the installed application on **Windows 11 Pro 25H2** across an 86+ minute soak (~29.4 MB working set, zero runaway heap growth observed). In isolated **Windows 11 Enterprise Build 26100 Windows Sandbox** testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while container WDAC policies halted unsigned execution. Separately, GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence. **Windows 10** has not been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is undetermined. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 
@@ -387,7 +402,7 @@ Physical host validation (Phase 16.38) demonstrated complete end-to-end function
 
 | Tool | Version |
 | :--- | :--- |
-| Windows | 10 or 11, x64 |
+| Windows | 64-bit Windows (`x86_64`); desktop runtime validated on Windows 11 Pro 25H2; CI runs on Windows Server 2022 (`windows-2022`) |
 | Node.js / npm | CI uses Node **24.15.0** / npm **11.12.1** |
 | Rust | MSVC toolchain `x86_64-pc-windows-msvc`. Edition 2024 requires **1.85 or newer**; CI uses **1.99.1**. |
 | C++ build tools | Visual Studio 2022 Build Tools with MSVC v143 and a Windows 10/11 SDK |
@@ -454,11 +469,11 @@ docs/                    Architecture notes and screenshots
 
 ## Known limitations
 
-- **Unsigned binaries** â€” expect SmartScreen warnings; App Control policies may block execution.
-- **Windows 10 untested on physical hardware**; Windows 11 installed-runtime validated in Phase 16.38 (Windows Sandbox container previously blocked execution via container WDAC).
-- **Third-party app launching** from the catalog was verified on physical host (`About Java` in Phase 16.38), but was blocked in Windows Sandbox by container WDAC.
-- **v0.1.0 â†’ downgrade risk** â€” do not run the v0.1.0 MSI over v0.1.1.
-- **Leftover WebView2 data** after uninstall in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
+- **Unsigned binaries** — expect SmartScreen warnings; App Control policies may block execution.
+- **Windows 10 untested (minimum build undetermined)** — Windows 10 has not been tested on physical or virtual desktop hardware, and Windows 7, 8, 8.1, and ARM64 are outside scope. Physical desktop validation covered **Windows 11 Pro 25H2** (Phase 16.38), **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29) tested MSI lifecycle only (execution blocked by container WDAC), and **Windows Server 2022** CI (`installer-smoke-test.yml`) provides automated installer smoke-test evidence only.
+- **Third-party app launching** from the catalog was verified on the physical **Windows 11 Pro 25H2** host (`About Java` in Phase 16.38), but was blocked in **Windows 11 Enterprise Build 26100 Windows Sandbox** by container WDAC.
+- **v0.1.0 → downgrade risk** — do not run the v0.1.0 MSI over v0.1.1.
+- **Leftover data and startup entry after uninstall** — uninstalling does not remove `%APPDATA%\com.deskpilot.app\settings.json`, `%APPDATA%\com.deskpilot.app\launch-history.json`, `%LOCALAPPDATA%\com.deskpilot.app\EBWebView\`, or an enabled `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot` value; disable **Start with Windows** in DeskPilot Settings before uninstalling.
 - **Store/MSIX apps not discovered.**
 - **Availability is a scan-time snapshot**; use **Refresh** after installing or removing software.
 - **Process CPU column shows cumulative CPU time**, not current CPU usage.
