@@ -1,4 +1,4 @@
-﻿<p align="center">
+<p align="center">
   <img src="docs/brand/deskpilot-app-icon.svg" width="88" alt="DeskPilot logo">
 </p>
 
@@ -15,17 +15,19 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11, and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, verify preview packages against the documented checksums or [build from source](#building-from-source). See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11, and have **not been validated on physical Windows 10 hardware**. To evaluate DeskPilot, verify preview packages against the documented checksums. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software (locally compiled binaries remain unsigned and are subject to the same application-control policies). If your policy requires signed binaries or blocks unsigned code, wait for an appropriately signed release or consult your system administrator. See [Known limitations](#known-limitations) before use.
 
 ---
 
 ## Contents
 
 - [Status at a glance](#status-at-a-glance)
+- [Visual preview](#visual-preview)
 - [Features](#features)
 - [What DeskPilot does not do](#what-deskpilot-does-not-do)
 - [System requirements](#system-requirements)
 - [Installation](#installation)
+- [Public preview testing](#public-preview-testing)
 - [Privacy and network behavior](#privacy-and-network-behavior)
 - [Security model](#security-model)
 - [Architecture](#architecture)
@@ -131,7 +133,7 @@ GitHub Actions Windows runner (see .github/workflows/screenshots.yml).
 To set accurate expectations for this preview:
 
 - **No process termination**, suspension, or priority changes. DeskPilot is strictly a monitor, not a task killer.
-- **No cloud accounts, sync, or telemetry** â€” all state is local; settings and launch history live in `%LOCALAPPDATA%\com.deskpilot.app` (`settings.json` and `history.json`) and can be disabled or deleted anytime.
+- **No cloud accounts, sync, or telemetry** â€” all state is local; settings and launch history live in `%APPDATA%\com.deskpilot.app` (`settings.json` and `launch-history.json`) and can be disabled or deleted anytime.
 - **No Microsoft Store manifest parsing** â€” packaged execution aliases display clean two-letter monogram cards rather than extracting Appx manifests.
 - **No launch arguments**, no "run as administrator", no launching from Downloads or temp folders.
 - **No auto-update mechanism.**
@@ -161,6 +163,27 @@ To set accurate expectations for this preview:
 - **Creates:** Public desktop shortcut (`%PUBLIC%\Desktop\DeskPilot.lnk`), Common Start Menu shortcut (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`), an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry. Erroneous legacy paths (`C:\Desktop`, `C:\deskpilot`) are completely eliminated.
 - **Tested (Physical Windows 11 Host, Phase 16.38 & Sandbox Container, Phase 16.29):** Elevated in-place major upgrade (`msiexec /i â€¦`), public shortcut creation, single ARP registration, installed executable execution, and clean user data preservation verified on Windows 11 Pro 25H2. (In earlier Windows Sandbox testing, installer lifecycle passed but container hypervisor WDAC policy blocked binary execution).
 
+### Windows File Explorer installation walkthrough
+
+For evaluators and testers installing DeskPilot via the Windows graphical shell:
+
+1. **Download and Checksum Verification:** Download `deskpilot_0.1.1_x64_en-US.msi` from [GitHub Releases](https://github.com/youssefmanssouri/deskpilot-/releases). In PowerShell, run `Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256` and confirm the digest matches `7EF4CBBC6EBCB759406067CE4108D617B0857E84EA07498C488B56BB7FD90CFD`.
+2. **File Explorer Execution:** Double-click `deskpilot_0.1.1_x64_en-US.msi` in File Explorer.
+3. **Microsoft Defender SmartScreen and Code Integrity:** Because preview binaries are unsigned (`NotSigned`), Windows Defender SmartScreen or system application control policies may present a warning:
+
+   *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."*
+
+   Do not bypass, override, or disable security warnings or application control policies. If Windows or your organizational security policy blocks execution, **stop installation immediately**. Do not attempt to bypass restrictions by building from source: locally compiled binaries remain unsigned and are subject to the same application-control policies. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your environment requires signed software, wait for an appropriately signed release or consult your system administrator.
+4. **User Account Control (UAC) Elevation:** If permitted by system policy, Windows will display a UAC elevation prompt requesting administrative permission for the Windows Installer. Click **Yes** to complete the per-machine installation into `C:\Program Files\deskpilot\`.
+5. **Shortcuts & First Launch:** Setup registers:
+   - Desktop shortcut: `%PUBLIC%\Desktop\DeskPilot.lnk`
+   - Start Menu shortcut: `%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`
+
+   Launch DeskPilot from either shortcut.
+
+> [!WARNING]
+> **Do not bypass or disable security protections.** Never bypass security warnings or disable Microsoft Defender SmartScreen, Smart App Control, or organizational Application Control policies (such as WDAC) to run DeskPilot. If your environment blocks unsigned installers, stop installation immediately. Building from source is not a workaround for application-control restrictions, as locally built binaries remain unsigned and are subject to the same policies. If your system requires signed software, wait for an appropriately signed release or consult your system administrator.
+
 ### WebView2 runtime
 
 The MSI embeds Microsoft's WebView2 **bootstrapper** (not the full runtime) and runs it silently during setup:
@@ -176,7 +199,7 @@ The MSI embeds Microsoft's WebView2 **bootstrapper** (not the full runtime) and 
 - **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the installed binary executed successfully on the physical developer host where UMCI was not enforced (Phase 16.38), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
 - Digital code signing with an Authenticode certificate would establish publisher identity, but environments enforcing strict App Control policies may still require explicit policy authorization.
 
-**Do not disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot.** If your policy requires signed software, wait for a signed release or evaluate from source in an environment where that is permitted.
+**Do not bypass or disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot. If Windows blocks execution, stop installation immediately.** Building from source is not an exemption or workaround for signature enforcement, as locally built binaries are also unsigned and may be blocked. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your policy requires signed software or blocks unsigned code, wait for an appropriately signed release or consult your system administrator.
 
 ### Verifying a download
 
@@ -211,21 +234,57 @@ This removes the program files, shortcuts, and the *Installed apps* entry. **Web
 
 ---
 
+## Public preview testing
+
+DeskPilot v0.1.1 Developer Preview is structured for empirical evaluation, compatibility verification, and community feedback.
+
+### Testing scope and supported environments
+
+- **Windows 11 x64 (Validated):** Validated on physical Windows 11 Pro 25H2 hardware (Phase 16.38). In-place MSI upgrades, installed executable startup, WebView2 Evergreen runtime initialization, Quick Launcher, application discovery, safe launching, process monitoring, system intelligence telemetry, and single-instance mutex enforcement were empirically qualified.
+- **Windows 10 x64 (Untested Hardware):** DeskPilot uses standard Win32 APIs and WebView2 Evergreen, which are architecturally compatible with Windows 10 (Version 21H2 or newer). However, physical hardware testing has not yet been conducted. Evaluator feedback from physical Windows 10 systems is actively requested.
+- **Windows on ARM64:** Not compiled or supported for this preview.
+
+### Core feature validation checklist
+
+We encourage testers to exercise and report findings on these core capabilities:
+
+1. **Application Discovery & Launching:** Verify that installed Win32 software is accurately detected in the **Apps** view with authentic extracted icons (`SHDefExtractIconW`), search filtering responds to user input, and launching executes cleanly.
+2. **Global Quick Launcher:** Press `Ctrl+Alt+Space` from any active foreground window. Ensure the launcher palette appears centered, search operates smoothly, and pressing `Esc` dismisses the window cleanly.
+3. **Read-Only Process Monitor:** Verify that running processes are enumerated with accurate CPU time and memory consumption in the **Processes** view. Confirm that DeskPilot acts strictly as a passive observer (no task-killing or termination features).
+4. **System Intelligence:** Compare CPU load, physical RAM usage, and fixed storage volume readings in the **System** view against Windows Task Manager and report any discrepancies.
+5. **System Tray Integration:** Confirm that closing the main window hides DeskPilot to the notification tray area, and right-clicking the tray icon surfaces *Show*, *Hide*, and *Quit*.
+
+### Submitting feedback
+
+- **Bug Reports:** If you encounter unexpected behavior, crashes, or rendering issues, please open an issue using the [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md). Be sure to include your Windows edition and build (`winver`).
+- **Feature Suggestions:** Share architectural ideas, usability suggestions, or workflow improvements using the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md).
+- **Contributing Guide:** For detailed evaluation instructions and source contribution workflows, see the [Contribution and Testing Guide](CONTRIBUTING.md).
+
+> [!IMPORTANT]
+> **Privacy Reminder:** DeskPilot operates locally with zero telemetry. When opening public GitHub issues, never attach or disclose sensitive information, credentials, API keys, private tokens, or proprietary directory paths. All issue submissions are public.
+
+---
+
 ## Privacy and network behavior
 
-**DeskPilot's own code** (Rust backend and React frontend):
+**Source-code inspection** (inspected DeskPilot Rust backend and React frontend code):
 
-- implements no HTTP/WebSocket client, analytics, telemetry, crash reporting, or update check;
-- writes no external database, remote telemetry, or disk-based logs. Local state is confined strictly to two local files (`settings.json` and `launch-history.json`) in `%LOCALAPPDATA%\com.deskpilot.app\` and, only if explicitly enabled, one per-user startup entry (see [PRIVACY.md](PRIVACY.md));
+- identified no application-level HTTP/WebSocket clients, telemetry implementation, socket implementation, crash reporting, or update check in the inspected application code;
+- writes no external database, remote telemetry, or disk-based event logs. Local state is confined strictly to two schema-bounded local JSON files (`settings.json` and `launch-history.json`) in the active user profile (`%APPDATA%\com.deskpilot.app\`) and, only if explicitly enabled by the user, one per-user startup value in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (see [PRIVACY.md](PRIVACY.md));
 - serves its UI from assets embedded in the executable, under a Content Security Policy that only allows same-origin resources.
+
+This is a source-inspection finding, not proof of runtime behavior across all execution conditions or platform dependencies.
+
+**Empirically observed runtime results:**
+
+- During short interactive testing sessions and Phase 16.38 soak monitoring on Windows 11, no open TCP/UDP listening sockets or remote socket connections were observed from DeskPilot.
+- These runtime observations reflect specific tested workloads and do not constitute a universal guarantee across all Windows configurations or execution conditions.
 
 **Components DeskPilot depends on behave independently:**
 
-- **WebView2 Runtime** is a Microsoft component that is updated and managed by Windows/Edge and may make its own network connections under Microsoft's policies. It also stores profile data in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
-- **The installer** may download the WebView2 Runtime if it is absent (see [Installation](#webview2-runtime)).
-- **Applications you launch** run as independent processes with their own network and data behavior.
-
-Short interactive test sessions observed no open TCP/UDP sockets from DeskPilot. That is an observation, not a guarantee about WebView2 or Windows behavior across all configurations. See [PRIVACY.md](PRIVACY.md) for details.
+- **WebView2 Runtime** is an underlying Microsoft system component updated and managed independently by Microsoft Edge / Windows. It may initiate its own network connections under Microsoft's policies, and stores profile data in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
+- **The installer bootstrapper** will attempt to download the WebView2 Runtime from Microsoft over the internet only if the runtime is not already present on the machine (see [Installation](#webview2-runtime)).
+- **Applications you launch** from the catalog run as independent OS processes with their own permissions, socket connections, and network behavior.
 
 ---
 
@@ -371,7 +430,7 @@ npm run tauri -- build --bundles msi
 ```
 
 > [!NOTE]
-> On machines enforcing Smart App Control or App Control for Business, locally compiled, unsigned build-script executables may be blocked, causing `cargo test` or `tauri dev` to fail. The CI workflow is the reference environment for backend tests.
+> Building from source is appropriate only in environments where you are explicitly permitted to build and execute unsigned software. Locally built binaries are unsigned and are not exempt from Smart App Control, App Control for Business (WDAC), or organizational policies; locally compiled build scripts and test binaries may be blocked. The CI workflow is the reference environment for backend tests.
 
 ### Project structure
 
@@ -422,11 +481,17 @@ No dates are committed.
 
 ## Contributing
 
-Bug reports and pull requests are welcome via [GitHub Issues](https://github.com/youssefmanssouri/deskpilot-/issues).
+We welcome bug reports, environment qualification feedback, and architectural discussions via [GitHub Issues](https://github.com/youssefmanssouri/deskpilot-/issues). Please review our [Contribution and Testing Guide](CONTRIBUTING.md) for complete evaluation guidelines and testing checklists.
 
-- For bugs, include your Windows version and build, whether WebView2 was preinstalled, and any App Control/SmartScreen messages.
-- Before opening a pull request, run `npm test`, `cargo test --locked --manifest-path src-tauri/Cargo.toml`, and `npm run build`.
-- Keep the security model intact: the frontend must not gain filesystem, shell, or raw-path access, and launch requests must remain ID-based.
+- **Bug Reports:** Use our [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md) and include your Windows build number (`winver`), WebView2 runtime status, and exact error messages.
+- **Feature Requests:** Use our [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md) to propose enhancements aligned with DeskPilot's local-first architecture.
+- **Local Testing:** Before opening a pull request, run the automated test suites:
+  ```bash
+  npm test
+  cargo test --locked --manifest-path src-tauri/Cargo.toml
+  npm run build
+  ```
+- **Architectural Boundaries:** Keep the security model intact: the frontend must remain an untrusted presentation layer with no direct filesystem or shell access, and application launch requests must remain ID-based.
 
 ### Reporting security issues
 
@@ -436,6 +501,7 @@ Please do **not** open a public issue for vulnerabilities. Report them privately
 
 ## Documentation
 
+- [Contribution and testing guide](CONTRIBUTING.md)
 - [Release notes â€” v0.1.1 preview](RELEASE_NOTES_v0.1.1_PREVIEW.md)
 - [Privacy statement](PRIVACY.md)
 - [Security policy](SECURITY.md)

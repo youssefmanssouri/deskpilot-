@@ -26,13 +26,18 @@ Communication between the frontend and Rust core is strictly mediated by strongl
 ### 4. Path Traversal & Filesystem Guards
 All filesystem paths received by the backend must undergo canonicalization (`std::fs::canonicalize`) and pass through a dedicated security guard (`security::InputGuard` / `fs_guard`) to prevent directory traversal (`..`), Alternate Data Streams (`:stream`), null bytes (`\0`), and unauthorized namespace access.
 
-### 5. Safe Destructive Operations & Rollback Safeguards
-Destructive file operations (such as file deletion or bulk renaming) require explicit safety mechanisms:
-- File deletions default to the Windows Recycle Bin (`IFileOperation` / `SHFileOperationW` with `FOF_ALLOWUNDO`) rather than permanent disk unlinking.
-- Mutating operations require two-phase verification: dry-run inspection followed by transactional execution with a logged rollback journal in SQLite.
+### 5. Bounded State Mutation & Isolation Safeguards
+DeskPilot avoids unconstrained filesystem modifications. The v0.1.1 preview application does not perform destructive file manipulations (such as arbitrary file deletion, renaming, or task killing). Persistent application data is stored in discrete, schema-bounded local JSON files (`settings.json` and `launch-history.json`) under the user's application profile (`%APPDATA%\com.deskpilot.app\`), with defensive write routines that prevent corruption. In addition, an optional per-user startup registry value at `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` is created only when the user explicitly enables startup behavior (it does not exist by default).
 
-### 6. Local-First & Zero Telemetry
-DeskPilot operates entirely locally. No analytics, tracking tokens, crash dumps, or user telemetry are transmitted over the network. All operational state resides in local SQLite storage restricted to the active user's local profile (`%LOCALAPPDATA%`).
+### 6. Local-First Architecture & Network Behavior Disclosures
+DeskPilot is architected as an offline, local-first utility. Persistent application data is confined to local schema-bounded JSON files (`settings.json` and `launch-history.json`) in the active user's profile directory (`%APPDATA%\com.deskpilot.app\`) and, only if explicitly enabled by the user, the optional per-user startup registry value at `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Network disclosures are categorized as follows:
+
+- **Source-Code Inspection:** Static inspection of DeskPilot's application codebase (Rust core and React web assets) identified no application-level telemetry engines, analytics trackers, crash reporters, HTTP/WebSocket clients, or socket implementations in the inspected application code. This is a source-inspection finding, not proof of runtime behavior or a universal guarantee across all execution conditions or platform dependencies.
+- **Empirical Runtime Observations:** During documented physical Windows 11 testing workloads and soak monitoring (Phase 16.38), no active TCP/UDP listening sockets or remote socket connections were observed from the DeskPilot desktop process. These findings represent empirical observations from specific tested workloads and configurations, not an exhaustive guarantee across all execution conditions, Windows environments, or network configurations.
+- **Independent Platform Components:** Certain system components operate independently outside DeskPilot's own application code:
+  - The Microsoft Edge WebView2 runtime is an independently managed platform component under Windows and Microsoft Edge. It may initiate its own network connections under Microsoft's policies, and stores profile data locally in `%LOCALAPPDATA%\com.deskpilot.app\EBWebView`.
+  - The MSI installer embeds Microsoft's WebView2 bootstrapper and, per the installer configuration, invokes it only when an existing WebView2 runtime installation is not detected; runtime installation and any associated network activity are managed by that bootstrapper.
+  - Third-party applications launched through DeskPilot run as independent operating-system processes with their own permissions and network behavior.
 
 ### 7. Dependency & Supply Chain Integrity
 All npm and Cargo dependencies are audited regularly. Lockfiles (`package-lock.json` and `Cargo.lock`) are committed to version control to guarantee deterministic, reproducible builds.
