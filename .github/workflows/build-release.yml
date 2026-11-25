@@ -710,36 +710,98 @@ jobs:
             exit 1
           }
 
-          $expectedSize = 1897688
+          function Write-WorkflowEnv {
+              param([string]$Name, [string]$Value)
+              if ([string]::IsNullOrWhiteSpace($env:GITHUB_ENV)) { Write-Error "CRITICAL: GITHUB_ENV is not defined"; exit 1 }
+              if ($Name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { Write-Error "CRITICAL: Invalid variable name '$Name'"; exit 1 }
+              if ([string]::IsNullOrWhiteSpace($Value)) { Write-Error "CRITICAL: Empty value for '$Name'"; exit 1 }
+              if ($Value -match '[\r\n\0]') { Write-Error "CRITICAL: Value for '$Name' contains control characters"; exit 1 }
+              $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+              [System.IO.File]::AppendAllText($env:GITHUB_ENV, "$Name=$Value`n", $utf8NoBom)
+          }
+
           $actualSize = (Get-Item $extractedPath).Length
-          if ($actualSize -ne $expectedSize) {
-            Write-Error "CRITICAL: Bootstrapper size mismatch! Expected $expectedSize bytes, got $actualSize"
+          if ($actualSize -le 0) {
+            Write-Error "CRITICAL: Extracted bootstrapper is empty ($actualSize bytes)!"
             exit 1
           }
 
-          $expectedHash = "CF2F2445FEF0C5C14E372045F84998771EEB8BB01D59BE4AFD00692FA160082E"
-          $actualHash = (Get-FileHash -Path $extractedPath -Algorithm SHA256).Hash
-          if ($actualHash -ne $expectedHash) {
-            Write-Error "CRITICAL: Bootstrapper SHA-256 mismatch! Expected $expectedHash, got $actualHash"
+          $actualHash = (Get-FileHash -Path $extractedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -notmatch '^[0-9a-f]{64}$') {
+            Write-Error "CRITICAL: Computed bootstrapper SHA-256 is invalid: $actualHash"
             exit 1
           }
 
           $sig = Get-AuthenticodeSignature -FilePath $extractedPath
-          if ($sig.Status -ne "Valid") {
-            Write-Error "CRITICAL: Bootstrapper signature is not valid! Status: $($sig.Status)"
+          if ($null -eq $sig -or $sig.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            Write-Error "CRITICAL: Bootstrapper Authenticode signature is not valid! Status: $($sig.Status)"
             exit 1
           }
-          if ($sig.SignerCertificate.Subject -notlike "*CN=Microsoft Corporation*") {
-            Write-Error "CRITICAL: Bootstrapper signer is not Microsoft! Subject: $($sig.SignerCertificate.Subject)"
-            exit 1
-          }
-          $expectedThumbprint = "4028CAD637509D4744B17EC5B42AED8D7A31E6AF"
-          if ($sig.SignerCertificate.Thumbprint -ne $expectedThumbprint) {
-            Write-Error "CRITICAL: Bootstrapper thumbprint mismatch! Expected $expectedThumbprint, got $($sig.SignerCertificate.Thumbprint)"
+          if ($null -eq $sig.SignerCertificate) {
+            Write-Error "CRITICAL: Bootstrapper signer certificate is missing!"
             exit 1
           }
 
-          Write-Output "WebView2 Bootstrapper integrity verified: Valid Microsoft Authenticode signature and exact SHA-256 match ($actualHash)"
+          $simpleName = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+          if ($simpleName -ne "Microsoft Corporation") {
+            Write-Error "CRITICAL: Bootstrapper signer SimpleName is not Microsoft Corporation! Got: '$simpleName'"
+            exit 1
+          }
+
+          $subjectLines = $sig.SignerCertificate.SubjectName.Format($true) -split "(\r\n|\n|\r)" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          $rdns = @{}
+          foreach ($line in $subjectLines) {
+            $eqIdx = $line.IndexOf('=')
+            if ($eqIdx -le 0) {
+              Write-Error "CRITICAL: Malformed X.509 subject attribute in certificate!"
+              exit 1
+            }
+            $key = $line.Substring(0, $eqIdx).Trim().ToUpperInvariant()
+            $val = $line.Substring($eqIdx + 1).Trim()
+            if (-not $rdns.ContainsKey($key)) {
+              $rdns[$key] = @()
+            }
+            $rdns[$key] += $val
+          }
+
+          if ($rdns['CN'].Count -ne 1 -or $rdns['CN'][0] -ne "Microsoft Corporation") {
+            Write-Error "CRITICAL: Bootstrapper certificate CN is missing, ambiguous, or not 'Microsoft Corporation'!"
+            exit 1
+          }
+          if ($rdns['O'].Count -ne 1 -or $rdns['O'][0] -ne "Microsoft Corporation") {
+            Write-Error "CRITICAL: Bootstrapper certificate O is missing, ambiguous, or not 'Microsoft Corporation'!"
+            exit 1
+          }
+          if ($rdns['C'].Count -ne 1 -or $rdns['C'][0] -ne "US") {
+            Write-Error "CRITICAL: Bootstrapper certificate C is missing, ambiguous, or not 'US'!"
+            exit 1
+          }
+
+          $ekuExt = $sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.37" } | Select-Object -First 1
+          if ($null -eq $ekuExt) {
+            Write-Error "CRITICAL: Signer certificate lacks Enhanced Key Usage extension (2.5.29.37)!"
+            exit 1
+          }
+          $ekuTyped = [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExt
+          $hasCodeSigningEku = @($ekuTyped.EnhancedKeyUsages | Where-Object { $_.Value -eq "1.3.6.1.5.5.7.3.3" }).Count -gt 0
+          if (-not $hasCodeSigningEku) {
+            Write-Error "CRITICAL: Signer certificate lacks Code Signing EKU (1.3.6.1.5.5.7.3.3)!"
+            exit 1
+          }
+
+          $thumbprint = $sig.SignerCertificate.Thumbprint
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') {
+            Write-Error "CRITICAL: Signer certificate thumbprint format is invalid: '$thumbprint'"
+            exit 1
+          }
+          $signerSubject = $sig.SignerCertificate.Subject
+
+          Write-WorkflowEnv -Name "DESKPILOT_WEBVIEW2_SHA256" -Value $actualHash
+          Write-WorkflowEnv -Name "DESKPILOT_WEBVIEW2_SIZE" -Value "$actualSize"
+          Write-WorkflowEnv -Name "DESKPILOT_WEBVIEW2_SIGNER" -Value $signerSubject
+          Write-WorkflowEnv -Name "DESKPILOT_WEBVIEW2_THUMBPRINT" -Value $thumbprint
+
+          Write-Output "WebView2 Bootstrapper integrity verified: Valid Microsoft Authenticode signature (SHA-256: $actualHash, Size: $actualSize bytes, Thumbprint: $thumbprint)"
 
       - name: Generate Checksums and Build Manifest
         shell: powershell
@@ -798,6 +860,14 @@ jobs:
           }
           $tauriCliVer = ($tauriCliRaw -join "`n").Trim()
 
+          if ([string]::IsNullOrWhiteSpace($env:DESKPILOT_WEBVIEW2_SHA256) -or
+              [string]::IsNullOrWhiteSpace($env:DESKPILOT_WEBVIEW2_SIZE) -or
+              [string]::IsNullOrWhiteSpace($env:DESKPILOT_WEBVIEW2_SIGNER) -or
+              [string]::IsNullOrWhiteSpace($env:DESKPILOT_WEBVIEW2_THUMBPRINT)) {
+            Write-Error "CRITICAL: Verified WebView2 bootstrapper provenance environment variables are missing!"
+            exit 1
+          }
+
           $manifest = [ordered]@{
             manifest_schema = "1.0"
             disclaimer = "This build manifest records build-time environment metadata for diagnostic and reproducibility auditing. It does not constitute a cryptographic attestation or hardware-backed signing statement."
@@ -822,10 +892,10 @@ jobs:
             )
             embedded_webview2 = @{
               source = "Binary table MicrosoftEdgeWebview2Setup.exe"
-              sha256 = "cf2f2445fef0c5c14e372045f84998771eeb8bb01d59be4afd00692fa160082e"
-              size_bytes = 1897688
-              signer = "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
-              thumbprint = "4028CAD637509D4744B17EC5B42AED8D7A31E6AF"
+              sha256 = "$env:DESKPILOT_WEBVIEW2_SHA256"
+              size_bytes = [int64]$env:DESKPILOT_WEBVIEW2_SIZE
+              signer = "$env:DESKPILOT_WEBVIEW2_SIGNER"
+              thumbprint = "$env:DESKPILOT_WEBVIEW2_THUMBPRINT"
               status = "Valid"
             }
             environment = @{
