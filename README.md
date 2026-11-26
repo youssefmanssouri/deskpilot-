@@ -15,7 +15,7 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, are distributed publicly on GitHub for technical evaluation and developer testing on Windows 11 Pro 25H2, and have **not been tested on physical or virtual Windows 10 desktop hardware** (the exact minimum supported Windows 10 build is undetermined). To evaluate DeskPilot, verify preview packages against the documented checksums. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software (locally compiled binaries remain unsigned and are subject to the same application-control policies). If your policy requires signed binaries or blocks unsigned code, wait for an appropriately signed release or consult your system administrator. See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, and source/release evaluation is intended for technical evaluation and developer testing on Windows 11 Pro 25H2. **Note on publication status:** the currently published GitHub Release is the earlier `v0.1.1-preview.2` release; the newer verified build (`effdb09971edf4746e0388fe714564ce477ee6a5`, GitHub Actions run `45693205561`) has **not yet been published** as a GitHub Release (workflow artifacts are temporary CI outputs, not permanent public downloads). DeskPilot has **not been tested on physical or virtual Windows 10 desktop hardware** (the exact minimum supported Windows 10 build is undetermined). Users may encounter *Unknown publisher* or SmartScreen warnings, and warning-free installation is not promised. If your policy requires signed binaries or blocks unsigned code, consult your system administrator. See [Known limitations](#known-limitations) before use.
 
 ---
 
@@ -43,15 +43,15 @@
 
 | Area | Status |
 | :--- | :--- |
-| Version | `0.1.1` developer preview release (commit `e99ccb8`) |
-| Code signing | Not signed. No commercial certificate enrolled. |
-| Public download | Available as a Developer Preview release asset on GitHub Releases. |
-| Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (Phase 16.38). In-place elevated MSI upgrade, installed binary startup, WebView2 Evergreen runtime initialization, Quick Launcher (`Ctrl+Alt+Space`), application discovery (138 apps), safe Win32 launching, read-only Process Monitor (1,784 process entries), System Intelligence (1-to-1 host metric parity), system tray with hide-to-tray, single-instance mutex, and 86+ minute sustained soak observation passed 100%. (In isolated Windows 11 Enterprise Build 26100 Windows Sandbox testing, execution was blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
+| Version | `0.1.1` unsigned developer preview (commit `effdb09971edf4746e0388fe714564ce477ee6a5`) |
+| Code signing | Not signed. Unsigned Developer Preview; SHA-256 checksums and build provenance (`build-manifest.json`) are provided for integrity verification. |
+| Public download | The latest published GitHub Release is the earlier `v0.1.1-preview.2` tag. The newer verified build (`effdb099`, run `45693205561`) has not yet been published as a GitHub Release. |
+| Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (build `26200.9974`, Phase 18.4). All 15 permitted functional acceptance checks passed, including elevated MSI upgrade with preserved settings/history, 137 apps discovered, safe Win32 launch (`About Java`), Process Monitor, System Intelligence, `--autostart` tray launch, single-instance mutex, guarded startup states (`Disabled`, `Enabled`, `Stale`, `OtherInstall`, `Unrecognized`), and a 31-minute runtime observation without crashes or unexpected resource growth (`26.24 -> 23.48 MB` working set). (In isolated Windows 11 Enterprise Build 26100 Windows Sandbox testing, execution was blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
 | Windows 10 x64 | **Untested on physical or virtual desktop hardware.** Exact minimum supported Windows 10 build is undetermined; empirical validation pending. (Windows 7, 8, and 8.1 are outside the intended support scope). |
-| Windows Server 2022 (`windows-2022`) | Automated CI smoke test only (`installer-smoke-test.yml`: silent MSI install, 20-second process launch check, uninstall). Provides CI installer smoke-test evidence only, not desktop Windows compatibility evidence. |
+| Windows Server 2022 (`windows-2022`) | Automated CI smoke test only (`installer-smoke-test.yml`, run `45692834602`: silent MSI install, 20-second process launch check, uninstall). Provides CI installer smoke-test evidence only, not desktop Windows compatibility evidence. |
 | Windows on ARM64 | Not built, not tested. |
-| Clean-machine install lifecycle | Elevated MSI upgrade, public shortcut placement (`%PUBLIC%\Desktop` and `%PROGRAMDATA%\...`), and retention of existing user data outside the MSI removal scope observed on physical Windows 11 Pro 25H2; silent install/20s-run/uninstall smoke-tested on CI Windows Server 2022. Windows 10 physical or virtual desktop validation remains pending. |
-| Automated tests | 244 frontend + 205 backend test cases defined; both suites gate the release build in CI. See [Testing and validation](#testing-and-validation). |
+| Clean-machine install lifecycle | Elevated MSI upgrade, public shortcut placement (`%PUBLIC%\Desktop` and `%PROGRAMDATA%\...`), and retention of existing user data outside the MSI removal scope observed on physical Windows 11 Pro 25H2 (Phase 18.4); silent install/20s-run/uninstall smoke-tested on CI Windows Server 2022 (`45692834602`). Windows 10 physical or virtual desktop validation remains pending. |
+| Automated tests | 511 total (260 Rust + 251 frontend) headless unit/integration tests; CI (`45692834705`), Installer Smoke Test (`45692834602`), CodeQL (`45692835764`), and Release Build (`45693205561`) passed. See [Testing and validation](#testing-and-validation). |
 
 ---
 
@@ -156,25 +156,25 @@ To set accurate expectations for this preview:
 ## Installation
 
 > [!NOTE]
-> DeskPilot v0.1.1 is distributed as a Developer Preview release on GitHub Releases. This section documents the behavior of the v0.1.1 MSI for evaluators and for anyone building the installer from source.
+> The latest published GitHub Release is the earlier `v0.1.1-preview.2` preview. The newer verified v0.1.1 build (`effdb099`, run `45693205561`) has not yet been published to GitHub Releases. This section documents the behavior of the v0.1.1 MSI for evaluators and for anyone building the installer from source.
 
 ### Installer behavior
 
 - **Package:** `deskpilot_0.1.1_x64_en-US.msi` (WiX v3.14), per-machine install (`ALLUSERS=1`) to `C:\Program Files\deskpilot`.
 - **Creates:** Public desktop shortcut (`%PUBLIC%\Desktop\DeskPilot.lnk`), Common Start Menu shortcut (`%ProgramData%\Microsoft\Windows\Start Menu\Programs\DeskPilot\DeskPilot.lnk`), an uninstall shortcut in the Start Menu folder, and one *Installed apps* entry. Erroneous legacy paths (`C:\Desktop`, `C:\deskpilot`) are completely eliminated.
-- **Tested (Physical Windows 11 Host, Phase 16.38; Windows Sandbox, Phase 16.29; CI, Windows Server 2022):** Elevated in-place major upgrade (`msiexec /i ...`), public shortcut creation, single ARP registration, installed executable execution, and retention of existing user data were observed on **Windows 11 Pro 25H2** (Phase 16.38). In **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29), MSI installer lifecycle passed while container WDAC policy blocked unsigned binary execution. GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence.
+- **Tested (Physical Windows 11 Host, Phases 16.38 & 18.4; Windows Sandbox, Phase 16.29; CI, Windows Server 2022):** Elevated in-place major upgrade (`msiexec /i ...`), public shortcut creation, single ARP registration, installed executable execution, and retention of existing user data were observed on **Windows 11 Pro 25H2** (build `26200.9974` in Phase 18.4; earlier preview in Phase 16.38). In **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29), MSI installer lifecycle passed while container WDAC policy blocked unsigned binary execution. GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`, run `45692834602`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence.
 
 ### Windows File Explorer installation walkthrough
 
 For evaluators and testers installing DeskPilot via the Windows graphical shell:
 
-1. **Download and Checksum Verification:** Download `deskpilot_0.1.1_x64_en-US.msi` from [GitHub Releases](https://github.com/youssefmanssouri/deskpilot-/releases). In PowerShell, run `Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256` and confirm the digest matches `7EF4CBBC6EBCB759406067CE4108D617B0857E84EA07498C488B56BB7FD90CFD`.
+1. **Download and Checksum Verification:** Download the MSI from [GitHub Releases](https://github.com/youssefmanssouri/deskpilot-/releases) and verify its SHA-256 against the checksums published on that specific release (for example, `v0.1.1-preview.2` has its own published checksums). For the newer `effdb09971edf4746e0388fe714564ce477ee6a5` candidate build (run `45693205561`, not yet published to GitHub Releases), `Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256` must match `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f`.
 2. **File Explorer Execution:** Double-click `deskpilot_0.1.1_x64_en-US.msi` in File Explorer.
 3. **Microsoft Defender SmartScreen and Code Integrity:** Because preview binaries are unsigned (`NotSigned`), Windows Defender SmartScreen or system application control policies may present a warning:
 
    *"Windows protected your PC — Microsoft Defender SmartScreen prevented an unrecognized app from starting."*
 
-   Do not bypass, override, or disable security warnings or application control policies. If Windows or your organizational security policy blocks execution, **stop installation immediately**. Do not attempt to bypass restrictions by building from source: locally compiled binaries remain unsigned and are subject to the same application-control policies. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your environment requires signed software, wait for an appropriately signed release or consult your system administrator.
+   Do not bypass, override, or disable security warnings or application control policies. If Windows or your organizational security policy blocks execution, **stop installation immediately**. Do not attempt to bypass restrictions by building from source: locally compiled binaries remain unsigned and are subject to the same application-control policies. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your environment requires signed software, consult your system administrator.
 4. **User Account Control (UAC) Elevation:** If permitted by system policy, Windows will display a UAC elevation prompt requesting administrative permission for the Windows Installer. Click **Yes** to complete the per-machine installation into `C:\Program Files\deskpilot\`.
 5. **Shortcuts & First Launch:** Setup registers:
    - Desktop shortcut: `%PUBLIC%\Desktop\DeskPilot.lnk`
@@ -183,7 +183,7 @@ For evaluators and testers installing DeskPilot via the Windows graphical shell:
    Launch DeskPilot from either shortcut.
 
 > [!WARNING]
-> **Do not bypass or disable security protections.** Never bypass security warnings or disable Microsoft Defender SmartScreen, Smart App Control, or organizational Application Control policies (such as WDAC) to run DeskPilot. If your environment blocks unsigned installers, stop installation immediately. Building from source is not a workaround for application-control restrictions, as locally built binaries remain unsigned and are subject to the same policies. If your system requires signed software, wait for an appropriately signed release or consult your system administrator.
+> **Do not bypass or disable security protections.** Never bypass security warnings or disable Microsoft Defender SmartScreen, Smart App Control, or organizational Application Control policies (such as WDAC) to run DeskPilot. If your environment blocks unsigned installers, stop installation immediately. Building from source is not a workaround for application-control restrictions, as locally built binaries remain unsigned and are subject to the same policies. If your system requires signed software, consult your system administrator.
 
 ### WebView2 runtime
 
@@ -191,16 +191,17 @@ The MSI embeds Microsoft's WebView2 **bootstrapper** (not the full runtime) and 
 
 - If the WebView2 Runtime is already installed, setup completes **without network access**.
 - If it is missing, the bootstrapper **downloads the runtime from Microsoft** — an internet connection is required in that case.
+- The release build workflow (`build-release.yml`) extracts and verifies Microsoft Corporation's Authenticode signature, X.509 publisher identity (`CN`/`O`/`C`), and Code Signing EKU (`1.3.6.1.5.5.7.3.3`) on the embedded WebView2 bootstrapper before packaging provenance in `build-manifest.json`.
 
 ### Unsigned binaries, SmartScreen, and Application Control
 
-`Get-AuthenticodeSignature` reports `NotSigned` for v0.1.1 binaries. As a result:
+`Get-AuthenticodeSignature` reports `NotSigned` for v0.1.1 binaries (both the MSI and `deskpilot.exe` are distributed as an unsigned Developer Preview; warning-free installation and publisher reputation are not promised). As a result:
 
 - **SmartScreen** may show *"Windows protected your PC"* / *Unknown publisher*.
-- **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the installed binary executed successfully on the physical developer host where UMCI was not enforced (Phase 16.38), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
-- Digital code signing with an Authenticode certificate would establish publisher identity, but environments enforcing strict App Control policies may still require explicit policy authorization.
+- **Windows Defender Application Control (WDAC) / Smart App Control** may block DeskPilot outright without an inline override prompt when signed-binary whitelisting is enforced. While the installed binary executed successfully on the physical developer host where UMCI was not enforced (Phases 16.38 & 18.4), execution of the unsigned installed binary inside Windows 11 Enterprise Sandbox was blocked by container WDAC policy `{0283ac0f-fff1-49ae-ada1-8a933130cad6}` (`VerifiedAndReputableDesktop`, Code Integrity Event IDs 3077/3089/3099, Win32 error 4551).
+- Digital code signing is not configured for this preview; environments enforcing strict App Control policies will require explicit policy authorization or must not install unsigned binaries.
 
-**Do not bypass or disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot. If Windows blocks execution, stop installation immediately.** Building from source is not an exemption or workaround for signature enforcement, as locally built binaries are also unsigned and may be blocked. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your policy requires signed software or blocks unsigned code, wait for an appropriately signed release or consult your system administrator.
+**Do not bypass or disable SmartScreen, Smart App Control, or organizational App Control policies to run DeskPilot. If Windows blocks execution, stop installation immediately.** Building from source is not an exemption or workaround for signature enforcement, as locally built binaries are also unsigned and may be blocked. Source evaluation is appropriate only in environments where you are explicitly permitted to build and run unsigned software. If your policy requires signed software or blocks unsigned code, consult your system administrator.
 
 ### Verifying a download
 
@@ -212,15 +213,15 @@ Get-FileHash -Algorithm SHA256 .\deskpilot_0.1.1_x64_en-US.msi
 
 | File | Size (bytes) | SHA-256 |
 | :--- | ---: | :--- |
-| `deskpilot_0.1.1_x64_en-US.msi` | 4,538,368 | `7EF4CBBC6EBCB759406067CE4108D617B0857E84EA07498C488B56BB7FD90CFD` |
-| `deskpilot.exe` (standalone release binary) | 5,162,496 | `6BC7A9288456FA50144571F0167156ED01638264492B5AC3A9CE90D547AB2CA0` |
-| `deskpilot.exe` (extracted MSI payload) | 5,162,496 | `4C3DD390D1B13693EC613F14D447A003D3587114D338E7C47AA24D5092166D4C` |
+| `deskpilot_0.1.1_x64_en-US.msi` | 4,472,832 | `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f` |
+| `deskpilot.exe` (standalone release binary) | 5,169,152 | `c1a15adfb3e9dc4be64182a96331a5691ab63ada8b93e410de1492a018ea5782` |
+| `deskpilot.exe` (MSI payload / installed executable) | 5,169,152 | `a517c48dbdcc1f3fadad8bce8dbff2ca073361edcbfa5e15cb4b057f0a5c0501` |
 
-Digests reflect the verified preview release compiled from commit `e99ccb84b1883a6a844e6576f2141a62ee74518f` (`e99ccb8`). (Note: The NSIS installer format was deprecated and discontinued in Phase 16.26; the preview release is strictly MSI-only). The `deskpilot.exe` installed by the MSI has a distinct hash from the standalone binary because the Tauri CLI bundler stamps a 3-byte package-type marker (`__TAURI_BUNDLE_TYPE_VAR_MSI` vs `__TAURI_BUNDLE_TYPE_VAR_UNK` at byte offset 4,864,919) into the MSI copy; executable logic and machine instructions are 100% byte-for-byte identical. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+Digests reflect the verified preview release compiled from commit `effdb09971edf4746e0388fe714564ce477ee6a5` (GitHub Actions run `45693205561`). (Note: The NSIS installer format was deprecated and discontinued in Phase 16.26; the preview release is strictly MSI-only). The `deskpilot.exe` installed by the MSI matches the extracted MSI payload byte-for-byte (`a517c48d...`) and has a distinct hash from the standalone CI binary (`c1a15adf...`) because the Tauri CLI bundler stamps a 3-byte package-type marker (`__TAURI_BUNDLE_TYPE_VAR_MSI` vs `__TAURI_BUNDLE_TYPE_VAR_UNK` at byte offset 4,873,967) into the MSI copy; executable logic and machine instructions are 100% byte-for-byte identical. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ### Upgrading and downgrading
 
-- Installing v0.1.1 over an existing installation performs a standard Windows Installer major upgrade (`msiexec /i ...`, observed in Phase 16.38).
+- Installing v0.1.1 over an existing installation performs a standard Windows Installer major upgrade (`msiexec /i ...`, observed in Phases 16.38 & 18.4).
 - Normal MSI upgrades do **not** explicitly manage, migrate, or delete DeskPilot's persistent JSON data (`%APPDATA%\com.deskpilot.app\settings.json` and `%APPDATA%\com.deskpilot.app\launch-history.json`), the WebView2 profile (`%LOCALAPPDATA%\com.deskpilot.app\EBWebView\`), or the optional startup registry value (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\DeskPilot`); these items sit outside the MSI's upgrade-removal scope. Automatic migration across arbitrary future schema changes is not guaranteed.
 - The v0.1.1 installer includes a downgrade guard, but **the older v0.1.0 MSI does not. Do not run the v0.1.0 MSI over v0.1.1** — in testing it downgraded the installation without warning.
 
@@ -366,9 +367,11 @@ DeskPilot distinguishes **automated tests** (logic verified without a real deskt
 
 | Suite | Runner | Test cases defined | Where |
 | :--- | :--- | ---: | :--- |
-| Frontend components, launcher, and IPC contracts | Vitest (jsdom) | 244 in 14 files | `src/components/__tests__`, `src/launcher/__tests__`, `src/lib/ipc/__tests__` |
-| Backend unit tests | `cargo test` | 166 | `#[cfg(test)]` modules in `src-tauri/src` |
-| Backend integration tests | `cargo test` | 39 in 3 files | `src-tauri/tests` |
+| Frontend components, launcher, and IPC contracts | Vitest (jsdom) | 251 in 22 files | `src/components/__tests__`, `src/launcher/__tests__`, `src/lib/ipc/__tests__` |
+| Backend unit tests | `cargo test` | 195 | `#[cfg(test)]` modules in `src-tauri/src` |
+| Backend integration tests | `cargo test` | 65 in 3 files | `src-tauri/tests` |
+
+Total automated tests passing: **511** (**260** Rust + **251** frontend), verified in CI (`45692834705`) and pre-build release gates (`45693205561`), alongside CodeQL (`45692835764`).
 
 The release workflow ([`build-release.yml`](.github/workflows/build-release.yml)) runs `npm test` and `cargo test --locked` as gates before building the MSI; any failure stops the build. The workflow runs on manual dispatch only — it is not triggered by pushes or pull requests.
 
@@ -378,11 +381,10 @@ These suites run headless (jsdom for the UI; the Rust harness for the backend). 
 
 | Scenario | Result |
 | :--- | :--- |
-| Windows 11 physical desktop: elevated MSI upgrade, installed binary execution, and full 15-point functional acceptance (Phase 16.38) | ✅ Passed (Phase 16.38) |
-| Windows 11 physical desktop: Quick Launcher 5-cycle activation (`Ctrl+Alt+Space`), 400ms dismissal grace period, native 64×64 icon extraction | ✅ Passed (Phase 16.21 & 16.38) |
-| Windows 11 physical desktop: live application discovery (138 apps), search filtering, and safe launch execution (`About Java` -> `javaw.exe`) | ✅ Passed (Phase 16.38) |
-| Windows 11 physical desktop: read-only Process Monitor (1,784 entries) and System Intelligence (exact host CIM metric parity) | ✅ Passed (Phase 16.38) |
-| Windows 11 physical desktop: system tray lifecycle, hide-to-tray on close, single-instance mutex, and 86+ minute sustained soak observation | ✅ Passed (Phase 16.38) |
+| Windows 11 Pro 25H2 (build `26200.9974`) physical desktop: elevated MSI upgrade, installed binary execution, and 15/15 permitted functional acceptance checks | ✅ Passed (Phase 18.4; earlier build in Phase 16.38) |
+| Windows 11 physical desktop: Quick Launcher (`Ctrl+Alt+Space`), native 64×64 icon extraction, live app discovery (137 apps), and safe launch (`About Java` -> `javaw.exe`) | ✅ Passed (Phase 18.4; earlier build in Phases 16.21 & 16.38) |
+| Windows 11 physical desktop: read-only Process Monitor (253 processes) and System Intelligence (CPU, RAM, drives, uptime) | ✅ Passed (Phase 18.4; earlier build in Phase 16.38) |
+| Windows 11 physical desktop: guarded startup registry states (`Disabled`, `Enabled`, `Stale`, `OtherInstall`, `Unrecognized`), `--autostart` tray launch, single-instance mutex, and 31-minute runtime observation (`26.24 -> 23.48 MB` working set, zero crashes) | ✅ Passed (Phase 18.4; ACL-denial `Unavailable` covered by unit tests, excluded from live ACL mutation) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: silent MSI install → public desktop shortcut (`%PUBLIC%\Desktop`) → Common Start Menu shortcut (`%PROGRAMDATA%\...`) → clean uninstall | ✅ Passed (Phase 16.29) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | ✅ Passed (Phase 16.29) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: runtime execution of unsigned installed binary | âŒ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
@@ -390,9 +392,9 @@ These suites run headless (jsdom for the UI; the Rust harness for the backend). 
 | Windows 11 Enterprise Build 26100, Windows Sandbox: interactive (non-silent) installer wizard | âš ï¸ Not tested |
 | Second-user interactive GUI login and application launch | â³ Pending (Windows Sandbox supports single session only) |
 | Windows 10 (physical or virtual desktop hardware) | â³ Untested (no physical or VM desktop runs; minimum supported Windows 10 build is undetermined) |
-| Windows Server 2022 (`windows-2022`), GitHub Actions CI (`installer-smoke-test.yml`): silent install, 20-second startup check, and uninstall | Passed (automated CI installer smoke-test evidence only; not desktop compatibility evidence) |
+| Windows Server 2022 (`windows-2022`), GitHub Actions CI (`installer-smoke-test.yml`, run `45692834602`): silent install, 20-second startup check, and uninstall | ✅ Passed (automated CI installer smoke-test evidence only; not desktop compatibility evidence) |
 
-Physical host validation (Phase 16.38) demonstrated complete end-to-end functionality for the installed application on **Windows 11 Pro 25H2** across an 86+ minute soak (~29.4 MB working set, zero runaway heap growth observed). In isolated **Windows 11 Enterprise Build 26100 Windows Sandbox** testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while container WDAC policies halted unsigned execution. Separately, GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence. **Windows 10** has not been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is undetermined. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
+Physical host validation (Phase 18.4 on `effdb099`) demonstrated end-to-end functionality for the installed application on **Windows 11 Pro 25H2** (build `26200.9974`) across a 31-minute runtime observation without crashes or unexpected resource growth (`26.24 -> 23.48 MB` working set; not claimed as formal memory-leak proof). In isolated **Windows 11 Enterprise Build 26100 Windows Sandbox** testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while container WDAC policies halted unsigned execution. Separately, GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`, run `45692834602`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence. **Windows 10** has not been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is undetermined. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
 
 ---
 

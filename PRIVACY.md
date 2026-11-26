@@ -27,7 +27,8 @@ DeskPilot is engineered as a local-first Windows command center and desktop util
 - A missing or damaged settings file is treated as the default settings. Deleting the file resets DeskPilot's preferences.
 
 ### Start with Windows (optional, off by default)
-- When **Settings → Startup → Start with Windows** is turned on, DeskPilot adds one value named `DeskPilot` under the current user's startup key (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`). It contains the quoted path to DeskPilot plus `--autostart`, so Windows starts it, in the tray, when you sign in. Turning the setting off removes that value.
+- When **Settings → Startup → Start with Windows** is turned on, DeskPilot adds one value named `DeskPilot` under the current user's startup key (`HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`). It contains the quoted path to DeskPilot plus `--autostart`, so Windows starts it, in the tray, when you sign in.
+- Turning the setting off removes that value **only** when it matches the active DeskPilot installation. If DeskPilot detects a stale entry (`Stale`), an entry belonging to another installation (`OtherInstall`), or an unrecognized value (`Unrecognized`), automatic changes are disabled and DeskPilot will not silently overwrite, repair, or delete the existing registry entry.
 - This is the only change DeskPilot makes to the Windows registry. It affects the current user only and requires no administrator rights.
 
 ### Network Behavior & Telemetry
