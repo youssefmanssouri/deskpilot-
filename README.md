@@ -15,7 +15,7 @@
 </p>
 
 > [!IMPORTANT]
-> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, and source/release evaluation is intended for technical evaluation and developer testing on Windows 11 Pro 25H2. **Note on publication status:** the currently published GitHub Release is the earlier `v0.1.1-preview.2` release; the newer verified build (`effdb09971edf4746e0388fe714564ce477ee6a5`, GitHub Actions run `45693205561`) has **not yet been published** as a GitHub Release (workflow artifacts are temporary CI outputs, not permanent public downloads). DeskPilot has **not been tested on physical or virtual Windows 10 desktop hardware** (the exact minimum supported Windows 10 build is undetermined). Users may encounter *Unknown publisher* or SmartScreen warnings, and warning-free installation is not promised. If your policy requires signed binaries or blocks unsigned code, consult your system administrator. See [Known limitations](#known-limitations) before use.
+> **v0.1.1 is a developer preview release.** Release binaries are **unsigned**, and source/release evaluation is intended for technical evaluation and developer testing on Windows 11 Pro 25H2. **Download:** the verified build (`effdb09971edf4746e0388fe714564ce477ee6a5`, GitHub Actions run `45693205561`) is published as the GitHub pre-release [`v0.1.1-preview.3`](https://github.com/youssefmanssouri/deskpilot-/releases/tag/v0.1.1-preview.3) and offered on the [DeskPilot website](https://deskpilot.youssefmanssouri.site/#download); verify the SHA-256 before installing. DeskPilot has **not been tested on physical or virtual Windows 10 desktop hardware** (the exact minimum supported Windows 10 build is undetermined). Users may encounter *Unknown publisher* or SmartScreen warnings, and warning-free installation is not promised. If your policy requires signed binaries or blocks unsigned code, consult your system administrator. See [Known limitations](#known-limitations) before use.
 
 ---
 
@@ -45,7 +45,7 @@
 | :--- | :--- |
 | Version | `0.1.1` unsigned developer preview (commit `effdb09971edf4746e0388fe714564ce477ee6a5`) |
 | Code signing | Not signed. Unsigned Developer Preview; SHA-256 checksums and build provenance (`build-manifest.json`) are provided for integrity verification. |
-| Public download | The latest published GitHub Release is the earlier `v0.1.1-preview.2` tag. The newer verified build (`effdb099`, run `45693205561`) has not yet been published as a GitHub Release. |
+| Public download | [`v0.1.1-preview.3`](https://github.com/youssefmanssouri/deskpilot-/releases/tag/v0.1.1-preview.3) (GitHub pre-release built from `effdb099`, run `45693205561`), also offered on the [DeskPilot website](https://deskpilot.youssefmanssouri.site/#download). MSI SHA-256 `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f`. |
 | Windows 11 x64 | **Physical desktop runtime acceptance validated** on Windows 11 Pro 25H2 (build `26200.9974`, Phase 18.4). All 15 permitted functional acceptance checks passed, including elevated MSI upgrade with preserved settings/history, 137 apps discovered, safe Win32 launch (`About Java`), Process Monitor, System Intelligence, `--autostart` tray launch, single-instance mutex, guarded startup states (`Disabled`, `Enabled`, `Stale`, `OtherInstall`, `Unrecognized`), and a 31-minute runtime observation without crashes or unexpected resource growth (`26.24 -> 23.48 MB` working set). (In isolated Windows 11 Enterprise Build 26100 Windows Sandbox testing, execution was blocked by container hypervisor WDAC policy `VerifiedAndReputableDesktop`). |
 | Windows 10 x64 | **Untested on physical or virtual desktop hardware.** Exact minimum supported Windows 10 build is undetermined; empirical validation pending. (Windows 7, 8, and 8.1 are outside the intended support scope). |
 | Windows Server 2022 (`windows-2022`) | Automated CI smoke test only (`installer-smoke-test.yml`, run `45692834602`: silent MSI install, 20-second process launch check, uninstall). Provides CI installer smoke-test evidence only, not desktop Windows compatibility evidence. |
@@ -156,7 +156,7 @@ To set accurate expectations for this preview:
 ## Installation
 
 > [!NOTE]
-> The latest published GitHub Release is the earlier `v0.1.1-preview.2` preview. The newer verified v0.1.1 build (`effdb099`, run `45693205561`) has not yet been published to GitHub Releases. This section documents the behavior of the v0.1.1 MSI for evaluators and for anyone building the installer from source.
+> The verified v0.1.1 build (`effdb099`, run `45693205561`) is published as [`v0.1.1-preview.3`](https://github.com/youssefmanssouri/deskpilot-/releases/tag/v0.1.1-preview.3). This section documents the behavior of the v0.1.1 MSI for evaluators and for anyone building the installer from source.
 
 ### Installer behavior
 
@@ -168,7 +168,7 @@ To set accurate expectations for this preview:
 
 For evaluators and testers installing DeskPilot via the Windows graphical shell:
 
-1. **Download and Checksum Verification:** Download the MSI from [GitHub Releases](https://github.com/youssefmanssouri/deskpilot-/releases) and verify its SHA-256 against the checksums published on that specific release (for example, `v0.1.1-preview.2` has its own published checksums). For the newer `effdb09971edf4746e0388fe714564ce477ee6a5` candidate build (run `45693205561`, not yet published to GitHub Releases), `Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256` must match `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f`.
+1. **Download and Checksum Verification:** Download the MSI from [GitHub Releases](https://github.com/youssefmanssouri/deskpilot-/releases) and verify its SHA-256 against the checksums published on that specific release (each release lists its own `SHA256SUMS.txt`). For `v0.1.1-preview.3` (commit `effdb09971edf4746e0388fe714564ce477ee6a5`, run `45693205561`), `Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256` must match `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f`.
 2. **File Explorer Execution:** Double-click `deskpilot_0.1.1_x64_en-US.msi` in File Explorer.
 3. **Microsoft Defender SmartScreen and Code Integrity:** Because preview binaries are unsigned (`NotSigned`), Windows Defender SmartScreen or system application control policies may present a warning:
 

@@ -8,7 +8,7 @@ DeskPilot is currently in **Developer Preview** (v0.1.1). At this stage, the pri
 
 ## 1. Project Status & Supported Environments
 
-- **Current Milestone:** `v0.1.1` Developer Preview (Revision 2, tag `v0.1.1-preview.2`).
+- **Current Milestone:** `v0.1.1` Developer Preview (Revision 3, tag [`v0.1.1-preview.3`](https://github.com/youssefmanssouri/deskpilot-/releases/tag/v0.1.1-preview.3)).
 - **Intended Scope:** Targets 64-bit Windows (`x86_64`). Windows on ARM64 is not built or supported, and Windows 7, 8, and 8.1 are outside the intended support scope.
 - **Validated Desktop Environment:** **Windows 11 Pro 25H2** (physical desktop validation completed in Phase 16.38).
 - **Installer Lifecycle Container:** **Windows 11 Enterprise Build 26100 Windows Sandbox** (Phase 16.29 MSI lifecycle tested; execution of the unsigned application was blocked by container WDAC).
