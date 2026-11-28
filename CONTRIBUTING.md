@@ -32,8 +32,8 @@ Before installing, verify the integrity of the downloaded MSI using PowerShell:
 Get-FileHash .\deskpilot_0.1.1_x64_en-US.msi -Algorithm SHA256
 ```
 
-**Official Checksum for v0.1.1 Developer Preview (Revision 2):**
-- **MSI Installer (`deskpilot_0.1.1_x64_en-US.msi`):** `7EF4CBBC6EBCB759406067CE4108D617B0857E84EA07498C488B56BB7FD90CFD` (Size: `4,538,368` bytes)
+**Official Checksum for v0.1.1 Developer Preview (Revision 3, `v0.1.1-preview.3`):**
+- **MSI Installer (`deskpilot_0.1.1_x64_en-US.msi`):** `b6e4001f44a9c05d7577e33ba0fab6ffa99b68e9e099b3a56d56d337e5dfd29f` (Size: `4,472,832` bytes)
 
 If the calculated hash does not match, do not run the installer.
 
