@@ -118,7 +118,7 @@ DeskPilot combines a modern, monochrome command center with low-level Windows in
 
 ### Desktop Integration
 
-- **Single Instance:** Launching DeskPilot again forwards focus to the existing window (via 	auri-plugin-single-instance).
+- **Single Instance:** Launching DeskPilot again forwards focus to the existing window (via `tauri-plugin-single-instance`).
 - **System Tray:** Notification area menu with *Show DeskPilot*, *Hide DeskPilot*, and *Quit DeskPilot*. Closing the window hides to tray; *Quit* exits.
 - Window bounds: default 960×680, minimum 520×450.
 
@@ -387,11 +387,11 @@ These suites run headless (jsdom for the UI; the Rust harness for the backend). 
 | Windows 11 physical desktop: guarded startup registry states (`Disabled`, `Enabled`, `Stale`, `OtherInstall`, `Unrecognized`), `--autostart` tray launch, single-instance mutex, and 31-minute runtime observation (`26.24 -> 23.48 MB` working set, zero crashes) | ✅ Passed (Phase 18.4; ACL-denial `Unavailable` covered by unit tests, excluded from live ACL mutation) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: silent MSI install → public desktop shortcut (`%PUBLIC%\Desktop`) → Common Start Menu shortcut (`%PROGRAMDATA%\...`) → clean uninstall | ✅ Passed (Phase 16.29) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: secondary standard user provisioning (`TestUser2`) with public shortcut visibility | ✅ Passed (Phase 16.29) |
-| Windows 11 Enterprise Build 26100, Windows Sandbox: runtime execution of unsigned installed binary | âŒ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: runtime execution of unsigned installed binary | ❌ Blocked by container WDAC policy `{0283ac0f...}` (Phase 16.29, Event 3077) |
 | Windows 11 Enterprise Build 26100, Windows Sandbox: upgrade from v0.1.0, repair, uninstall | ✅ Evaluated in Phase 10.9C / Phase 16.29 |
-| Windows 11 Enterprise Build 26100, Windows Sandbox: interactive (non-silent) installer wizard | âš ï¸ Not tested |
-| Second-user interactive GUI login and application launch | â³ Pending (Windows Sandbox supports single session only) |
-| Windows 10 (physical or virtual desktop hardware) | â³ Untested (no physical or VM desktop runs; minimum supported Windows 10 build is undetermined) |
+| Windows 11 Enterprise Build 26100, Windows Sandbox: interactive (non-silent) installer wizard | ⚠️ Not tested |
+| Second-user interactive GUI login and application launch | ⏳ Pending (Windows Sandbox supports single session only) |
+| Windows 10 (physical or virtual desktop hardware) | ⏳ Untested (no physical or VM desktop runs; minimum supported Windows 10 build is undetermined) |
 | Windows Server 2022 (`windows-2022`), GitHub Actions CI (`installer-smoke-test.yml`, run `45692834602`): silent install, 20-second startup check, and uninstall | ✅ Passed (automated CI installer smoke-test evidence only; not desktop compatibility evidence) |
 
 Physical host validation (Phase 18.4 on `effdb099`) demonstrated end-to-end functionality for the installed application on **Windows 11 Pro 25H2** (build `26200.9974`) across a 31-minute runtime observation without crashes or unexpected resource growth (`26.24 -> 23.48 MB` working set; not claimed as formal memory-leak proof). In isolated **Windows 11 Enterprise Build 26100 Windows Sandbox** testing (Phase 16.29), installer lifecycle and shortcut directory layout were verified with zero ICE errors, while container WDAC policies halted unsigned execution. Separately, GitHub Actions **Windows Server 2022** (`windows-2022`, `installer-smoke-test.yml`, run `45692834602`) provides automated installer smoke-test evidence (silent install, 20-second startup check, and uninstall), not desktop Windows compatibility evidence. **Windows 10** has not been tested on physical or virtual desktop hardware, and the exact minimum supported Windows 10 build is undetermined. Full details are in the [release notes](RELEASE_NOTES_v0.1.1_PREVIEW.md).
